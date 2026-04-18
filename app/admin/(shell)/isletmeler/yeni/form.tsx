@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createBusiness, type CreateBusinessInput } from '@/lib/actions/businesses';
 import { slugify } from '@/lib/utils';
@@ -29,7 +28,6 @@ const TR_CITIES = [
 ];
 
 export function CreateBusinessForm({ plans }: Props) {
-  const router = useRouter();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{
