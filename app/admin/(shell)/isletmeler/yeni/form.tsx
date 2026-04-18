@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createBusiness, type CreateBusinessInput } from '@/lib/actions/businesses';
 import { slugify } from '@/lib/utils';
@@ -28,6 +29,7 @@ const TR_CITIES = [
 ];
 
 export function CreateBusinessForm({ plans }: Props) {
+  const router = useRouter();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{
@@ -48,16 +50,27 @@ export function CreateBusinessForm({ plans }: Props) {
     plan_id: '',
   });
 
+  // Kullanıcı slug'ı elle değiştirdi mi? Eğer değiştirdiyse artık otomatik doldurmuyoruz
+  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
+
   const updateField = <K extends keyof CreateBusinessInput>(key: K, value: CreateBusinessInput[K]) => {
     setForm((f) => ({ ...f, [key]: value }));
   };
 
-  // İşletme adından otomatik slug üret (kullanıcı manuel değiştirebilir)
+  // Slug field'ı değiştiğinde - manuel edit flag'i set et
+  const handleSlugChange = (slug: string) => {
+    setSlugManuallyEdited(true);
+    setForm((f) => ({ ...f, business_slug: slugify(slug) }));
+  };
+
+  // İşletme adından otomatik slug üret
+  // - Eğer kullanıcı slug'ı manuel değiştirmediyse, her karakterde otomatik günceller
+  // - Manuel değiştirdiyse artık dokunmaz
   const handleNameChange = (name: string) => {
     setForm((f) => ({
       ...f,
       business_name: name,
-      business_slug: f.business_slug || slugify(name),
+      business_slug: slugManuallyEdited ? f.business_slug : slugify(name),
     }));
   };
 
@@ -248,6 +261,7 @@ Sorularınız için bize her zaman ulaşabilirsiniz.
             form={form}
             updateField={updateField}
             handleNameChange={handleNameChange}
+            handleSlugChange={handleSlugChange}
           />
         )}
         {step === 2 && <Step2 form={form} updateField={updateField} />}
@@ -370,10 +384,12 @@ function Step1({
   form,
   updateField,
   handleNameChange,
+  handleSlugChange,
 }: {
   form: CreateBusinessInput;
   updateField: <K extends keyof CreateBusinessInput>(key: K, value: CreateBusinessInput[K]) => void;
   handleNameChange: (name: string) => void;
+  handleSlugChange: (slug: string) => void;
 }) {
   return (
     <div className="space-y-5">
@@ -407,7 +423,7 @@ function Step1({
           <input
             type="text"
             value={form.business_slug}
-            onChange={(e) => updateField('business_slug', slugify(e.target.value))}
+            onChange={(e) => handleSlugChange(e.target.value)}
             placeholder="karakoy"
             className="form-input rounded-r-none border-r-0"
           />
