@@ -34,6 +34,8 @@ const config: Config = {
         danger: 'var(--danger)',
         card: 'var(--card)',
         'card-2': 'var(--card-2)',
+        super: 'var(--super)',
+        'super-soft': 'var(--super-soft)',
       },
       borderRadius: {
         sm: '8px',

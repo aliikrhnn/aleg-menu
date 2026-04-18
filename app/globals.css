@@ -1,9 +1,9 @@
+/* Brutalist Spice font sistemi */
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=Instrument+Serif:ital,wght@0,400;1,400&family=Space+Mono:wght@400;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* Brutalist Spice font sistemi */
-@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=Instrument+Serif:ital,wght@0,400;1,400&family=Space+Mono:wght@400;700&display=swap');
 
 /* ==== WARM TEMA (varsayılan) ==== */
 :root {
@@ -25,6 +25,18 @@
   --danger: #B84A3A;
   --card: #FAF5EA;
   --card-2: #FFFDF7;
+  /* Süper admin için özel ton - her temada farklı */
+  --super: #5A6B7E;
+  --super-soft: #DCE3EA;
+  /* Ek değişkenler */
+  --r-sm: 8px;
+  --r: 14px;
+  --r-lg: 22px;
+  --shadow-sm: 0 1px 2px rgba(42,31,24,.05);
+  --shadow-md: 0 1px 2px rgba(42,31,24,.06), 0 8px 24px rgba(42,31,24,.06);
+  --f-sans: 'Bricolage Grotesque', system-ui, sans-serif;
+  --f-serif: 'Instrument Serif', serif;
+  --f-mono: 'Space Mono', monospace;
 }
 
 /* ==== ESPRESSO TEMA (koyu) ==== */
@@ -42,6 +54,8 @@
   --accent-soft: #3A2118;
   --card: #221A14;
   --card-2: #281F17;
+  --super: #8AA2BC;
+  --super-soft: #2A3340;
 }
 
 /* ==== SWISS TEMA (minimal) ==== */
@@ -59,6 +73,8 @@
   --accent-soft: #FAD6CC;
   --card: #FFFFFF;
   --card-2: #FFFFFF;
+  --super: #2D3E54;
+  --super-soft: #DAE2EB;
 }
 
 /* ==== EDITORIAL TEMA ==== */
