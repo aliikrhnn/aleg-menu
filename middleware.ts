@@ -24,6 +24,7 @@ export async function middleware(request: NextRequest) {
 
   let rewrittenPath = url.pathname;
   let isAdminSubdomain = false;
+  let isPanelSubdomain = false;
 
   const isRootDomain =
     currentHost === ROOT_DOMAIN ||
@@ -39,6 +40,7 @@ export async function middleware(request: NextRequest) {
       rewrittenPath = `/admin${url.pathname}`;
     }
   } else if (currentHost === 'panel') {
+    isPanelSubdomain = true;
     if (!url.pathname.startsWith('/panel')) {
       rewrittenPath = `/panel${url.pathname}`;
     }
@@ -92,6 +94,57 @@ export async function middleware(request: NextRequest) {
 
     if (!isSuperAdmin) {
       const loginUrl = new URL('/giris?error=not_authorized', request.url);
+      return NextResponse.redirect(loginUrl);
+    }
+  }
+
+  // ============================================================
+  // PANEL AUTH CHECK
+  // ============================================================
+  if (
+    isPanelSubdomain &&
+    !url.pathname.startsWith('/giris') &&
+    !rewrittenPath.startsWith('/panel/giris')
+  ) {
+    const response = NextResponse.next();
+
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll();
+          },
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value, options }) => {
+              response.cookies.set(name, value, options);
+            });
+          },
+        },
+      }
+    );
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      const loginUrl = new URL('/giris', request.url);
+      return NextResponse.redirect(loginUrl);
+    }
+
+    // Business member mi kontrol et
+    const { data: membership } = await supabase
+      .from('business_members')
+      .select('business_id, status')
+      .eq('user_id', user.id)
+      .eq('status', 'active')
+      .maybeSingle();
+
+    if (!membership) {
+      // Member değilse login'e yönlendir
+      const loginUrl = new URL('/giris?error=no_business', request.url);
       return NextResponse.redirect(loginUrl);
     }
   }
