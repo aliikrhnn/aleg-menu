@@ -1,83 +1,109 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-
-/**
- * Subdomain yönlendirme middleware'i.
- *
- * Yönlendirme kuralları:
- * - admin.alegstudio.com       → /admin/*
- * - panel.alegstudio.com       → /panel/*
- * - [slug].alegstudio.com      → /menu/[slug]/*  (örn: karakoy.alegstudio.com)
- * - alegstudio.com             → / (pazarlama sitesi)
- *
- * Geliştirme modunda (localhost):
- * - admin.localhost:3000       → /admin/*
- * - panel.localhost:3000       → /panel/*
- * - [slug].localhost:3000      → /menu/[slug]/*
- * - localhost:3000             → /
- */
+import { createServerClient } from '@supabase/ssr';
 
 const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'alegstudio.com';
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const url = request.nextUrl.clone();
   const hostname = request.headers.get('host') || '';
 
-  // Port'u temizle (localhost:3000 → localhost)
   const currentHost = hostname
     .replace(`.${ROOT_DOMAIN}`, '')
     .replace('.localhost:3000', '')
     .replace(':3000', '');
 
-  // Zaten /admin, /panel veya /menu ile başlıyorsa karışma
   if (
-    url.pathname.startsWith('/admin') ||
-    url.pathname.startsWith('/panel') ||
-    url.pathname.startsWith('/menu') ||
-    url.pathname.startsWith('/api') ||
     url.pathname.startsWith('/_next') ||
     url.pathname.startsWith('/static') ||
+    url.pathname.startsWith('/api') ||
     url.pathname.includes('.')
   ) {
     return NextResponse.next();
   }
 
-  // Kök domain → olduğu gibi devam et (pazarlama sitesi)
-  if (
+  let rewrittenPath = url.pathname;
+  let isAdminSubdomain = false;
+
+  const isRootDomain =
     currentHost === ROOT_DOMAIN ||
     currentHost === 'localhost' ||
     currentHost === 'www' ||
-    hostname === ROOT_DOMAIN
+    hostname === ROOT_DOMAIN;
+
+  if (isRootDomain) {
+    // Root domain - olduğu gibi
+  } else if (currentHost === 'admin') {
+    isAdminSubdomain = true;
+    if (!url.pathname.startsWith('/admin')) {
+      rewrittenPath = `/admin${url.pathname}`;
+    }
+  } else if (currentHost === 'panel') {
+    if (!url.pathname.startsWith('/panel')) {
+      rewrittenPath = `/panel${url.pathname}`;
+    }
+  } else {
+    if (!url.pathname.startsWith('/menu')) {
+      rewrittenPath = `/menu/${currentHost}${url.pathname}`;
+    }
+  }
+
+  // ============================================================
+  // ADMIN AUTH CHECK
+  // ============================================================
+  if (
+    isAdminSubdomain &&
+    !url.pathname.startsWith('/giris') &&
+    !rewrittenPath.startsWith('/admin/giris')
   ) {
-    return NextResponse.next();
+    const response = NextResponse.next();
+
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll();
+          },
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value, options }) => {
+              response.cookies.set(name, value, options);
+            });
+          },
+        },
+      }
+    );
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      const loginUrl = new URL('/giris', request.url);
+      return NextResponse.redirect(loginUrl);
+    }
+
+    const { data: isSuperAdmin } = await supabase
+      .from('super_admins')
+      .select('user_id')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (!isSuperAdmin) {
+      const loginUrl = new URL('/giris?error=not_authorized', request.url);
+      return NextResponse.redirect(loginUrl);
+    }
   }
 
-  // admin subdomain
-  if (currentHost === 'admin') {
-    url.pathname = `/admin${url.pathname}`;
+  if (rewrittenPath !== url.pathname) {
+    url.pathname = rewrittenPath;
     return NextResponse.rewrite(url);
   }
 
-  // panel subdomain
-  if (currentHost === 'panel') {
-    url.pathname = `/panel${url.pathname}`;
-    return NextResponse.rewrite(url);
-  }
-
-  // Diğer tüm subdomain'ler → müşteri menüsü (örn: karakoy.alegstudio.com)
-  url.pathname = `/menu/${currentHost}${url.pathname}`;
-  return NextResponse.rewrite(url);
+  return NextResponse.next();
 }
 
 export const config = {
-  matcher: [
-    /*
-     * Şunları hariç tut:
-     * - API rotaları
-     * - Static dosyalar
-     * - Görsel optimizasyonu
-     * - Favicon
-     */
-    '/((?!api|_next/static|_next/image|favicon.ico).*)',
-  ],
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
 };
