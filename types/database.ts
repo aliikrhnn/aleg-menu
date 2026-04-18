@@ -37,7 +37,6 @@ export interface Database {
         };
         Update: Partial<Database['public']['Tables']['super_admins']['Row']>;
       };
-
       businesses: {
         Row: {
           id: string;
@@ -63,7 +62,6 @@ export interface Database {
         };
         Update: Partial<Database['public']['Tables']['businesses']['Row']>;
       };
-
       branches: {
         Row: {
           id: string;
@@ -80,7 +78,67 @@ export interface Database {
         Insert: Omit<Database['public']['Tables']['branches']['Row'], 'id' | 'created_at'>;
         Update: Partial<Database['public']['Tables']['branches']['Row']>;
       };
-
+      roles: {
+        Row: {
+          id: string;
+          business_id: string;
+          name: string;
+          description: string | null;
+          permissions: Json;
+          is_default: boolean;
+          is_owner: boolean;
+          created_at: string;
+        };
+        Insert: Partial<Database['public']['Tables']['roles']['Row']> & {
+          business_id: string;
+          name: string;
+        };
+        Update: Partial<Database['public']['Tables']['roles']['Row']>;
+      };
+      business_members: {
+        Row: {
+          id: string;
+          business_id: string;
+          user_id: string;
+          role_id: string | null;
+          branch_id: string | null;
+          full_name: string | null;
+          phone: string | null;
+          avatar_url: string | null;
+          status: 'invited' | 'active' | 'suspended';
+          invited_at: string | null;
+          joined_at: string | null;
+          last_seen_at: string | null;
+          created_at: string;
+        };
+        Insert: Partial<Database['public']['Tables']['business_members']['Row']> & {
+          business_id: string;
+          user_id: string;
+        };
+        Update: Partial<Database['public']['Tables']['business_members']['Row']>;
+      };
+      platform_plans: {
+        Row: {
+          id: string;
+          slug: string;
+          name: string;
+          description: string | null;
+          price_monthly: number | null;
+          price_yearly: number | null;
+          features: Json;
+          max_branches: number | null;
+          max_products: number | null;
+          max_team_members: number | null;
+          active: boolean;
+          sort_order: number;
+          created_at: string;
+        };
+        Insert: Partial<Database['public']['Tables']['platform_plans']['Row']> & {
+          slug: string;
+          name: string;
+        };
+        Update: Partial<Database['public']['Tables']['platform_plans']['Row']>;
+      };
       categories: {
         Row: {
           id: string;
@@ -98,7 +156,6 @@ export interface Database {
         Insert: Omit<Database['public']['Tables']['categories']['Row'], 'id' | 'created_at' | 'updated_at'>;
         Update: Partial<Database['public']['Tables']['categories']['Row']>;
       };
-
       products: {
         Row: {
           id: string;
@@ -128,7 +185,6 @@ export interface Database {
         };
         Update: Partial<Database['public']['Tables']['products']['Row']>;
       };
-
       tables: {
         Row: {
           id: string;
@@ -150,7 +206,6 @@ export interface Database {
         };
         Update: Partial<Database['public']['Tables']['tables']['Row']>;
       };
-
       tickets: {
         Row: {
           id: string;
@@ -183,7 +238,6 @@ export interface Database {
         };
         Update: Partial<Database['public']['Tables']['tickets']['Row']>;
       };
-
       orders: {
         Row: {
           id: string;
@@ -214,9 +268,6 @@ export interface Database {
         };
         Update: Partial<Database['public']['Tables']['orders']['Row']>;
       };
-
-      // Diğer tablolar Supabase gen types ile otomatik eklenecek.
-      // Şimdilik bu temel tipler yeterli.
     };
     Views: {
       [_ in never]: never;
@@ -242,9 +293,12 @@ export interface Database {
   };
 }
 
-// Kolay kullanım için alias'lar
+export type SuperAdmin = Database['public']['Tables']['super_admins']['Row'];
 export type Business = Database['public']['Tables']['businesses']['Row'];
 export type Branch = Database['public']['Tables']['branches']['Row'];
+export type Role = Database['public']['Tables']['roles']['Row'];
+export type BusinessMember = Database['public']['Tables']['business_members']['Row'];
+export type PlatformPlan = Database['public']['Tables']['platform_plans']['Row'];
 export type Category = Database['public']['Tables']['categories']['Row'];
 export type Product = Database['public']['Tables']['products']['Row'];
 export type Table = Database['public']['Tables']['tables']['Row'];
