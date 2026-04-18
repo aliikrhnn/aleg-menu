@@ -24,6 +24,20 @@ export type LocalizedText = {
 export interface Database {
   public: {
     Tables: {
+      super_admins: {
+        Row: {
+          user_id: string;
+          full_name: string | null;
+          created_at: string;
+        };
+        Insert: {
+          user_id: string;
+          full_name?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['super_admins']['Row']>;
+      };
+
       businesses: {
         Row: {
           id: string;
