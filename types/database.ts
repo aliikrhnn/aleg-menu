@@ -75,7 +75,11 @@ export interface Database {
           active: boolean;
           created_at: string;
         };
-        Insert: Omit<Database['public']['Tables']['branches']['Row'], 'id' | 'created_at'>;
+        Insert: Partial<Database['public']['Tables']['branches']['Row']> & {
+          business_id: string;
+          name: string;
+          slug: string;
+        };
         Update: Partial<Database['public']['Tables']['branches']['Row']>;
       };
       roles: {
@@ -153,7 +157,10 @@ export interface Database {
           created_at: string;
           updated_at: string;
         };
-        Insert: Omit<Database['public']['Tables']['categories']['Row'], 'id' | 'created_at' | 'updated_at'>;
+        Insert: Partial<Database['public']['Tables']['categories']['Row']> & {
+          business_id: string;
+          name: LocalizedText;
+        };
         Update: Partial<Database['public']['Tables']['categories']['Row']>;
       };
       products: {
