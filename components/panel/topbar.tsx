@@ -1,0 +1,95 @@
+'use client';
+
+import { useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
+
+interface PanelTopbarProps {
+  user: {
+    email?: string;
+    full_name?: string | null;
+  };
+  businessStatus?: string;
+}
+
+export function PanelTopbar({ user, businessStatus }: PanelTopbarProps) {
+  const router = useRouter();
+
+  const handleLogout = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push('/giris');
+    router.refresh();
+  };
+
+  const initials = (user.full_name || user.email || 'A')
+    .split(' ')
+    .map((s) => s[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+
+  return (
+    <header className="h-[60px] flex-shrink-0 border-b border-line bg-card flex items-center px-6 gap-4">
+      {/* Search (placeholder — henüz aktif değil) */}
+      <div className="relative flex-1 max-w-md">
+        <span
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-3"
+          style={{ fontFamily: 'var(--f-mono)', fontSize: 12 }}
+        >
+          ⌕
+        </span>
+        <input
+          type="text"
+          placeholder="Ürün, masa veya sipariş ara..."
+          className="w-full h-9 pl-8 pr-3 rounded-[var(--r-sm)] bg-paper-2 border border-line text-sm placeholder:text-ink-3 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/20"
+          style={{ fontFamily: 'var(--f-sans)' }}
+        />
+      </div>
+
+      <div className="flex-1" />
+
+      {/* Trial/durum pill */}
+      {businessStatus === 'trial' && (
+        <div
+          className="hidden md:flex items-center gap-2 px-3 h-7 rounded-full bg-accent/10 text-accent"
+          style={{ fontFamily: 'var(--f-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em' }}
+        >
+          <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
+          DENEME SÜRECİ
+        </div>
+      )}
+
+      {businessStatus === 'active' && (
+        <div
+          className="hidden md:flex items-center gap-2 px-3 h-7 rounded-full bg-ok/10 text-ok"
+          style={{ fontFamily: 'var(--f-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em' }}
+        >
+          <span className="w-1.5 h-1.5 rounded-full bg-ok" />
+          AKTİF
+        </div>
+      )}
+
+      {/* User menu */}
+      <div className="flex items-center gap-3">
+        <div className="text-right hidden sm:block">
+          <div className="text-[13px] font-medium leading-tight">{user.full_name || 'Kullanıcı'}</div>
+          <div className="text-[11px] text-ink-3">{user.email}</div>
+        </div>
+        <div
+          className="w-9 h-9 rounded-full bg-accent/15 text-accent flex items-center justify-center font-semibold text-sm"
+          style={{ fontFamily: 'var(--f-sans)' }}
+        >
+          {initials}
+        </div>
+        <button
+          onClick={handleLogout}
+          className="text-ink-3 hover:text-ink text-xs uppercase transition-colors"
+          style={{ fontFamily: 'var(--f-mono)', letterSpacing: '0.08em' }}
+          title="Çıkış"
+        >
+          ↗
+        </button>
+      </div>
+    </header>
+  );
+}

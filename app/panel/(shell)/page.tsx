@@ -1,5 +1,5 @@
+import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
-import { LogoutButton } from './logout-button';
 
 export default async function PanelHomePage() {
   const supabase = createClient();
@@ -8,10 +8,9 @@ export default async function PanelHomePage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Kullanıcının işletmesini getir
   const { data: membership } = await supabase
     .from('business_members')
-    .select('business_id, full_name, role_id')
+    .select('business_id, full_name')
     .eq('user_id', user?.id || '')
     .eq('status', 'active')
     .maybeSingle();
@@ -32,69 +31,86 @@ export default async function PanelHomePage() {
         .maybeSingle()
     : { data: null };
 
+  // Ürün ve masa sayıları
+  const { count: productCount } = business
+    ? await supabase
+        .from('products')
+        .select('*', { count: 'exact', head: true })
+        .eq('business_id', business.id)
+    : { count: 0 };
+
+  const { count: tableCount } = business
+    ? await supabase
+        .from('tables')
+        .select('*', { count: 'exact', head: true })
+        .eq('business_id', business.id)
+    : { count: 0 };
+
   const firstName = membership?.full_name?.split(' ')[0] || 'dostum';
   const greeting = getGreeting();
 
+  // Kuruluş günlerini hesapla
+  const daysSinceCreation = business?.created_at
+    ? Math.floor((Date.now() - new Date(business.created_at).getTime()) / (1000 * 60 * 60 * 24))
+    : 0;
+
   return (
-    <div className="min-h-screen flex flex-col">
-      {/* Topbar */}
-      <header className="border-b border-line bg-card">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div
-              className="w-10 h-10 rounded-[10px] bg-accent flex items-center justify-center"
-              style={{
-                fontFamily: 'var(--f-serif)',
-                fontStyle: 'italic',
-                fontSize: 20,
-                fontWeight: 500,
-                color: '#FAF5EA',
-                letterSpacing: '-0.04em',
-              }}
-            >
-              a
-            </div>
-            <div>
-              <div
-                style={{
-                  fontFamily: 'var(--f-serif)',
-                  fontStyle: 'italic',
-                  fontSize: 18,
-                  fontWeight: 400,
-                  letterSpacing: '-0.02em',
-                }}
-              >
-                {business?.name || 'Aleg'}
-              </div>
-              <div
-                className="text-ink-3 uppercase"
-                style={{
-                  fontFamily: 'var(--f-mono)',
-                  fontSize: 9,
-                  fontWeight: 700,
-                  letterSpacing: '0.14em',
-                }}
-              >
-                İŞLETME PANELİ
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <div className="text-right hidden sm:block">
-              <div className="text-sm font-medium">{membership?.full_name}</div>
-              <div className="text-xs text-ink-3">{user?.email}</div>
-            </div>
-            <LogoutButton />
-          </div>
+    <div className="px-8 py-10 max-w-[1200px] mx-auto">
+      {/* Hero */}
+      <div className="mb-10">
+        <div
+          className="text-accent uppercase mb-3"
+          style={{
+            fontFamily: 'var(--f-mono)',
+            fontSize: 10,
+            fontWeight: 700,
+            letterSpacing: '0.14em',
+          }}
+        >
+          ANA SAYFA · {new Date().toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}
         </div>
-      </header>
+        <h1
+          style={{
+            fontFamily: 'var(--f-serif)',
+            fontStyle: 'italic',
+            fontSize: 48,
+            fontWeight: 400,
+            letterSpacing: '-0.02em',
+            lineHeight: 1.05,
+          }}
+        >
+          {greeting}, {firstName}
+        </h1>
+        <p className="text-ink-2 text-base mt-3">
+          {daysSinceCreation === 0 ? 'Hoşgeldin — kafene bakalım.' : `${daysSinceCreation} gündür Aleg'tesin.`}
+        </p>
+      </div>
 
-      {/* Main content */}
-      <main className="flex-1 max-w-3xl mx-auto px-6 py-16 w-full">
-        <div className="mb-10">
+      {/* 3 kart - özet */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
+        <MetricCard
+          label="DURUM"
+          value={statusLabel(business?.subscription_status)}
+          sublabel={plan?.name ? `${plan.name} plan` : ''}
+        />
+        <MetricCard
+          label="MENÜDEKİ ÜRÜN"
+          value={(productCount ?? 0).toString()}
+          sublabel="aktif ürün sayısı"
+        />
+        <MetricCard
+          label="MASA"
+          value={(tableCount ?? 0).toString()}
+          sublabel="kayıtlı masa"
+        />
+      </div>
+
+      {/* İki kolon: QR preview + Sonraki adımlar */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-10">
+        {/* QR Menu önizleme */}
+        <div className="bg-card border border-line rounded-[var(--r)] p-6">
           <div
-            className="text-accent uppercase mb-3"
+            className="text-ink-3 uppercase mb-3"
             style={{
               fontFamily: 'var(--f-mono)',
               fontSize: 10,
@@ -102,89 +118,117 @@ export default async function PanelHomePage() {
               letterSpacing: '0.14em',
             }}
           >
-            HOŞGELDİN
-          </div>
-          <h1
-            style={{
-              fontFamily: 'var(--f-serif)',
-              fontStyle: 'italic',
-              fontSize: 56,
-              fontWeight: 400,
-              letterSpacing: '-0.02em',
-              lineHeight: 1.05,
-            }}
-            className="mb-4"
-          >
-            {greeting}, {firstName}
-          </h1>
-          <p className="text-ink-2 text-lg leading-relaxed">
-            {business?.name} paneline başarıyla giriş yaptın. Menü, masalar, sipariş ve raporlar
-            yakında burada olacak — şu an sadece iskelet hazır.
-          </p>
-        </div>
-
-        {/* Bilgi kartları */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
-          <InfoCard label="DURUM" value={statusLabel(business?.subscription_status)} />
-          <InfoCard label="PLAN" value={plan?.name || 'Yok'} />
-          <InfoCard
-            label="SUBDOMAIN"
-            value={`${business?.slug}.alegstudio.com`}
-            mono
-          />
-        </div>
-
-        {/* Sıradaki özellikler */}
-        <div className="bg-card border border-line rounded-[14px] p-8">
-          <div
-            className="text-accent uppercase mb-3"
-            style={{
-              fontFamily: 'var(--f-mono)',
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: '0.14em',
-            }}
-          >
-            YAKINDA
+            QR MENÜ URL
           </div>
           <h2
             style={{
               fontFamily: 'var(--f-serif)',
               fontStyle: 'italic',
-              fontSize: 28,
+              fontSize: 26,
+              fontWeight: 400,
+              letterSpacing: '-0.02em',
+            }}
+            className="mb-3"
+          >
+            Müşterilerin göreceği link
+          </h2>
+          <a
+            href={`https://${business?.slug}.alegstudio.com`}
+            target="_blank"
+            rel="noreferrer"
+            className="text-accent hover:underline text-sm break-all"
+            style={{ fontFamily: 'var(--f-mono)' }}
+          >
+            {business?.slug}.alegstudio.com ↗
+          </a>
+          <div className="mt-4 text-sm text-ink-3">
+            Bu linki QR koda çevirip masalarınıza yapıştırabilirsiniz. Müşteriler telefonlarıyla
+            okutup menünüze anında erişir.
+          </div>
+        </div>
+
+        {/* Sıradaki adımlar */}
+        <div className="bg-accent/5 border border-accent/20 rounded-[var(--r)] p-6">
+          <div
+            className="text-accent uppercase mb-3"
+            style={{
+              fontFamily: 'var(--f-mono)',
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: '0.14em',
+            }}
+          >
+            BAŞLAMAK İÇİN
+          </div>
+          <h2
+            style={{
+              fontFamily: 'var(--f-serif)',
+              fontStyle: 'italic',
+              fontSize: 26,
               fontWeight: 400,
               letterSpacing: '-0.02em',
             }}
             className="mb-4"
           >
-            Aktarılacak ekranlar
+            İlk 3 adım
           </h2>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-ink-2">
-            <FeatureItem icon="◉" title="Menü yönetimi" desc="Kategoriler ve ürünler" />
-            <FeatureItem icon="◇" title="POS & Masa" desc="Sipariş ve ödeme" />
-            <FeatureItem icon="◈" title="KDS" desc="Mutfak ekranı" />
-            <FeatureItem icon="◍" title="Raporlar" desc="Günlük satış, popüler ürünler" />
-            <FeatureItem icon="✆" title="Sadakat" desc="Müşteri kulübü" />
-            <FeatureItem icon="⚙" title="Ayarlar" desc="Tema, çalışma saatleri" />
-          </div>
-
-          <div className="mt-6 pt-6 border-t border-line text-sm text-ink-3">
-            Önceliklendirmek istediğin özellik varsa Aleg ekibiyle iletişime geçebilirsin.
+          <div className="space-y-3">
+            <Step
+              n={1}
+              title="Kategorilerinizi ekleyin"
+              desc="Kahve, yiyecek, tatlı..."
+              href="/menu"
+            />
+            <Step
+              n={2}
+              title="Ürünleri ekleyin"
+              desc="Fotoğraf, fiyat, açıklama"
+              href="/menu"
+            />
+            <Step
+              n={3}
+              title="QR koddan test edin"
+              desc="Müşteri gözünden bakın"
+              href={`https://${business?.slug}.alegstudio.com`}
+              external
+            />
           </div>
         </div>
-      </main>
+      </div>
 
-      {/* Footer */}
-      <footer className="border-t border-line py-6">
-        <div className="max-w-6xl mx-auto px-6 text-center text-xs text-ink-3" style={{ fontFamily: 'var(--f-mono)', letterSpacing: '0.04em' }}>
-          <span style={{ fontFamily: 'var(--f-serif)', fontStyle: 'italic', fontSize: 14 }}>Aleg</span>
-          <span className="mx-2">·</span>
-          Kafe işletim sistemi
-          <span className="mx-2">·</span>
-          v0.1
+      {/* Yakında bölümü */}
+      <div className="bg-card border border-line rounded-[var(--r)] p-6">
+        <div
+          className="text-ink-3 uppercase mb-3"
+          style={{
+            fontFamily: 'var(--f-mono)',
+            fontSize: 10,
+            fontWeight: 700,
+            letterSpacing: '0.14em',
+          }}
+        >
+          YAKINDA
         </div>
-      </footer>
+        <h2
+          style={{
+            fontFamily: 'var(--f-serif)',
+            fontStyle: 'italic',
+            fontSize: 24,
+            fontWeight: 400,
+            letterSpacing: '-0.02em',
+          }}
+          className="mb-4"
+        >
+          Çalışmaları süren özellikler
+        </h2>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+          <FeatureBox icon="◉" title="POS & Masa Yönetimi" desc="Sipariş alma, ödeme, hesap bölüşme" />
+          <FeatureBox icon="◈" title="KDS (Mutfak Ekranı)" desc="Siparişleri gerçek zamanlı takip" />
+          <FeatureBox icon="◌" title="Raporlar" desc="Günlük satış, popüler ürünler" />
+        </div>
+      </div>
     </div>
   );
 }
@@ -199,10 +243,10 @@ function getGreeting() {
 
 function statusLabel(status?: string): string {
   const labels: Record<string, string> = {
-    trial: '30 günlük deneme',
+    trial: 'Deneme',
     active: 'Aktif',
-    past_due: 'Gecikmiş ödeme',
-    cancelled: 'İptal edildi',
+    past_due: 'Gecikmiş',
+    cancelled: 'İptal',
     suspended: 'Askıda',
   };
   return labels[status || ''] || '—';
@@ -212,11 +256,19 @@ function statusLabel(status?: string): string {
 // Bileşenler
 // ============================================================
 
-function InfoCard({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+function MetricCard({
+  label,
+  value,
+  sublabel,
+}: {
+  label: string;
+  value: string;
+  sublabel: string;
+}) {
   return (
-    <div className="bg-card border border-line rounded-[14px] p-5">
+    <div className="bg-card border border-line rounded-[var(--r)] p-5 min-h-[120px] grid gap-2 content-between">
       <div
-        className="text-ink-3 uppercase mb-2"
+        className="text-ink-3 uppercase"
         style={{
           fontFamily: 'var(--f-mono)',
           fontSize: 10,
@@ -227,42 +279,80 @@ function InfoCard({ label, value, mono }: { label: string; value: string; mono?:
         {label}
       </div>
       <div
-        className="text-ink"
-        style={
-          mono
-            ? {
-                fontFamily: 'var(--f-mono)',
-                fontSize: 14,
-                wordBreak: 'break-all',
-              }
-            : {
-                fontFamily: 'var(--f-serif)',
-                fontStyle: 'italic',
-                fontSize: 24,
-                fontWeight: 400,
-                letterSpacing: '-0.02em',
-                lineHeight: 1.2,
-              }
-        }
+        style={{
+          fontFamily: 'var(--f-serif)',
+          fontStyle: 'italic',
+          fontSize: 36,
+          fontWeight: 400,
+          letterSpacing: '-0.02em',
+          lineHeight: 1,
+        }}
       >
         {value}
+      </div>
+      <div className="text-xs text-ink-3" style={{ fontFamily: 'var(--f-mono)', letterSpacing: '0.04em' }}>
+        {sublabel}
       </div>
     </div>
   );
 }
 
-function FeatureItem({ icon, title, desc }: { icon: string; title: string; desc: string }) {
+function Step({
+  n,
+  title,
+  desc,
+  href,
+  external,
+}: {
+  n: number;
+  title: string;
+  desc: string;
+  href: string;
+  external?: boolean;
+}) {
+  const Component = external ? 'a' : Link;
+  const extraProps = external ? { target: '_blank', rel: 'noreferrer' } : {};
+
   return (
-    <div className="flex items-start gap-3 py-2">
+    <Component
+      href={href}
+      {...extraProps}
+      className="flex items-start gap-3 py-2.5 group cursor-pointer"
+    >
       <div
-        className="w-9 h-9 rounded-[10px] bg-accent/10 text-accent flex items-center justify-center flex-shrink-0"
-        style={{ fontFamily: 'var(--f-mono)' }}
+        className="w-7 h-7 rounded-full bg-accent text-card flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform"
+        style={{
+          fontFamily: 'var(--f-mono)',
+          fontSize: 11,
+          fontWeight: 700,
+        }}
       >
-        {icon}
+        {n}
       </div>
-      <div>
-        <div className="text-sm font-medium text-ink">{title}</div>
+      <div className="flex-1">
+        <div className="text-sm font-medium text-ink group-hover:text-accent transition-colors">
+          {title} {external && <span className="text-xs">↗</span>}
+        </div>
         <div className="text-xs text-ink-3 mt-0.5">{desc}</div>
+      </div>
+    </Component>
+  );
+}
+
+function FeatureBox({ icon, title, desc }: { icon: string; title: string; desc: string }) {
+  return (
+    <div className="p-4 rounded-[var(--r-sm)] bg-paper-2 border border-line">
+      <div className="flex items-start gap-3">
+        <div
+          className="w-8 h-8 rounded-[var(--r-sm)] bg-accent/10 text-accent flex items-center justify-center flex-shrink-0"
+          style={{ fontFamily: 'var(--f-mono)' }}
+        >
+          {icon}
+        </div>
+        <div className="flex-1">
+          <div className="text-sm font-medium text-ink">{title}</div>
+          <div className="text-xs text-ink-3 mt-0.5">{desc}</div>
+        </div>
       </div>
     </div>
   );
