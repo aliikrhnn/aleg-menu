@@ -23,7 +23,7 @@ export const PANEL_NAV: PanelNavGroup[] = [
     items: [
       { id: 'dashboard', label: 'Ana Sayfa', href: '/', icon: '◇' },
       { id: 'pos', label: 'Sipariş & Masa', href: '/pos', icon: '◉' },
-      { id: 'kds', label: 'Mutfak Ekranı', href: '/kds', icon: '◈', comingSoon: true },
+      { id: 'kds', label: 'Mutfak Ekranı', href: '/kds', icon: '◈' },
     ],
   },
   {
