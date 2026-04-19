@@ -9,6 +9,7 @@ import {
   updateProductStatus,
   type ProductInput,
 } from '@/lib/actions/menu';
+import { aiGenerateProductDescription, aiTranslateText } from '@/lib/actions/ai';
 import type { LocalizedText } from '@/types/database';
 
 type CategoryOption = {
@@ -411,6 +412,76 @@ function ProductFormModal({
     hero_icon: initial?.hero_icon || '',
   });
 
+  // AI işlemleri için loading state
+  const [aiLoading, setAiLoading] = useState<string | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
+
+  // Kategoriyi ad olarak bul - AI'ya context vermek için
+  const categoryName = categories.find((c) => c.id === form.category_id)?.name.tr;
+
+  // TR açıklama üret
+  const handleGenerateDescription = async () => {
+    if (!form.name_tr.trim()) {
+      setAiError('Önce ürün adını yaz');
+      return;
+    }
+    setAiLoading('desc_tr');
+    setAiError(null);
+    const res = await aiGenerateProductDescription({
+      name: form.name_tr,
+      category: categoryName,
+      language: 'tr',
+    });
+    setAiLoading(null);
+    if (res.success && res.description) {
+      setForm((f) => ({ ...f, description_tr: res.description! }));
+    } else {
+      setAiError(res.error || 'AI hatası');
+    }
+  };
+
+  // TR isim → EN isim çevir
+  const handleTranslateName = async () => {
+    if (!form.name_tr.trim()) {
+      setAiError('Önce Türkçe adı yaz');
+      return;
+    }
+    setAiLoading('name_en');
+    setAiError(null);
+    const res = await aiTranslateText({
+      text: form.name_tr,
+      from: 'tr',
+      to: 'en',
+    });
+    setAiLoading(null);
+    if (res.success && res.translated) {
+      setForm((f) => ({ ...f, name_en: res.translated! }));
+    } else {
+      setAiError(res.error || 'AI hatası');
+    }
+  };
+
+  // TR açıklama → EN açıklama çevir
+  const handleTranslateDescription = async () => {
+    if (!form.description_tr?.trim()) {
+      setAiError('Önce Türkçe açıklamayı yaz veya üret');
+      return;
+    }
+    setAiLoading('desc_en');
+    setAiError(null);
+    const res = await aiTranslateText({
+      text: form.description_tr,
+      from: 'tr',
+      to: 'en',
+    });
+    setAiLoading(null);
+    if (res.success && res.translated) {
+      setForm((f) => ({ ...f, description_en: res.translated! }));
+    } else {
+      setAiError(res.error || 'AI hatası');
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit(form);
@@ -452,6 +523,13 @@ function ProductFormModal({
 
         {/* Content */}
         <div className="px-6 py-5 space-y-4">
+          {/* AI hata göster */}
+          {aiError && (
+            <div className="p-2.5 rounded-[var(--r-sm)] bg-warn/10 border border-warn/20 text-warn text-xs">
+              ⚠ {aiError}
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Field label="Ürün Adı (Türkçe)" required>
               <input
@@ -463,7 +541,18 @@ function ProductFormModal({
                 autoFocus
               />
             </Field>
-            <Field label="Ürün Adı (İngilizce)">
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-sm font-medium text-ink-2">
+                  Ürün Adı (İngilizce)
+                </label>
+                <AiButton
+                  onClick={handleTranslateName}
+                  loading={aiLoading === 'name_en'}
+                  disabled={!form.name_tr.trim() || aiLoading !== null}
+                  label="Çevir"
+                />
+              </div>
               <input
                 type="text"
                 value={form.name_en || ''}
@@ -471,10 +560,21 @@ function ProductFormModal({
                 placeholder="Flat White"
                 className="form-input"
               />
-            </Field>
+            </div>
           </div>
 
-          <Field label="Açıklama (Türkçe)">
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-sm font-medium text-ink-2">
+                Açıklama (Türkçe)
+              </label>
+              <AiButton
+                onClick={handleGenerateDescription}
+                loading={aiLoading === 'desc_tr'}
+                disabled={!form.name_tr.trim() || aiLoading !== null}
+                label="AI ile üret"
+              />
+            </div>
             <textarea
               value={form.description_tr || ''}
               onChange={(e) => setForm((f) => ({ ...f, description_tr: e.target.value }))}
@@ -482,9 +582,20 @@ function ProductFormModal({
               rows={2}
               className="form-input resize-none"
             />
-          </Field>
+          </div>
 
-          <Field label="Açıklama (İngilizce)">
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-sm font-medium text-ink-2">
+                Açıklama (İngilizce)
+              </label>
+              <AiButton
+                onClick={handleTranslateDescription}
+                loading={aiLoading === 'desc_en'}
+                disabled={!form.description_tr?.trim() || aiLoading !== null}
+                label="Çevir"
+              />
+            </div>
             <textarea
               value={form.description_en || ''}
               onChange={(e) => setForm((f) => ({ ...f, description_en: e.target.value }))}
@@ -492,7 +603,7 @@ function ProductFormModal({
               rows={2}
               className="form-input resize-none"
             />
-          </Field>
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Field label="Kategori" required>
@@ -607,6 +718,41 @@ function Field({
       </label>
       {children}
     </div>
+  );
+}
+
+function AiButton({
+  onClick,
+  loading,
+  disabled,
+  label,
+}: {
+  onClick: () => void;
+  loading: boolean;
+  disabled: boolean;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled || loading}
+      className="inline-flex items-center gap-1.5 h-6 px-2 rounded-[var(--r-sm)] text-xs font-medium bg-accent/10 text-accent hover:bg-accent/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+      style={{ fontFamily: 'var(--f-sans)' }}
+      title="Claude AI ile üretilir"
+    >
+      {loading ? (
+        <>
+          <span className="inline-block w-3 h-3 rounded-full border-2 border-accent/30 border-t-accent animate-spin" />
+          <span>Üretiliyor...</span>
+        </>
+      ) : (
+        <>
+          <span>✨</span>
+          <span>{label}</span>
+        </>
+      )}
+    </button>
   );
 }
 
