@@ -22,7 +22,7 @@ export const PANEL_NAV: PanelNavGroup[] = [
     group: 'GÜNLÜK',
     items: [
       { id: 'dashboard', label: 'Ana Sayfa', href: '/', icon: '◇' },
-      { id: 'pos', label: 'Sipariş & Masa', href: '/pos', icon: '◉', comingSoon: true },
+      { id: 'pos', label: 'Sipariş & Masa', href: '/pos', icon: '◉' },
       { id: 'kds', label: 'Mutfak Ekranı', href: '/kds', icon: '◈', comingSoon: true },
     ],
   },

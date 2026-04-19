@@ -2,10 +2,12 @@
 
 import { useState, useMemo } from 'react';
 import type { LocalizedText } from '@/types/database';
+import { CartDrawer } from './cart-drawer';
 
 type Lang = 'tr' | 'en';
 
 type Business = {
+  id: string;
   name: string;
   slug: string;
   logo_url: string | null;
@@ -72,6 +74,7 @@ export function MenuView({ business, categories, products }: Props) {
   const [search, setSearch] = useState('');
   const [mode, setMode] = useState<'dinein' | 'pickup' | 'delivery'>('dinein');
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [cartDrawerOpen, setCartDrawerOpen] = useState(false);
 
   // Aktif kategorideki ürünler (search uygulu)
   const catProducts = useMemo(() => {
@@ -106,6 +109,35 @@ export function MenuView({ business, categories, products }: Props) {
       return [...c, { product_id: p.id, qty: 1, unit_price: p.price }];
     });
   };
+
+  const handleQtyChange = (productId: string, newQty: number) => {
+    if (newQty <= 0) {
+      setCart((c) => c.filter((x) => x.product_id !== productId));
+    } else {
+      setCart((c) =>
+        c.map((x) => (x.product_id === productId ? { ...x, qty: newQty } : x))
+      );
+    }
+  };
+
+  const handleClearCart = () => {
+    setCart([]);
+  };
+
+  // Drawer için ürün adlarıyla birlikte sepet kalemleri
+  const cartItemsForDrawer = useMemo(
+    () =>
+      cart.map((c) => {
+        const product = products.find((p) => p.id === c.product_id);
+        return {
+          product_id: c.product_id,
+          product_name: tt(product?.name, lang, 'Ürün'),
+          qty: c.qty,
+          unit_price: c.unit_price,
+        };
+      }),
+    [cart, products, lang]
+  );
 
   const activeCategory = categories.find((c) => c.id === activeCat);
 
@@ -375,7 +407,8 @@ export function MenuView({ business, categories, products }: Props) {
       {cartCount > 0 && (
         <div className="fixed left-0 right-0 bottom-0 z-50 px-4 pb-4 pt-2 bg-gradient-to-t from-paper to-transparent">
           <button
-            className="w-full h-14 rounded-[14px] bg-accent text-card flex items-center justify-between px-4 shadow-lg"
+            onClick={() => setCartDrawerOpen(true)}
+            className="w-full h-14 rounded-[14px] bg-accent text-card flex items-center justify-between px-4 shadow-lg active:scale-[0.99] transition-transform"
             style={{
               boxShadow: '0 12px 32px rgba(196,85,58,0.4), 0 4px 12px rgba(196,85,58,0.2)',
               color: '#FAF5EA',
@@ -404,6 +437,19 @@ export function MenuView({ business, categories, products }: Props) {
           </button>
         </div>
       )}
+
+      {/* ============ CART DRAWER ============ */}
+      <CartDrawer
+        open={cartDrawerOpen}
+        onClose={() => setCartDrawerOpen(false)}
+        lang={lang}
+        mode={mode}
+        items={cartItemsForDrawer}
+        total={cartTotal}
+        businessId={business.id}
+        onQtyChange={handleQtyChange}
+        onClearCart={handleClearCart}
+      />
 
       <style jsx global>{`
         .scrollbar-hide::-webkit-scrollbar {

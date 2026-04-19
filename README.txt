@@ -1,32 +1,48 @@
-# Türkiye Haritası Güncelleme
+# Adım 2: Canlı Siparişler Paneli
 
-## YAPACAKLARIN
+## YENİ DOSYALAR (Projende aynı dizinleri oluştur)
 
-1. **Yeni dosya ekle:**
-   - public/map/turkey-silhouette.webp  (yeni temiz silüet)
+1. lib/actions/pos.ts
+2. app/panel/(shell)/pos/page.tsx
+3. app/panel/(shell)/pos/orders-board.tsx
+4. supabase/migrations/0007_realtime_orders.sql (yedek için)
 
-2. **Güncelle:**
-   - components/landing/map-section.tsx  (yeniden yaz)
+## DEĞİŞEN DOSYA (üstüne yaz)
 
-3. **ESKİ dosyayı SİLMEK istersen (opsiyonel):**
-   - public/map/turkey-map.webp  (artık kullanılmıyor)
-   - Hemen silmeden önce canlıda çalıştığını test et
+- components/panel/nav-config.ts
 
-## DEĞİŞİKLİKLER
+## SUPABASE'DE ÇALIŞTIR (ÖNEMLİ)
 
-✓ Bursa artık AKTİF şehir (olive yeşil, count: 1)
-✓ Aktif şehir sayısı: 5 → 6
-✓ Aktif işletme sayısı: 8 → 9
-✓ Türkiye silueti TEMİZ (il isimleri kaldırıldı)
-✓ 18 şehir kodla eklendi — KESKİN, OKUNAKLI etiketler
-✓ Isparta etiketi kırmızı pill + beyaz yazı (vurgulu)
-✓ Beta şehirleri koyu pill + beyaz yazı
-✓ Bekleyen şehirler küçük ince etiket
-✓ Her şehrin labelPos'u (top/bottom/left/right) optimize edildi — overlapping azaldı
+SQL Editor'da çalıştır:
+
+    ALTER PUBLICATION supabase_realtime ADD TABLE orders;
+    ALTER PUBLICATION supabase_realtime ADD TABLE waiter_calls;
+
+Bu olmadan realtime çalışmaz.
+
+NOT: Supabase'de UI'dan da yapabilirsin:
+- Dashboard → Database → Replication → supabase_realtime publication
+- orders tablosuna checkbox koy
 
 ## TEST
 
-Remove-Item -Recurse -Force .next
-npm run dev
+1. cd C:\Users\aliik\OneDrive\Desktop\aleg-starter
+2. Remove-Item -Recurse -Force .next
+3. npm run dev
 
-Türkiye tab'ına geç, kontrol et.
+4. Tarayıcı sekme 1: Panel → giriş → /panel/pos
+5. Tarayıcı sekme 2: http://localhost:3000/menu/karakoy
+6. Sekme 2'den sipariş gönder
+7. Sekme 1'de ANLIK olarak "Yeni Sipariş" kolonuna düşmeli + ses çalmalı
+8. "Mutfağa Yolla" → "Hazır" → "Teslim Edildi" butonlarıyla durumu ilerlet
+
+## NASIL ÇALIŞIR
+
+- Supabase Realtime (WebSocket) — orders tablosundaki değişiklikleri dinler
+- Değişiklik algılandığında tüm liste tazelenir (cache yok, taze veri)
+- Yeni received sipariş gelirse ses çalar (switch ile kapatabilir)
+- 20 saniyede bir fallback refresh (realtime koptuğu durumda)
+
+## SONRAKİ ADIM
+
+/panel/kds - Tam ekran mutfak görünümü

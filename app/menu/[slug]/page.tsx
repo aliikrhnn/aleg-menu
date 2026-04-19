@@ -98,6 +98,7 @@ export default async function CustomerMenuPage({ params }: Props) {
   return (
     <MenuView
       business={{
+        id: business.id,
         name: business.name,
         slug: business.slug,
         logo_url: business.logo_url,

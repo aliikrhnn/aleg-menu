@@ -28,8 +28,17 @@ export function LoginForm() {
       return;
     }
 
-    // Başarılı giriş - panel'e yönlen (middleware business member kontrolü yapacak)
-    router.push('/');
+    // Başarılı giriş - panel ana sayfasına yönlen
+    // Subdomain (panel.alegstudio.com) varsa '/' ile panele gider
+    // Localhost'ta direkt /panel path'ine gitmemiz gerekir
+    const hostname = window.location.hostname;
+    const isSubdomain = hostname.startsWith('panel.');
+
+    if (isSubdomain) {
+      router.push('/');
+    } else {
+      router.push('/panel');
+    }
     router.refresh();
   };
 

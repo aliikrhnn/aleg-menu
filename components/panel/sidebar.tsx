@@ -95,10 +95,22 @@ export function PanelSidebar({ businessName }: PanelSidebarProps) {
                 currentPath === item.href || (item.href !== '/' && currentPath.startsWith(item.href));
               const disabled = item.comingSoon;
 
+              // Subdomain (panel.alegstudio.com) kullanılıyorsa middleware path'i /panel/xxx'a
+              // rewrite ediyor. Ama root domain'de (localhost:3000) link'in kendisine
+              // /panel prefix'ini eklemeliyiz.
+              const isOnPanelSubdomain =
+                typeof window !== 'undefined' &&
+                window.location.hostname.startsWith('panel.');
+              const resolvedHref = isOnPanelSubdomain
+                ? item.href
+                : item.href === '/'
+                  ? '/panel'
+                  : `/panel${item.href}`;
+
               return (
                 <Link
                   key={item.id}
-                  href={disabled ? '#' : item.href}
+                  href={disabled ? '#' : resolvedHref}
                   onClick={(e) => {
                     if (disabled) e.preventDefault();
                   }}
