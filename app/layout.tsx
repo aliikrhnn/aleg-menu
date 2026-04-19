@@ -3,10 +3,10 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: {
-    default: 'Aleg — Kafe işletim sistemi',
+    default: 'Aleg — İşletme yönetim sistemi',
     template: '%s · Aleg',
   },
-  description: 'Kafeler için uçtan uca dijital yönetim platformu. QR menü, kasa, mutfak ekranı, sadakat ve daha fazlası.',
+  description: 'Kafe, restoran, bar ve her tür yiyecek-içecek işletmesi için uçtan uca dijital yönetim platformu. QR menü, kasa, mutfak ekranı, sadakat ve daha fazlası.',
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://alegstudio.com'),
   icons: {
     icon: '/favicon.ico',

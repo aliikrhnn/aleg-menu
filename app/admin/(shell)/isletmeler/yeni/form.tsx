@@ -12,11 +12,15 @@ interface Props {
 
 const BUSINESS_TYPES = [
   { value: 'cafe', label: 'Kafe' },
-  { value: 'restaurant', label: 'Restoran' },
-  { value: 'brunch', label: 'Brunch' },
   { value: 'specialty_coffee', label: 'Specialty Coffee' },
-  { value: 'bar', label: 'Bar' },
-  { value: 'pastry', label: 'Pastane' },
+  { value: 'restaurant', label: 'Restoran' },
+  { value: 'brunch', label: 'Brunch & Kahvaltı' },
+  { value: 'bar', label: 'Bar / Pub' },
+  { value: 'pastry', label: 'Pastane / Fırın' },
+  { value: 'fast_food', label: 'Hızlı Tüketim (kebap, döner, pizza)' },
+  { value: 'dessert', label: 'Tatlıcı / Dondurmacı' },
+  { value: 'catering', label: 'Catering / Event' },
+  { value: 'hotel_restaurant', label: 'Otel Restoranı' },
   { value: 'other', label: 'Diğer' },
 ];
 

@@ -1,5 +1,5 @@
 /**
- * Kafe sahibi paneli için sidebar navigasyon öğeleri.
+ * İşletme paneli için sidebar navigasyon öğeleri.
  * Önem sırası: günlük kullanılacaklar üstte, yönetim altta.
  */
 

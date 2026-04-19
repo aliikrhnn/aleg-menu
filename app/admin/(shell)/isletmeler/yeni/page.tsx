@@ -35,7 +35,7 @@ export default async function NewBusinessPage() {
             lineHeight: 1.05,
           }}
         >
-          Yeni bir kafe ekleyelim
+          Yeni bir işletme ekleyelim
         </h1>
         <p className="text-ink-2 text-base mt-3">
           Bilgileri doldur, hesap otomatik oluşur. Geçici şifre ekrana çıkar — sahibine WhatsApp&apos;tan gönderirsin.

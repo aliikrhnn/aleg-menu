@@ -65,7 +65,7 @@ export default function PanelLoginPage({ searchParams }: Props) {
             }}
             className="mb-2"
           >
-            Kafeni aç
+            İşletmene gir
           </h1>
           <p className="text-ink-3 text-sm mb-6">
             E-postanı ve şifreni gir, panel açılsın.

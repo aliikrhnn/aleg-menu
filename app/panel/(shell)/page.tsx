@@ -82,7 +82,7 @@ export default async function PanelHomePage() {
           {greeting}, {firstName}
         </h1>
         <p className="text-ink-2 text-base mt-3">
-          {daysSinceCreation === 0 ? 'Hoşgeldin — kafene bakalım.' : `${daysSinceCreation} gündür Aleg'tesin.`}
+          {daysSinceCreation === 0 ? 'Hoşgeldin — işletmene bakalım.' : `${daysSinceCreation} gündür Aleg'tesin.`}
         </p>
       </div>
 

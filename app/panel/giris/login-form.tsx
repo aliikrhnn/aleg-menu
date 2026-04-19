@@ -43,7 +43,7 @@ export function LoginForm() {
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          placeholder="sen@kafen.com"
+          placeholder="sen@isletmen.com"
           required
           autoComplete="email"
           className="w-full h-11 px-3.5 rounded-[10px] bg-paper-2 border border-line text-ink placeholder:text-ink-3 focus:outline-none focus:border-accent focus:bg-card transition-colors"

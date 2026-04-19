@@ -30,13 +30,13 @@ export default function HomePage() {
       {/* Hero */}
       <section className="flex-1 flex items-center justify-center px-8 py-20">
         <div className="max-w-4xl text-center">
-          <div className="label-mono text-accent mb-6">KAFE İŞLETİM SİSTEMİ</div>
+          <div className="label-mono text-accent mb-6">İŞLETME YÖNETİM SİSTEMİ</div>
           <h1 className="font-serif-italic text-6xl md:text-7xl lg:text-8xl leading-[1.05] tracking-tight text-ink mb-8">
-            Kafen,<br />nefes alıyor.
+            İşletmen,<br />nefes alıyor.
           </h1>
           <p className="text-lg text-ink-2 max-w-2xl mx-auto mb-12 leading-relaxed">
             QR menüden kasaya, mutfak ekranından sadakat programına — tek bir platformda.
-            Türkiye&apos;nin her köşesindeki kafeler için.
+            Kafe, restoran, bar, pastane — her tür yiyecek-içecek işletmesi için.
           </p>
           <div className="flex items-center justify-center gap-4">
             <a

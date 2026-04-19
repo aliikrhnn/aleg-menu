@@ -13,7 +13,7 @@ export default function MenuPage({ params }: Props) {
         <p className="text-ink-2 mb-8">
           Bu sayfa QR okutulduğunda açılacak menü sayfası.
           <br />
-          Kafe kodu: <code className="font-mono text-sm bg-paper-2 px-2 py-1 rounded">{params.slug}</code>
+          İşletme kodu: <code className="font-mono text-sm bg-paper-2 px-2 py-1 rounded">{params.slug}</code>
         </p>
         <div className="inline-block px-4 py-2 rounded-[10px] bg-paper-2 border border-line text-sm text-ink-3">
           🚧 Menü tasarımı aktarılacak
