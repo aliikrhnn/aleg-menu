@@ -57,8 +57,11 @@ export function ModuleDeepDive() {
         </p>
 
         <div className="flex flex-col gap-24 mb-24">
+          {/* AI MODÜLÜ — ALEG'İN EN GÜÇLÜ FARKLILAŞTIRICISI */}
+          <AIModule />
+
           <ModuleDetail
-            num="01"
+            num="02"
             title="QR Menü & İmzalı Masa Oturumları"
             lead="Her masa için imzalı, versiyonlu QR. Kopya veya uzaktan taranmış QR'lara karşı dört farklı doğrulama politikası: open, table_code, staff_unlock, hybrid."
             bullets={[
@@ -72,7 +75,7 @@ export function ModuleDeepDive() {
 
           <ModuleDetail
             reverse
-            num="02"
+            num="03"
             title="İstasyon Bazlı Yönlendirme"
             lead="Her OrderLine, ilgili istasyona otomatik düşer. Bar, mutfak, soğuk prep, pastane — herkes sadece kendi işini görür. Yazıcılar lokasyon ve doküman tipine göre yönlendirilir."
             bullets={[
@@ -85,7 +88,7 @@ export function ModuleDeepDive() {
           />
 
           <ModuleDetail
-            num="03"
+            num="04"
             title="Offline-Safe Kasiyer"
             lead="İnternet kesilirse kasiyer durmaz. Siparişler ve ödemeler CashSession sınırı içinde yerel olarak yazılır; bağlantı dönünce sessizce senkronize olur. Hiçbir sipariş kaybolmaz."
             bullets={[
@@ -97,10 +100,8 @@ export function ModuleDeepDive() {
             visual={<VisOffline />}
           />
 
-          {/* AI MODÜLÜ — GENİŞLETİLMİŞ */}
-          <AIModule />
-
           <ModuleDetail
+            reverse
             num="05"
             title="Sadakat · LoyaltyAccount"
             lead="Tenant-scoped puan ledger'ı. Kampanyalar menü indirimi, sadakat tetikleyicisi veya misafir teşviki verebilir. Damga kart yerine imzalı dijital hesap."
@@ -114,7 +115,6 @@ export function ModuleDeepDive() {
           />
 
           <ModuleDetail
-            reverse
             num="06"
             title="PaymentIntent → PaymentRecord"
             lead="Beklenen ödemenin idempotent kaydı, gerçekleşen ödemenin dayanıklı finansal kaydı. UI varsayımları finansal gerçek değildir."
@@ -652,7 +652,7 @@ function AIModule() {
             fontWeight: 500,
           }}
         >
-          MODÜL 04 · ✦ YAPAY ZEKA
+          MODÜL 01 · ✦ YAPAY ZEKA
         </span>
         <h3
           className="text-ink mb-4 max-w-[860px]"
