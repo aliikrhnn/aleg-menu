@@ -49,7 +49,7 @@ export function MenuView({ business, categories, products }: Props) {
   );
 
   // Section ref'leri (scroll için)
-  const sectionRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const sectionRefs = useRef<Map<string, HTMLElement>>(new Map());
   const tabsRef = useRef<HTMLDivElement>(null);
 
   // Kategori bazlı ürün gruplaması
