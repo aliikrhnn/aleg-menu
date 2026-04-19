@@ -39,8 +39,8 @@ export default function HomePage() {
       <MapSection />
       <Pricing onDemo={openDemo} />
       <Early onDemo={openDemo} />
-      <FAQ />
       <FinalCTA onDemo={openDemo} />
+      <FAQ />
       <Footer />
 
       <DemoModal open={demoOpen} onClose={closeDemo} />

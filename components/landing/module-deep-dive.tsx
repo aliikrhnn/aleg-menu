@@ -263,7 +263,7 @@ function ModuleDetail({
 
       <div className="lg:[direction:ltr] flex justify-center">
         <div
-          className="bg-card border border-line rounded-[22px] p-5 md:p-7 flex flex-col gap-4 relative overflow-hidden w-full max-w-[460px] min-h-[420px] md:aspect-square"
+          className="bg-card border border-line rounded-[22px] p-5 md:p-7 flex flex-col gap-4 relative overflow-hidden w-full max-w-[460px] h-[480px] md:h-auto md:aspect-square"
           style={{
             boxShadow: '0 4px 10px rgba(42,31,24,0.1), 0 30px 60px -20px rgba(42,31,24,0.25)',
             ...(highlight && {
