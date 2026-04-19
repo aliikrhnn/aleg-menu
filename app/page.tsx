@@ -9,7 +9,11 @@ import { Features } from '@/components/landing/features';
 import { Steps } from '@/components/landing/steps';
 import { Showcase } from '@/components/landing/showcase';
 import { Modules } from '@/components/landing/modules';
+import { ModuleDeepDive } from '@/components/landing/module-deep-dive';
+import { MapSection } from '@/components/landing/map-section';
 import { Pricing } from '@/components/landing/pricing';
+import { Early } from '@/components/landing/early';
+import { FAQ } from '@/components/landing/faq';
 import { FinalCTA } from '@/components/landing/final-cta';
 import { Footer } from '@/components/landing/footer';
 import { DemoModal } from '@/components/landing/demo-modal';
@@ -31,10 +35,11 @@ export default function HomePage() {
       <Steps />
       <Showcase />
       <Modules />
-
-      {/* Parça 3b'de gelecek: ModuleDeepDive + MapSection + Early + FAQ */}
-
+      <ModuleDeepDive />
+      <MapSection />
       <Pricing onDemo={openDemo} />
+      <Early onDemo={openDemo} />
+      <FAQ />
       <FinalCTA onDemo={openDemo} />
       <Footer />
 

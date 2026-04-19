@@ -1,0 +1,3 @@
+# AI-Flow dosyasını SİL - AI artık ModuleDeepDive içinde
+
+Sil: components/landing/ai-flow.tsx
