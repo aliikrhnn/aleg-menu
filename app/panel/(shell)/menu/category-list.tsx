@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { createCategory, updateCategory, deleteCategory, type CategoryInput } from '@/lib/actions/menu';
+import { aiGenerateCategoryDescription, aiTranslateText } from '@/lib/actions/ai';
 import type { LocalizedText } from '@/types/database';
 
 type CategoryWithCount = {
@@ -182,6 +183,72 @@ function CategoryForm({
     active: initial?.active !== false,
   });
 
+  // AI state
+  const [aiLoading, setAiLoading] = useState<string | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
+
+  // TR açıklama üret
+  const handleGenerateDescription = async () => {
+    if (!form.name_tr.trim()) {
+      setAiError('Önce kategori adını yaz');
+      return;
+    }
+    setAiLoading('desc_tr');
+    setAiError(null);
+    const res = await aiGenerateCategoryDescription({
+      name: form.name_tr,
+      language: 'tr',
+    });
+    setAiLoading(null);
+    if (res.success && res.description) {
+      setForm((f) => ({ ...f, description_tr: res.description! }));
+    } else {
+      setAiError(res.error || 'AI hatası');
+    }
+  };
+
+  // TR ad → EN ad çevir
+  const handleTranslateName = async () => {
+    if (!form.name_tr.trim()) {
+      setAiError('Önce Türkçe adı yaz');
+      return;
+    }
+    setAiLoading('name_en');
+    setAiError(null);
+    const res = await aiTranslateText({
+      text: form.name_tr,
+      from: 'tr',
+      to: 'en',
+    });
+    setAiLoading(null);
+    if (res.success && res.translated) {
+      setForm((f) => ({ ...f, name_en: res.translated! }));
+    } else {
+      setAiError(res.error || 'AI hatası');
+    }
+  };
+
+  // TR açıklama → EN çevir
+  const handleTranslateDescription = async () => {
+    if (!form.description_tr?.trim()) {
+      setAiError('Önce Türkçe açıklamayı yaz veya üret');
+      return;
+    }
+    setAiLoading('desc_en');
+    setAiError(null);
+    const res = await aiTranslateText({
+      text: form.description_tr,
+      from: 'tr',
+      to: 'en',
+    });
+    setAiLoading(null);
+    if (res.success && res.translated) {
+      setForm((f) => ({ ...f, description_en: res.translated! }));
+    } else {
+      setAiError(res.error || 'AI hatası');
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit(form);
@@ -208,6 +275,13 @@ function CategoryForm({
       </div>
 
       <div className="space-y-5">
+        {/* AI hata göster */}
+        {aiError && (
+          <div className="p-2.5 rounded-[var(--r-sm)] bg-warn/10 border border-warn/20 text-warn text-xs">
+            ⚠ {aiError}
+          </div>
+        )}
+
         {/* Ad (TR + EN) */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field label="Kategori Adı (Türkçe)" required>
@@ -220,7 +294,18 @@ function CategoryForm({
               autoFocus
             />
           </Field>
-          <Field label="Kategori Adı (İngilizce)" hint="Opsiyonel">
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-sm font-medium text-ink-2">
+                Kategori Adı (İngilizce)
+              </label>
+              <AiButton
+                onClick={handleTranslateName}
+                loading={aiLoading === 'name_en'}
+                disabled={!form.name_tr.trim() || aiLoading !== null}
+                label="Çevir"
+              />
+            </div>
             <input
               type="text"
               value={form.name_en || ''}
@@ -228,12 +313,23 @@ function CategoryForm({
               placeholder="Coffees"
               className="form-input"
             />
-          </Field>
+          </div>
         </div>
 
         {/* Açıklama */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Field label="Açıklama (Türkçe)" hint="Kategori başlığının altında görünür">
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-sm font-medium text-ink-2">
+                Açıklama (Türkçe)
+              </label>
+              <AiButton
+                onClick={handleGenerateDescription}
+                loading={aiLoading === 'desc_tr'}
+                disabled={!form.name_tr.trim() || aiLoading !== null}
+                label="AI ile üret"
+              />
+            </div>
             <textarea
               value={form.description_tr || ''}
               onChange={(e) => setForm((f) => ({ ...f, description_tr: e.target.value }))}
@@ -241,8 +337,19 @@ function CategoryForm({
               rows={2}
               className="form-input resize-none"
             />
-          </Field>
-          <Field label="Açıklama (İngilizce)">
+          </div>
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-sm font-medium text-ink-2">
+                Açıklama (İngilizce)
+              </label>
+              <AiButton
+                onClick={handleTranslateDescription}
+                loading={aiLoading === 'desc_en'}
+                disabled={!form.description_tr?.trim() || aiLoading !== null}
+                label="Çevir"
+              />
+            </div>
             <textarea
               value={form.description_en || ''}
               onChange={(e) => setForm((f) => ({ ...f, description_en: e.target.value }))}
@@ -250,7 +357,7 @@ function CategoryForm({
               rows={2}
               className="form-input resize-none"
             />
-          </Field>
+          </div>
         </div>
 
         {/* Icon + Aktif */}
@@ -451,6 +558,41 @@ function Field({
       {children}
       {hint && <div className="text-xs text-ink-3 mt-1.5">{hint}</div>}
     </div>
+  );
+}
+
+function AiButton({
+  onClick,
+  loading,
+  disabled,
+  label,
+}: {
+  onClick: () => void;
+  loading: boolean;
+  disabled: boolean;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled || loading}
+      className="inline-flex items-center gap-1.5 h-6 px-2 rounded-[var(--r-sm)] text-xs font-medium bg-accent/10 text-accent hover:bg-accent/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+      style={{ fontFamily: 'var(--f-sans)' }}
+      title="Claude AI ile üretilir"
+    >
+      {loading ? (
+        <>
+          <span className="inline-block w-3 h-3 rounded-full border-2 border-accent/30 border-t-accent animate-spin" />
+          <span>Üretiliyor...</span>
+        </>
+      ) : (
+        <>
+          <span>✨</span>
+          <span>{label}</span>
+        </>
+      )}
+    </button>
   );
 }
 

@@ -88,6 +88,64 @@ SADECE açıklama metnini döndür, başka hiçbir şey ekleme.`;
 }
 
 // ============================================================
+// KATEGORİ AÇIKLAMASI ÜRET
+// ============================================================
+export async function generateCategoryDescription(params: {
+  name: string;
+  language?: 'tr' | 'en';
+}): Promise<{ success: true; description: string } | { success: false; error: string }> {
+  try {
+    const lang = params.language || 'tr';
+    const isEnglish = lang === 'en';
+
+    const systemPrompt = isEnglish
+      ? `You write short, elegant category introductions for cafe/restaurant menus.
+Style guide:
+- Maximum 10 words
+- Tells customer what's in this category with character
+- Not a definition, but an invitation
+- No marketing clichés
+Return ONLY the description text, no preamble.`
+      : `Kafe/restoran menüsü için kategori başlıklarının altında görünecek kısa, zarif tanıtım yazıları yazıyorsun.
+Stil kuralları:
+- Maksimum 10 kelime
+- Ne olduğunu tanımlamak değil, davet etmek
+- Pazarlama klişesi yok
+SADECE açıklama metnini döndür, başka hiçbir şey ekleme.
+
+Örnekler:
+Kategori: Espresso Bazlı → "Günün başladığı, ritualin koyulaştığı yer"
+Kategori: Mevsim Kahveleri → "Taze mevsim dokusuyla hazırlanmış limitli seri"
+Kategori: Brunch → "Sakin bir hafta sonu sabahının mutfak hikayesi"`;
+
+    const userMessage = isEnglish ? `Category: ${params.name}` : `Kategori: ${params.name}`;
+
+    const response = await getClient().messages.create({
+      model: MODEL,
+      max_tokens: 100,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userMessage }],
+    });
+
+    const text = response.content
+      .filter((block): block is { type: 'text'; text: string } => block.type === 'text')
+      .map((block) => block.text)
+      .join('')
+      .trim();
+
+    if (!text) {
+      return { success: false, error: 'Boş yanıt alındı' };
+    }
+
+    return { success: true, description: text };
+  } catch (e) {
+    console.error('AI generate error:', e);
+    const message = e instanceof Error ? e.message : 'AI hatası';
+    return { success: false, error: message };
+  }
+}
+
+// ============================================================
 // ÇEVİRİ (TR ↔ EN)
 // ============================================================
 export async function translateText(params: {

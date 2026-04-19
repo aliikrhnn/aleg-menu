@@ -1,7 +1,7 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
-import { generateProductDescription, translateText } from '@/lib/ai/claude';
+import { generateProductDescription, generateCategoryDescription, translateText } from '@/lib/ai/claude';
 
 // ============================================================
 // Permission helper
@@ -46,6 +46,35 @@ export async function aiGenerateProductDescription(params: {
     }
 
     const result = await generateProductDescription(params);
+
+    if (!result.success) {
+      return { success: false, error: result.error };
+    }
+
+    return { success: true, description: result.description };
+  } catch (e) {
+    return {
+      success: false,
+      error: e instanceof Error ? e.message : 'AI hatası',
+    };
+  }
+}
+
+// ============================================================
+// Kategori açıklaması üret
+// ============================================================
+export async function aiGenerateCategoryDescription(params: {
+  name: string;
+  language?: 'tr' | 'en';
+}): Promise<{ success: boolean; description?: string; error?: string }> {
+  try {
+    await requireBusinessAccess();
+
+    if (!params.name || params.name.trim().length < 2) {
+      return { success: false, error: 'Önce kategori adını yaz' };
+    }
+
+    const result = await generateCategoryDescription(params);
 
     if (!result.success) {
       return { success: false, error: result.error };
