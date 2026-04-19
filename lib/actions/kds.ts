@@ -165,7 +165,7 @@ export async function advanceKitchenOrder(
     }
 
     // Sadece received veya preparing'ten ilerlet
-    let newStatus: string;
+    let newStatus: 'preparing' | 'ready';
     if (order.status === 'received') {
       newStatus = 'preparing';
     } else if (order.status === 'preparing') {
