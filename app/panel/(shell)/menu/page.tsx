@@ -52,7 +52,7 @@ export default async function MenuPage() {
       </div>
 
       {/* Header */}
-      <div className="flex items-end justify-between mb-10">
+      <div className="flex items-end justify-between mb-10 gap-4 flex-wrap">
         <div>
           <div
             className="text-accent uppercase mb-3"
@@ -81,6 +81,15 @@ export default async function MenuPage() {
             Kategorilerini organize et, ürünlerini ekle. Müşterin menünü QR koddan görecek.
           </p>
         </div>
+
+        <Link
+          href="/menu/urunler"
+          className="h-11 px-5 rounded-[var(--r-sm)] bg-card border border-line hover:border-accent text-ink-2 hover:text-accent font-semibold text-sm flex items-center gap-2 transition-colors"
+          style={{ fontFamily: 'var(--f-sans)' }}
+        >
+          <span style={{ fontFamily: 'var(--f-mono)' }}>⊟</span>
+          Ürünleri Yönet →
+        </Link>
       </div>
 
       {/* İstatistik bar */}

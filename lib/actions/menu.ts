@@ -229,3 +229,203 @@ export async function reorderCategories(
     return { success: false, error: e instanceof Error ? e.message : 'Hata' };
   }
 }
+
+// ============================================================
+// ÜRÜN İŞLEMLERİ
+// ============================================================
+
+export type ProductInput = {
+  category_id: string | null;
+  name_tr: string;
+  name_en?: string;
+  description_tr?: string;
+  description_en?: string;
+  price: number;
+  status?: 'active' | 'soldout' | 'draft' | 'archived';
+  print_station?: string;
+  is_featured?: boolean;
+  hero_icon?: string;
+};
+
+export async function createProduct(
+  input: ProductInput
+): Promise<{ success: boolean; error?: string; product_id?: string }> {
+  try {
+    const { supabase, businessId } = await requireBusinessAccess();
+
+    if (!input.name_tr || input.name_tr.length < 2) {
+      return { success: false, error: 'Ürün adı en az 2 karakter olmalı' };
+    }
+    if (input.price < 0) {
+      return { success: false, error: 'Fiyat negatif olamaz' };
+    }
+
+    // Kategori varsa - bu business'a mı ait kontrol et
+    if (input.category_id) {
+      const { data: cat } = await supabase
+        .from('categories')
+        .select('business_id')
+        .eq('id', input.category_id)
+        .maybeSingle();
+
+      if (!cat || cat.business_id !== businessId) {
+        return { success: false, error: 'Geçersiz kategori' };
+      }
+    }
+
+    const name: LocalizedText = { tr: input.name_tr };
+    if (input.name_en) name.en = input.name_en;
+
+    const description: LocalizedText | null =
+      input.description_tr || input.description_en
+        ? { tr: input.description_tr || '', ...(input.description_en ? { en: input.description_en } : {}) }
+        : null;
+
+    // Sıra belirle - aynı kategorideki en son ürün + 1
+    let sortOrder = 1;
+    if (input.category_id) {
+      const { data: existing } = await supabase
+        .from('products')
+        .select('sort_order')
+        .eq('category_id', input.category_id)
+        .order('sort_order', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      sortOrder = (existing?.sort_order || 0) + 1;
+    }
+
+    const { data, error } = await supabase
+      .from('products')
+      .insert({
+        business_id: businessId,
+        category_id: input.category_id,
+        name,
+        description,
+        price: input.price,
+        status: input.status || 'active',
+        print_station: input.print_station || null,
+        is_featured: input.is_featured || false,
+        hero_icon: input.hero_icon || null,
+        sort_order: sortOrder,
+      })
+      .select('id')
+      .single();
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath('/panel/menu');
+    revalidatePath('/panel/menu/urunler');
+    return { success: true, product_id: data.id };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : 'Hata' };
+  }
+}
+
+export async function updateProduct(
+  productId: string,
+  input: Partial<ProductInput>
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { supabase, businessId } = await requireBusinessAccess();
+
+    const { data: existing } = await supabase
+      .from('products')
+      .select('business_id')
+      .eq('id', productId)
+      .maybeSingle();
+
+    if (!existing || existing.business_id !== businessId) {
+      return { success: false, error: 'Ürün bulunamadı veya erişim yok' };
+    }
+
+    const updates: Record<string, unknown> = {};
+
+    if (input.name_tr !== undefined || input.name_en !== undefined) {
+      const { data: current } = await supabase
+        .from('products')
+        .select('name')
+        .eq('id', productId)
+        .single();
+
+      const currentName = (current?.name as LocalizedText) || { tr: '' };
+      updates.name = {
+        ...currentName,
+        ...(input.name_tr !== undefined && { tr: input.name_tr }),
+        ...(input.name_en !== undefined && { en: input.name_en }),
+      };
+    }
+
+    if (input.description_tr !== undefined || input.description_en !== undefined) {
+      const { data: current } = await supabase
+        .from('products')
+        .select('description')
+        .eq('id', productId)
+        .single();
+
+      const currentDesc = (current?.description as LocalizedText) || { tr: '' };
+      updates.description = {
+        ...currentDesc,
+        ...(input.description_tr !== undefined && { tr: input.description_tr }),
+        ...(input.description_en !== undefined && { en: input.description_en }),
+      };
+    }
+
+    if (input.category_id !== undefined) updates.category_id = input.category_id;
+    if (input.price !== undefined) updates.price = input.price;
+    if (input.status !== undefined) updates.status = input.status;
+    if (input.print_station !== undefined) updates.print_station = input.print_station || null;
+    if (input.is_featured !== undefined) updates.is_featured = input.is_featured;
+    if (input.hero_icon !== undefined) updates.hero_icon = input.hero_icon || null;
+
+    const { error } = await supabase.from('products').update(updates).eq('id', productId);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath('/panel/menu');
+    revalidatePath('/panel/menu/urunler');
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : 'Hata' };
+  }
+}
+
+export async function deleteProduct(
+  productId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { supabase, businessId } = await requireBusinessAccess();
+
+    const { data: existing } = await supabase
+      .from('products')
+      .select('business_id')
+      .eq('id', productId)
+      .maybeSingle();
+
+    if (!existing || existing.business_id !== businessId) {
+      return { success: false, error: 'Ürün bulunamadı veya erişim yok' };
+    }
+
+    const { error } = await supabase.from('products').delete().eq('id', productId);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath('/panel/menu');
+    revalidatePath('/panel/menu/urunler');
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : 'Hata' };
+  }
+}
+
+export async function updateProductStatus(
+  productId: string,
+  status: 'active' | 'soldout' | 'draft' | 'archived'
+): Promise<{ success: boolean; error?: string }> {
+  return updateProduct(productId, { status });
+}
