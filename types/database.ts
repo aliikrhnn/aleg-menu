@@ -275,6 +275,43 @@ export interface Database {
         };
         Update: Partial<Database['public']['Tables']['orders']['Row']>;
       };
+      order_items: {
+        Row: {
+          id: string;
+          order_id: string;
+          product_id: string | null;
+          variant_id: string | null;
+          product_name: string;
+          product_snapshot: Json | null;
+          quantity: number;
+          unit_price: number;
+          options: Json;
+          note: string | null;
+          status: 'ordered' | 'preparing' | 'ready' | 'delivered' | 'cancelled';
+        };
+        Insert: Partial<Database['public']['Tables']['order_items']['Row']> & {
+          order_id: string;
+          product_name: string;
+          quantity: number;
+          unit_price: number;
+        };
+        Update: Partial<Database['public']['Tables']['order_items']['Row']>;
+      };
+      waiter_calls: {
+        Row: {
+          id: string;
+          business_id: string;
+          table_id: string | null;
+          reason: string | null;
+          status: 'pending' | 'acknowledged' | 'resolved';
+          created_at: string;
+          resolved_at: string | null;
+        };
+        Insert: Partial<Database['public']['Tables']['waiter_calls']['Row']> & {
+          business_id: string;
+        };
+        Update: Partial<Database['public']['Tables']['waiter_calls']['Row']>;
+      };
     };
     Views: {
       [_ in never]: never;
@@ -311,3 +348,5 @@ export type Product = Database['public']['Tables']['products']['Row'];
 export type Table = Database['public']['Tables']['tables']['Row'];
 export type Ticket = Database['public']['Tables']['tickets']['Row'];
 export type Order = Database['public']['Tables']['orders']['Row'];
+export type OrderItem = Database['public']['Tables']['order_items']['Row'];
+export type WaiterCall = Database['public']['Tables']['waiter_calls']['Row'];
