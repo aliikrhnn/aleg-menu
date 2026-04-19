@@ -617,9 +617,9 @@ function FloatingCards() {
 
   return (
     <>
-      <FCard pos="top-[20%] -left-8" idx={idx1} key={`top-${idx1}`} />
-      <FCard pos="bottom-[24%] -right-6" idx={idx2} key={`bot-${idx2}`} />
-      <FCard pos="top-[60%] -left-4" idx={idx3} key={`mid-${idx3}`} />
+      <FCard pos="top-[10%] left-2 md:top-[20%] md:-left-8" idx={idx1} key={`top-${idx1}`} />
+      <FCard pos="bottom-[10%] right-2 md:bottom-[24%] md:-right-6" idx={idx2} key={`bot-${idx2}`} />
+      <FCard pos="hidden md:flex top-[60%] -left-4" idx={idx3} key={`mid-${idx3}`} />
     </>
   );
 }
@@ -628,12 +628,12 @@ function FCard({ pos, idx }: { pos: string; idx: number }) {
   const n = NOTIFICATIONS[idx];
   return (
     <div
-      className={`absolute ${pos} hidden md:flex items-center gap-2.5 px-3 py-2 z-10 rounded-lg`}
+      className={`absolute ${pos} flex items-center gap-2.5 px-3 py-2 z-10 rounded-lg`}
       style={{
         background: '#FAF5EA',
         border: '1px solid #D6C9B2',
         boxShadow: '0 4px 10px rgba(42,31,24,0.1), 0 30px 60px -20px rgba(42,31,24,0.25)',
-        minWidth: 210,
+        minWidth: 170,
         animation: 'floatIn 0.6s ease forwards',
         opacity: 0,
       }}
