@@ -912,10 +912,10 @@ function QrPattern() {
 // ============================================================
 function CafeDashboard({ step }: { step: number }) {
   return (
-    <div className="grid grid-cols-[130px_1fr] min-h-[440px]">
-      {/* Sidebar */}
+    <div className="grid grid-cols-1 md:grid-cols-[130px_1fr] min-h-[420px]">
+      {/* Sidebar - mobilde gizli */}
       <aside
-        className="px-2.5 py-3.5"
+        className="hidden md:block px-2.5 py-3.5"
         style={{ background: WARM.paper2, borderRight: `1px solid ${WARM.line}` }}
       >
         <div className="flex items-center gap-1.5 mb-4">

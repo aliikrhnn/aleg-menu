@@ -75,7 +75,7 @@ export function FAQ() {
             <p className="text-ink-2 mt-4 leading-relaxed" style={{ fontSize: 15 }}>
               Burada cevabını bulamadıklarını{' '}
               <a
-                href="https://wa.me/905000000000"
+                href="https://wa.me/905462311434"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-olive hover:underline"

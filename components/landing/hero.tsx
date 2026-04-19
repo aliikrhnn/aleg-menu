@@ -119,12 +119,11 @@ function WarmDashboardMockup() {
   return (
     <div
       data-theme="warm"
-      className="rounded-[14px] overflow-hidden relative"
+      className="rounded-[14px] overflow-hidden relative md:[transform:rotateY(-6deg)_rotateX(4deg)_rotate(0.6deg)]"
       style={{
         background: '#FAF5EA',
         border: '1px solid #D6C9B2',
         boxShadow: '0 4px 10px rgba(42,31,24,0.1), 0 30px 60px -20px rgba(42,31,24,0.25)',
-        transform: 'rotateY(-6deg) rotateX(4deg) rotate(0.6deg)',
         transformOrigin: 'center',
       }}
     >
@@ -153,9 +152,9 @@ function WarmDashboardMockup() {
       </div>
 
       {/* Dashboard */}
-      <div className="grid grid-cols-[140px_1fr] min-h-[440px]">
-        {/* Sidebar */}
-        <aside className="px-3 py-4 border-r" style={{ background: '#EDE4D3', borderColor: '#D6C9B2' }}>
+      <div className="grid grid-cols-1 md:grid-cols-[140px_1fr] min-h-[420px]">
+        {/* Sidebar - mobilde gizli */}
+        <aside className="hidden md:block px-3 py-4 border-r" style={{ background: '#EDE4D3', borderColor: '#D6C9B2' }}>
           <div className="flex items-center gap-1.5 mb-4">
             <div
               className="w-6 h-6 rounded-md grid place-items-center"
@@ -225,7 +224,7 @@ function WarmDashboardMockup() {
         </aside>
 
         {/* Main */}
-        <main className="p-4">
+        <main className="p-3 md:p-4">
           {/* Head */}
           <div className="flex justify-between items-end mb-4">
             <div>
@@ -274,7 +273,7 @@ function WarmDashboardMockup() {
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-4 gap-2 mb-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
             {[
               { lab: 'MENÜ TARAMA', val: '142', d: '+12%', tone: 'pos' },
               { lab: 'SİPARİŞ', val: '38', d: '+8%', tone: 'pos' },
@@ -337,7 +336,7 @@ function WarmDashboardMockup() {
           </div>
 
           {/* Kurulum Kartı + Live Çağrılar */}
-          <div className="grid grid-cols-2 gap-2.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             {/* Kurulum */}
             <div
               className="p-3 rounded-lg"

@@ -263,11 +263,8 @@ function ModuleDetail({
 
       <div className="lg:[direction:ltr] flex justify-center">
         <div
-          className="bg-card border border-line rounded-[22px] p-7 flex flex-col gap-4 relative overflow-hidden"
+          className="bg-card border border-line rounded-[22px] p-5 md:p-7 flex flex-col gap-4 relative overflow-hidden w-full max-w-[460px] min-h-[420px] md:aspect-square"
           style={{
-            aspectRatio: '1/1',
-            maxWidth: 460,
-            width: '100%',
             boxShadow: '0 4px 10px rgba(42,31,24,0.1), 0 30px 60px -20px rgba(42,31,24,0.25)',
             ...(highlight && {
               background:
@@ -766,7 +763,7 @@ function AIModule() {
           </div>
         </div>
 
-        <div className="relative z-10 grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-6 lg:gap-8 items-center">
+        <div className="relative z-10 grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-6 lg:gap-8 items-start lg:items-center">
           {/* Phone */}
           <div className="flex flex-col items-center gap-3 mx-auto">
             <div
@@ -1292,7 +1289,7 @@ function AIPanelScreen({
   subtitle: string;
 }) {
   return (
-    <div className="min-h-[440px] flex flex-col">
+    <div className="min-h-[400px] md:min-h-[440px] flex flex-col">
       <div
         className="flex items-center justify-between px-4 py-3 border-b"
         style={{ background: '#EDE4D3', borderColor: '#D6C9B2' }}
