@@ -9,7 +9,7 @@ export function ModuleDeepDive() {
       className="relative z-10"
       style={{ padding: '140px 0' }}
     >
-      <div className="max-w-[1280px] mx-auto px-8 reveal">
+      <div className="max-w-[1280px] mx-auto px-8">
         <div className="inline-flex items-center gap-2.5 mb-5">
           <span className="w-6 h-px bg-ink-3" />
           <span
