@@ -2,7 +2,6 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { revalidatePath } from 'next/cache';
 
 // ============================================================
 // QR Codes - Server Actions
@@ -132,7 +131,7 @@ export async function getAllTablesWithQr(): Promise<{
       if (qrByTable.has(table.id)) continue;
 
       // Masa adından slug türet: "Masa 1" → "masa-1"
-      let base = slugify(table.name);
+      const base = slugify(table.name);
       let candidate = base;
       let n = 1;
       while (usedSlugs.has(candidate)) {

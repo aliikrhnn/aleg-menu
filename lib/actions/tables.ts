@@ -94,7 +94,7 @@ export async function getTablesWithZones(): Promise<{
 
     // Aktif sipariş sayısını hesapla (hangi masa şu an dolu?)
     const tableIds = (tablesRaw || []).map((t) => t.id);
-    let activeCounts = new Map<string, number>();
+    const activeCounts = new Map<string, number>();
     if (tableIds.length > 0) {
       const { data: activeOrders } = await admin
         .from('orders')
