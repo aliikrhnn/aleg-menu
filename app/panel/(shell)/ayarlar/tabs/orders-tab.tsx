@@ -94,7 +94,6 @@ export function OrdersTab({
                   modes: { ...config.modes, dinein: v },
                 })
               }
-              first
             />
             <ModeRow
               icon="🥡"
@@ -270,7 +269,6 @@ function ModeRow({
   hint,
   checked,
   onChange,
-  first,
   last,
 }: {
   icon: string;
@@ -278,7 +276,6 @@ function ModeRow({
   hint: string;
   checked: boolean;
   onChange: (v: boolean) => void;
-  first?: boolean;
   last?: boolean;
 }) {
   return (

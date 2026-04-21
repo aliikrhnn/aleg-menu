@@ -1,4 +1,5 @@
 'use client';
+/* eslint-disable @next/next/no-img-element */
 
 import type { BusinessSettings } from '@/lib/actions/settings';
 import { Card } from '../shared';
@@ -256,7 +257,7 @@ export function PreviewTab({ settings }: Props) {
             className="text-[11px] text-ink-3 px-3 py-2 rounded-[8px]"
             style={{ background: 'var(--paper-2)' }}
           >
-            💡 Logo eklediğinde QR kartlarının üstünde küçük boyutta görünür. Masalar → QR İndir'den yazdırabilirsin.
+            💡 Logo eklediğinde QR kartlarının üstünde küçük boyutta görünür. Masalar → QR İndir&apos;den yazdırabilirsin.
           </div>
         </div>
       </Card>
