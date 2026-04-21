@@ -42,6 +42,7 @@ interface Props {
   business: Business;
   categories: Category[];
   products: Product[];
+  qrTable?: { id: string; name: string } | null;
 }
 
 // Yardımcı: dil-aware metin
@@ -68,11 +69,14 @@ function greeting(lang: Lang) {
   return 'Good evening';
 }
 
-export function MenuView({ business, categories, products }: Props) {
+export function MenuView({ business, categories, products, qrTable }: Props) {
   const [lang, setLang] = useState<Lang>('tr');
   const [activeCat, setActiveCat] = useState<string | null>(categories[0]?.id || null);
   const [search, setSearch] = useState('');
-  const [mode, setMode] = useState<'dinein' | 'pickup' | 'delivery'>('dinein');
+  // QR ile gelince otomatik "dinein" modu
+  const [mode, setMode] = useState<'dinein' | 'pickup' | 'delivery'>(
+    qrTable ? 'dinein' : 'dinein'
+  );
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartDrawerOpen, setCartDrawerOpen] = useState(false);
 
@@ -172,21 +176,49 @@ export function MenuView({ business, categories, products }: Props) {
       <div className="px-5 pt-5 pb-3">
         <div className="flex items-start justify-between gap-3 mb-4">
           <div className="min-w-0 flex-1">
-            {/* AÇIK pill */}
-            <div className="flex items-center gap-1.5 mb-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-ok animate-pulse" />
-              <span
-                className="text-ink-3 uppercase"
-                style={{
-                  fontFamily: 'var(--f-mono)',
-                  fontSize: 9,
-                  fontWeight: 700,
-                  letterSpacing: '0.14em',
-                }}
-              >
-                {business.city ? `${business.city} · ` : ''}
-                {lang === 'tr' ? 'AÇIK' : 'OPEN'}
-              </span>
+            {/* AÇIK pill + MASA rozeti */}
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
+              <div className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-ok animate-pulse" />
+                <span
+                  className="text-ink-3 uppercase"
+                  style={{
+                    fontFamily: 'var(--f-mono)',
+                    fontSize: 9,
+                    fontWeight: 700,
+                    letterSpacing: '0.14em',
+                  }}
+                >
+                  {business.city ? `${business.city} · ` : ''}
+                  {lang === 'tr' ? 'AÇIK' : 'OPEN'}
+                </span>
+              </div>
+
+              {qrTable && (
+                <div
+                  className="inline-flex items-center gap-1.5 h-5 pl-2 pr-2.5 rounded-full"
+                  style={{
+                    background: 'color-mix(in srgb, var(--accent) 12%, transparent)',
+                    border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)',
+                  }}
+                >
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2.5">
+                    <polyline points="20 6 9 17 4 12" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  <span
+                    className="uppercase"
+                    style={{
+                      fontFamily: 'var(--f-mono)',
+                      fontSize: 9,
+                      fontWeight: 700,
+                      letterSpacing: '0.12em',
+                      color: 'var(--accent)',
+                    }}
+                  >
+                    {qrTable.name.toUpperCase()}
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Selamlama */}
@@ -447,6 +479,8 @@ export function MenuView({ business, categories, products }: Props) {
         items={cartItemsForDrawer}
         total={cartTotal}
         businessId={business.id}
+        tableId={qrTable?.id || null}
+        tableName={qrTable?.name || null}
         onQtyChange={handleQtyChange}
         onClearCart={handleClearCart}
       />

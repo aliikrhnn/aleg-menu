@@ -23,6 +23,7 @@ interface CartDrawerProps {
   total: number;
   businessId: string;
   tableId?: string | null;
+  tableName?: string | null;
   onQtyChange: (productId: string, newQty: number) => void;
   onClearCart: () => void;
 }
@@ -66,6 +67,7 @@ export function CartDrawer({
   total,
   businessId,
   tableId,
+  tableName,
   onQtyChange,
   onClearCart,
 }: CartDrawerProps) {
@@ -260,7 +262,9 @@ export function CartDrawer({
                   fontWeight: 700,
                 }}
               >
-                {mode === 'dinein'
+                {mode === 'dinein' && tableName
+                  ? `${tableName.toUpperCase()} · ${lang === 'tr' ? 'SİPARİŞ' : 'ORDER'}`
+                  : mode === 'dinein'
                   ? lang === 'tr'
                     ? 'MASA SİPARİŞİ'
                     : 'DINE-IN'

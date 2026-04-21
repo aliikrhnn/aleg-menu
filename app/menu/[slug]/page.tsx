@@ -1,16 +1,19 @@
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { resolveQrSlug } from '@/lib/actions/qr';
 import { MenuView } from './menu-view';
 import type { LocalizedText } from '@/types/database';
 
 interface Props {
   params: { slug: string };
+  searchParams: { t?: string };
 }
 
 // Cache: 60 saniye - menü sürekli aynı, değişiklik olunca sahip refresh tetikler
+// ?t= parametresi cache'i bozar, her QR için ayrı render olur
 export const revalidate = 60;
 
-export default async function CustomerMenuPage({ params }: Props) {
+export default async function CustomerMenuPage({ params, searchParams }: Props) {
   const supabase = createClient();
 
   // 1. İşletmeyi slug'dan bul
@@ -60,6 +63,15 @@ export default async function CustomerMenuPage({ params }: Props) {
     );
   }
 
+  // QR slug'ı varsa masa bilgisini çöz
+  let qrTable: { id: string; name: string } | null = null;
+  if (searchParams?.t) {
+    const qrResult = await resolveQrSlug(business.id, searchParams.t);
+    if (qrResult.success && qrResult.table_id && qrResult.table_name) {
+      qrTable = { id: qrResult.table_id, name: qrResult.table_name };
+    }
+  }
+
   // 2. Aktif kategorileri çek (sıralı)
   const { data: categories } = await supabase
     .from('categories')
@@ -106,6 +118,7 @@ export default async function CustomerMenuPage({ params }: Props) {
       }}
       categories={formattedCategories}
       products={formattedProducts}
+      qrTable={qrTable}
     />
   );
 }
