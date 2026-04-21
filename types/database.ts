@@ -377,6 +377,21 @@ export interface Database {
         };
         Update: Partial<Database['public']['Tables']['stations']['Row']>;
       };
+      ai_usage: {
+        Row: {
+          id: string;
+          business_id: string;
+          user_id: string | null;
+          feature: 'slogan' | 'monogram' | 'chat';
+          tokens_used: number;
+          created_at: string;
+        };
+        Insert: Partial<Database['public']['Tables']['ai_usage']['Row']> & {
+          business_id: string;
+          feature: 'slogan' | 'monogram' | 'chat';
+        };
+        Update: Partial<Database['public']['Tables']['ai_usage']['Row']>;
+      };
     };
     Views: {
       [_ in never]: never;
