@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { PanelSidebar } from '@/components/panel/sidebar';
 import { PanelTopbar } from '@/components/panel/topbar';
+import { AiAssistant } from '@/components/panel/ai-assistant';
 
 export default async function PanelShellLayout({
   children,
@@ -14,7 +15,7 @@ export default async function PanelShellLayout({
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect('/giris');
+    redirect('/panel/giris');
   }
 
   const { data: membership } = await supabase
@@ -25,18 +26,21 @@ export default async function PanelShellLayout({
     .maybeSingle();
 
   if (!membership) {
-    redirect('/giris?error=no_business');
+    redirect('/panel/giris?error=no_business');
   }
 
   const { data: business } = await supabase
     .from('businesses')
-    .select('name, subscription_status')
+    .select('name, logo_url, subscription_status')
     .eq('id', membership.business_id)
     .maybeSingle();
 
   return (
     <div data-theme="warm" className="flex h-screen overflow-hidden bg-paper text-ink">
-      <PanelSidebar businessName={business?.name || 'İşletme'} />
+      <PanelSidebar
+        businessName={business?.name || 'İşletme'}
+        logoUrl={business?.logo_url || null}
+      />
       <div className="flex-1 flex flex-col overflow-hidden">
         <PanelTopbar
           user={{
@@ -47,6 +51,7 @@ export default async function PanelShellLayout({
         />
         <main className="flex-1 overflow-y-auto">{children}</main>
       </div>
+      <AiAssistant businessName={business?.name} />
     </div>
   );
 }

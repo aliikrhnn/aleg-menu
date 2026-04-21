@@ -44,7 +44,7 @@ export const PANEL_NAV: PanelNavGroup[] = [
   {
     group: 'AYARLAR',
     items: [
-      { id: 'settings', label: 'İşletme Ayarları', href: '/ayarlar', icon: '⚙', comingSoon: true },
+      { id: 'settings', label: 'İşletme Ayarları', href: '/ayarlar', icon: '⚙' },
       { id: 'billing', label: 'Abonelik', href: '/abonelik', icon: '◎', comingSoon: true },
     ],
   },

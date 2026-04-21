@@ -55,6 +55,17 @@ export interface Database {
           owner_user_id: string | null;
           created_at: string;
           updated_at: string;
+          // 0009 migration
+          tagline_tr: string | null;
+          tagline_en: string | null;
+          address: string | null;
+          whatsapp: string | null;
+          instagram: string | null;
+          facebook: string | null;
+          website: string | null;
+          currency: string;
+          working_hours: Json;
+          order_config: Json;
         };
         Insert: Partial<Database['public']['Tables']['businesses']['Row']> & {
           slug: string;

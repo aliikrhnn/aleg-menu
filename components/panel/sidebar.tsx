@@ -8,9 +8,10 @@ import { cn } from '@/lib/utils';
 
 interface PanelSidebarProps {
   businessName: string;
+  logoUrl?: string | null;
 }
 
-export function PanelSidebar({ businessName }: PanelSidebarProps) {
+export function PanelSidebar({ businessName, logoUrl }: PanelSidebarProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
 
@@ -28,19 +29,36 @@ export function PanelSidebar({ businessName }: PanelSidebarProps) {
       {/* Brand */}
       <div className={cn('border-b border-line', collapsed ? 'px-3.5 py-4' : 'px-[18px] py-5')}>
         <div className="flex items-center gap-2.5">
-          <div
-            className="w-9 h-9 rounded-[var(--r-sm)] bg-accent flex items-center justify-center flex-shrink-0"
-            style={{
-              fontFamily: 'var(--f-serif)',
-              fontStyle: 'italic',
-              fontSize: 18,
-              fontWeight: 500,
-              color: '#FAF5EA',
-              letterSpacing: '-0.04em',
-            }}
-          >
-            a
-          </div>
+          {logoUrl ? (
+            <div
+              className="w-9 h-9 rounded-[var(--r-sm)] flex items-center justify-center flex-shrink-0 overflow-hidden"
+              style={{
+                background: 'var(--paper)',
+                border: '1px solid var(--line)',
+                padding: 3,
+              }}
+            >
+              <img
+                src={logoUrl}
+                alt={businessName}
+                className="max-w-full max-h-full object-contain"
+              />
+            </div>
+          ) : (
+            <div
+              className="w-9 h-9 rounded-[var(--r-sm)] bg-accent flex items-center justify-center flex-shrink-0"
+              style={{
+                fontFamily: 'var(--f-serif)',
+                fontStyle: 'italic',
+                fontSize: 18,
+                fontWeight: 500,
+                color: '#FAF5EA',
+                letterSpacing: '-0.04em',
+              }}
+            >
+              {businessName?.[0]?.toLowerCase() || 'a'}
+            </div>
+          )}
           {!collapsed && (
             <div className="grid gap-0 min-w-0">
               <strong
@@ -116,22 +134,36 @@ export function PanelSidebar({ businessName }: PanelSidebarProps) {
                   }}
                   title={collapsed ? item.label : undefined}
                   className={cn(
-                    'flex items-center gap-2.5 min-h-[36px] w-full',
+                    'group relative flex items-center gap-2.5 min-h-[36px] w-full',
                     'rounded-[var(--r-sm)] text-[13px]',
-                    'transition-colors duration-100',
+                    'transition-all duration-200',
                     'border-l-2 border-transparent',
                     collapsed ? 'justify-center px-0' : 'justify-start px-2.5',
                     disabled
                       ? 'text-ink-3 cursor-not-allowed opacity-60'
                       : isActive
                         ? 'bg-card text-ink font-semibold shadow-[var(--shadow-sm)]'
-                        : 'text-ink-2 hover:bg-card/50',
+                        : 'text-ink-2 hover:text-ink hover:bg-card hover:translate-x-0.5 hover:shadow-[0_1px_2px_rgba(42,31,24,0.04)]',
                     !collapsed && isActive && !disabled && 'border-l-accent'
                   )}
                   style={{ fontFamily: 'var(--f-sans)' }}
                 >
+                  {/* Hover'da sol tarafta ince accent çizgi */}
+                  {!disabled && !isActive && !collapsed && (
+                    <span
+                      className="absolute left-0 top-1/2 -translate-y-1/2 w-[2px] h-0 bg-accent/50 rounded-r transition-all duration-200 group-hover:h-[18px]"
+                      aria-hidden
+                    />
+                  )}
                   <span
-                    className={cn('w-[18px] text-center text-[13px] flex-shrink-0', isActive && !disabled ? 'text-accent' : 'text-ink-3')}
+                    className={cn(
+                      'w-[18px] text-center text-[13px] flex-shrink-0 transition-colors duration-200',
+                      isActive && !disabled
+                        ? 'text-accent'
+                        : !disabled
+                          ? 'text-ink-3 group-hover:text-accent'
+                          : 'text-ink-3'
+                    )}
                     style={{ fontFamily: 'var(--f-mono)' }}
                   >
                     {item.icon}
