@@ -228,7 +228,7 @@ export async function resolveQrSlug(
     return {
       success: true,
       table_id: qr.table_id,
-      table_name: tableData?.name || null,
+      table_name: tableData?.name || undefined,
     };
   } catch (err) {
     return {

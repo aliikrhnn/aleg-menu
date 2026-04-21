@@ -1,20 +1,17 @@
-# Database Types Güncellemesi
+# TypeScript Tip Düzeltmesi
 
 ## DEĞİŞEN DOSYA (üstüne yaz)
 
-types/database.ts
+lib/actions/qr.ts
 
-## EKLENEN TABLOLAR
+## NE DÜZELTİLDİ
 
-1. qr_codes      - QR kodlar (Adım 5'te eklendi)
-2. table_zones   - Masa bölgeleri (Salon/Teras/Bahçe)
-3. stations      - Mutfak istasyonları (Bar/Mutfak/Soğuk/Pastane)
-
-Bu tablolar Supabase'de vardı ama TypeScript tip 
-dosyasında yoktu. Build sırasında tip hatası veriyordu.
+resolveQrSlug fonksiyonu return tipinde
+table_name: string | undefined diye tanımlıydı ama
+null döndürüyordu. null → undefined yapıldı.
 
 ## KOMUT
 
 git add .
-git commit -m "fix: add qr_codes, table_zones, stations types"
+git commit -m "fix: qr.ts table_name type mismatch"
 git push
