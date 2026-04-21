@@ -312,6 +312,60 @@ export interface Database {
         };
         Update: Partial<Database['public']['Tables']['waiter_calls']['Row']>;
       };
+      qr_codes: {
+        Row: {
+          id: string;
+          business_id: string;
+          branch_id: string | null;
+          table_id: string | null;
+          slug: string;
+          purpose: 'table' | 'general' | 'delivery';
+          design_template: string;
+          design_config: Json;
+          scan_count: number;
+          last_scanned_at: string | null;
+          active: boolean;
+          created_at: string;
+        };
+        Insert: Partial<Database['public']['Tables']['qr_codes']['Row']> & {
+          business_id: string;
+          slug: string;
+        };
+        Update: Partial<Database['public']['Tables']['qr_codes']['Row']>;
+      };
+      table_zones: {
+        Row: {
+          id: string;
+          business_id: string;
+          branch_id: string | null;
+          name: string;
+          color: string | null;
+          icon: string | null;
+          sort_order: number;
+          created_at: string;
+        };
+        Insert: Partial<Database['public']['Tables']['table_zones']['Row']> & {
+          business_id: string;
+          name: string;
+        };
+        Update: Partial<Database['public']['Tables']['table_zones']['Row']>;
+      };
+      stations: {
+        Row: {
+          id: string;
+          business_id: string;
+          branch_id: string | null;
+          name: string;
+          kind: 'kitchen' | 'bar' | 'cold' | 'bakery' | 'other';
+          active: boolean;
+          created_at: string;
+        };
+        Insert: Partial<Database['public']['Tables']['stations']['Row']> & {
+          business_id: string;
+          name: string;
+        };
+        Update: Partial<Database['public']['Tables']['stations']['Row']>;
+      };
     };
     Views: {
       [_ in never]: never;

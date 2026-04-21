@@ -1,18 +1,20 @@
-# Lint Hata Düzeltmesi
+# Database Types Güncellemesi
 
-## DEĞİŞEN DOSYALAR (üstüne yaz)
+## DEĞİŞEN DOSYA (üstüne yaz)
 
-1. lib/actions/qr.ts
-2. lib/actions/tables.ts
+types/database.ts
 
-## NE DÜZELTİLDİ
+## EKLENEN TABLOLAR
 
-1. qr.ts - kullanılmayan import 'revalidatePath' kaldırıldı
-2. qr.ts - base let → const yapıldı
-3. tables.ts - activeCounts let → const yapıldı
+1. qr_codes      - QR kodlar (Adım 5'te eklendi)
+2. table_zones   - Masa bölgeleri (Salon/Teras/Bahçe)
+3. stations      - Mutfak istasyonları (Bar/Mutfak/Soğuk/Pastane)
+
+Bu tablolar Supabase'de vardı ama TypeScript tip 
+dosyasında yoktu. Build sırasında tip hatası veriyordu.
 
 ## KOMUT
 
 git add .
-git commit -m "fix: lint errors"
+git commit -m "fix: add qr_codes, table_zones, stations types"
 git push
