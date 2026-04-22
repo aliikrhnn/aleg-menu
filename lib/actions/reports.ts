@@ -66,16 +66,8 @@ export type ReportsData = {
 };
 
 // ============================================================
-// Helper - tarih aralıkları
+// Helper
 // ============================================================
-
-function getDateRange(daysAgo: number): { from: string; to: string } {
-  const end = new Date();
-  const start = new Date();
-  start.setDate(start.getDate() - daysAgo);
-  start.setHours(0, 0, 0, 0);
-  return { from: start.toISOString(), to: end.toISOString() };
-}
 
 function startOfDay(d: Date): Date {
   const n = new Date(d);
