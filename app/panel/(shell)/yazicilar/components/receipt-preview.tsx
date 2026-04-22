@@ -422,7 +422,7 @@ function KitchenReceipt({
       >
         {order.order_type === 'dine_in' && order.table_label
           ? `MASA: ${order.table_label}`
-          : order.order_type === 'pickup'
+          : (order.order_type as string) === 'pickup'
             ? 'GEL-AL'
             : 'PAKET'}
       </div>
