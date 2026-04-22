@@ -202,7 +202,7 @@ export function StationsManager({
             İstasyonlar
           </h1>
           <p className="text-ink-2 text-[15px]">
-            Siparişleri Bar, Mutfak, Pastane gibi istasyonlara ayır. KDS'de her
+            Siparişleri Bar, Mutfak, Pastane gibi istasyonlara ayır. KDS&apos;de her
             istasyon sadece kendi işini görür.
           </p>
         </div>
@@ -249,7 +249,7 @@ export function StationsManager({
                 ` +${unassignedProducts.length - 5} daha`}
               <br />
               Bu ürünler siparişte hiçbir istasyona düşmez. Bir istasyona ata
-              veya kartta "Ürünleri ata" butonunu kullan.
+              veya kartta &quot;Ürünleri ata&quot; butonunu kullan.
             </div>
           </div>
         </div>
@@ -274,7 +274,7 @@ export function StationsManager({
             Henüz istasyonun yok
           </h2>
           <p className="text-ink-2 text-sm mb-5 max-w-md mx-auto">
-            İstasyonlar sayesinde bar sipariş barista'ya, yemek mutfağa ayrı
+            İstasyonlar sayesinde bar sipariş barista&apos;ya, yemek mutfağa ayrı
             düşer. İlk istasyonunu oluştur.
           </p>
           <button

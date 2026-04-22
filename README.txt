@@ -1,19 +1,22 @@
-# KDS BUG FIX - stations is not defined
+# LINT FIX - react/no-unescaped-entities
 
 ## SORUN
 
-TicketCard bileşeninde stations değişkeni scope'ta yoktu,
-istasyon rozeti render ederken "ReferenceError: stations is not defined"
-hatası veriyordu.
+JSX text içinde Türkçe metinlerde ' ve " karakterleri var:
+  KDS'de → KDS&apos;de
+  barista'ya → barista&apos;ya
+  "Ürünleri ata" → &quot;Ürünleri ata&quot;
 
-## ÇÖZÜM
-
-TicketCard'a stations prop'u eklendi. Caller'lardan geçiliyor.
+React'ın JSX kuralı: text içinde apostrof ve tırnak escape edilmeli.
 
 ## DOSYA (üstüne yaz)
 
-app/panel/kds/kitchen-board.tsx
+app/panel/(shell)/istasyonlar/stations-manager.tsx
 
-## KOMUT (.next cache temizlemeye gerek yok, hot reload yeter)
+## KOMUT
 
-# Tarayıcıda sayfayı yenile
+git add .
+git commit -m "Lint: JSX unescaped entities (apostrof/tırnak)"
+git push
+
+Bu sefer geçer.
