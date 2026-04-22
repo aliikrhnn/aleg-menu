@@ -399,7 +399,7 @@ function ReviewCard({
                       fontWeight: 700,
                     }}
                   >
-                    GOOGLE'A YÖNLENDİRİLDİ
+                    GOOGLE&apos;A YÖNLENDİRİLDİ
                   </span>
                 </>
               )}

@@ -22,6 +22,7 @@ const PRINTER_SERVICES = [
 ];
 
 // Characteristic UUID'leri (yaygın yazma kanalları)
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const WRITE_CHARACTERISTICS = [
   '00002af1-0000-1000-8000-00805f9b34fb',
   '0000ff02-0000-1000-8000-00805f9b34fb',
@@ -94,7 +95,7 @@ async function connectToPrinter(deviceId: string): Promise<BluetoothPrinterDevic
   try {
     // @ts-expect-error - getDevices experimental API
     if (navigator.bluetooth?.getDevices) {
-      // @ts-expect-error
+      // @ts-expect-error - getDevices henüz TypeScript lib'inde yok
       const devices = await navigator.bluetooth.getDevices();
       device = devices.find((d: BluetoothDevice) => d.id === deviceId) || null;
     }
@@ -104,7 +105,7 @@ async function connectToPrinter(deviceId: string): Promise<BluetoothPrinterDevic
 
   if (!device) {
     // Re-pair zorunlu - user dialog açılacak
-    // @ts-expect-error
+    // @ts-expect-error - WebBluetooth tipler henüz TypeScript lib'inde eksik
     device = await navigator.bluetooth.requestDevice({
       acceptAllDevices: true,
       optionalServices: PRINTER_SERVICES,

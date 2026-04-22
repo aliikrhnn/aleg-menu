@@ -1,92 +1,39 @@
-# PİLOT FİNAL V2 - 4 İYİLEŞTİRME
+# LINT-FIX - Push İçin Gereken Düzeltmeler
 
-Bu paket bir öncekinin (pilot-final-fix.zip) üstüne uygulanır.
-Yeni dosyalar var (receipt-design-tab.tsx + printers.ts).
-
-
-## İÇERİK
-
-1. Hesap fişinde GERÇEK LOGO (raster image)
-2. Çoklu istasyon UX hint'i
-3. Otomatik başlatma GİZLİ (pencere açmadan)
-4. [YENİ] "Önizleme fişini bastır" - gerçek ayarlarla test
+Pre-push hook 8 lint hatası yüzünden push'u engelliyordu.
+Bu paket hepsini düzeltir.
 
 
-## 4. ÖNİZLEME FİŞİ (YENİ)
+## UYGULAMA
 
-ÖNCEDEN:
-Test fişi butonu sabit "ALEG TEST" fişi basıyordu.
-Kullanıcı fiş tasarımında yaptığı değişiklikleri görmeden
-önce sipariş vermek zorundaydı.
+7 dosyayı aleg-starter/ içine kopyala (üstüne yaz):
 
-ŞİMDİ:
-- Buton "Önizleme fişini bastır" oldu
-- Kasa preview seçiliyken → Mock sipariş + gerçek ayarlar + logo + QR
-- Mutfak preview seçiliyken → Mock sipariş + mutfak formatı + istasyon adı
-- Aynı önizlemedeki tasarım fişe basılır
-
-BÖYLECE: Ali değişiklik yapıp hemen basıp görebilir, müşteri
-deneyimini simüle eder.
-
-DEĞİŞEN DOSYALAR:
-- panel/lib/actions/printers.ts               (requestTestPrint previewType)
-- panel/app/panel/(shell)/yazicilar/tabs/receipt-design-tab.tsx
-- agent/agent.js                              (preview job → mock order)
+1. app/panel/(shell)/degerlendirmeler/reviews-manager.tsx
+2. app/panel/(shell)/yazicilar/components/printer-form-modal.tsx
+3. app/panel/(shell)/yazicilar/page.tsx
+4. lib/actions/printers.ts
+5. lib/actions/reviews.ts
+6. lib/printer/bluetooth-client.ts
+7. lib/printer/escpos.ts
 
 
-## KURULUM
+## SONRA
 
-### PANEL
-panel/ klasöründeki tüm dosyaları aleg-starter/ üstüne yaz:
-- lib/printer/escpos.ts
-- lib/actions/printers.ts
-- app/panel/(shell)/yazicilar/components/printer-form-modal.tsx
-- app/panel/(shell)/yazicilar/tabs/receipt-design-tab.tsx
+cd C:\Users\aliik\OneDrive\Desktop\aleg-starter
+git add .
+git commit -m "feat: yazici sistemi tam, agent, degerlendirme QR, logo raster"
+git push origin main
 
-`npm run dev` otomatik reload.
-
-### AGENT
-agent/ klasöründeki dosyaları aleg-printer-agent/ üstüne yaz.
-
-Agent çalışıyorsa Ctrl+C ile durdur, tekrar başlat:
-  node agent.js
-
-(sharp ilk kez yüklenecekse `npm install` gerekir)
+Lint geçecek. Vercel otomatik deploy eder (~2 dakika).
 
 
-## TEST AKIŞI
+## DÜZELTİLEN HATALAR
 
-### Önizleme Fişi Testi
-1. /panel/yazicilar > Fiş Tasarımı
-2. Kasa Fişi sekmesinde → Logo/Slogan/QR toggle'larını açıp kapat
-3. Önizlemede değişikliği gör
-4. "🖨 Önizleme fişini bastır" butonuna bas
-5. Kasa yazıcısından çıkan fişin önizlemeyle BİREBİR aynı olduğunu gör:
-   - Logo (raster, siyah-beyaz)
-   - İşletme adı + slogan + adres + telefon (toggle'a göre)
-   - 2x Latte + Yulaf (+5TL)
-   - 1x Kurabiye + Not: Fazla kavrulmasın
-   - Ara toplam / TOPLAM
-   - Alt yazı (ayarlardan)
-   - Değerlendirme QR (toggle açıksa)
-
-6. Mutfak Fişi sekmesine geç
-7. "Önizleme fişini bastır" → Mutfak formatında fiş çıkar
-   - Büyük font, istasyon adı, #sipariş no, masa, ürünler, müşteri notu
-
-### Diğer Test'ler (öncekilerden)
-- Çoklu istasyon: Yazıcı ekle formunda istasyon altında hint görünür
-- Logo: Kasa fişi basıldığında gerçek logo çıkar
-- Gizli başlatma: otomatik-baslat-ekle.bat > Windows restart > node.exe arka planda
-
-
-## ÖNEMLİ
-
-Önizleme fişi yazdırma "preview test" olarak işaretlenir:
-- job_type = 'cashier' veya 'kitchen'
-- order_id = NULL
-- triggered_by = 'manual'
-
-Agent bu kombinasyonu gördüğünde mock sipariş kullanır (DB'ye
-fake sipariş eklenmez). Gerçek siparişlerin auto-print akışını
-etkilemez.
+1. reviews-manager.tsx:402  GOOGLE'A → GOOGLE&apos;A (apostrof escape)
+2. printer-form-modal.tsx:3 useEffect unused → import'tan kaldırıldı
+3. yazicilar/page.tsx:5    LocalizedText unused → import'tan kaldırıldı
+4. printers.ts:935         as any → typed literal union
+5. reviews.ts:313          as any → typed object
+6. bluetooth-client.ts:25  WRITE_CHARACTERISTICS unused → eslint-disable
+7. bluetooth-client.ts:97  @ts-expect-error description eklendi
+8. escpos.ts:435           showLogo unused → kaldırıldı + yorum

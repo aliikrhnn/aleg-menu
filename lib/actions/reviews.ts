@@ -268,12 +268,18 @@ export async function archiveReview(
 }
 
 // Public — Müşteri değerlendirme sayfası açıldığında işletme bilgisi
+/**
+ * Değerlendirme sayfası için işletme bilgisi getir.
+ * Param hem siparişId hem işletme slug olabilir:
+ * - UUID formatında ise → siparişten işletme bul
+ * - Değilse veya bulunamazsa → işletme slug olarak dene
+ */
 export async function getReviewBusinessInfo(orderIdOrSlug: string): Promise<{
   success: boolean;
   data?: {
     business_id: string;
     business_name: string;
-    order_id: string | null;
+    order_id: string | null; // null = genel değerlendirme (sipariş yok)
     review_smart_redirect: boolean;
     google_place_id: string;
     review_qr_text: string;
@@ -283,6 +289,8 @@ export async function getReviewBusinessInfo(orderIdOrSlug: string): Promise<{
 }> {
   try {
     const admin = createAdminClient();
+
+    // UUID formatı kontrolü (8-4-4-4-12)
     const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     const isUuid = uuidPattern.test(orderIdOrSlug);
 
@@ -290,32 +298,59 @@ export async function getReviewBusinessInfo(orderIdOrSlug: string): Promise<{
     let orderId: string | null = null;
 
     if (isUuid) {
+      // UUID ise önce sipariş olarak ara
       const { data: order } = await admin
-        .from('orders').select('id, business_id').eq('id', orderIdOrSlug).maybeSingle();
+        .from('orders')
+        .select('id, business_id')
+        .eq('id', orderIdOrSlug)
+        .maybeSingle();
+
       if (order) {
         businessId = order.business_id as string;
         orderId = order.id as string;
       }
     }
 
+    // Sipariş bulunamadıysa veya UUID değilse → slug olarak dene
     if (!businessId) {
-      const { data: biz } = await admin
-        .from('businesses').select('id').eq('slug', orderIdOrSlug).maybeSingle();
-      if (biz) businessId = biz.id as string;
+      const { data: business } = await admin
+        .from('businesses')
+        .select('id')
+        .eq('slug', orderIdOrSlug)
+        .maybeSingle();
+
+      if (business) {
+        businessId = business.id as string;
+        orderId = null; // genel değerlendirme
+      }
     }
 
-    if (!businessId) return { success: false, error: 'Sipariş veya işletme bulunamadı' };
+    if (!businessId) {
+      return { success: false, error: 'Sipariş veya işletme bulunamadı' };
+    }
 
     const { data: business } = await admin
-      .from('businesses').select('name, receipt_settings').eq('id', businessId).maybeSingle();
+      .from('businesses')
+      .select('name, receipt_settings')
+      .eq('id', businessId)
+      .maybeSingle();
+
     if (!business) return { success: false, error: 'İşletme bulunamadı' };
 
-    const settings = (business.receipt_settings as any) || {};
+    const settings = (business.receipt_settings as {
+      review_smart_redirect?: boolean;
+      google_place_id?: string;
+      review_qr_text?: string;
+    }) || {};
 
+    // Zaten değerlendirildi mi? (sadece sipariş bazlı kontrol)
     let alreadyReviewed = false;
     if (orderId) {
       const { data: existing } = await admin
-        .from('reviews').select('id').eq('order_id', orderId).maybeSingle();
+        .from('reviews')
+        .select('id')
+        .eq('order_id', orderId)
+        .maybeSingle();
       alreadyReviewed = !!existing;
     }
 
@@ -332,6 +367,9 @@ export async function getReviewBusinessInfo(orderIdOrSlug: string): Promise<{
       },
     };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : 'Hata' };
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Bilinmeyen hata',
+    };
   }
 }

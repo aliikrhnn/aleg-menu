@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getPrinters, getReceiptSettings } from '@/lib/actions/printers';
 import { getStations } from '@/lib/actions/stations';
 import { PrintersManager } from './printers-manager';
-import { DEFAULT_RECEIPT_SETTINGS, type LocalizedText } from '@/types/database';
+import { DEFAULT_RECEIPT_SETTINGS } from '@/types/database';
 
 export const dynamic = 'force-dynamic';
 

@@ -432,7 +432,7 @@ export function buildCashierReceipt(
   const b = new EscPosBuilder(opts.paperWidth || 48);
 
   // Toggle varsayılanları
-  const showLogo = opts.showLogo !== false;
+  // showLogo agent tarafında kullanılıyor (logo-raster.js), burada değil
   const showTagline = opts.showTagline !== false;
   const showPhone = opts.showPhone !== false;
   const showAddress = opts.showAddress !== false;

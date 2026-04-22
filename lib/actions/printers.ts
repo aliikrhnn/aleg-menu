@@ -932,7 +932,7 @@ export async function getPrintJobDetails(jobId: string): Promise<{
     return {
       success: true,
       data: {
-        job: { id: job.id, job_type: job.job_type as any, printer },
+        job: { id: job.id, job_type: job.job_type as 'kitchen' | 'cashier' | 'reprint_kitchen' | 'reprint_cashier' | 'test', printer },
         order: {
           id: orderRow.id as string,
           order_no: (orderRow.id as string).slice(0, 8).toUpperCase(),
