@@ -30,6 +30,7 @@ export const PANEL_NAV: PanelNavGroup[] = [
     group: 'YÖNETİM',
     items: [
       { id: 'menu', label: 'Menü', href: '/menu', icon: '⊟' },
+      { id: 'variations', label: 'Varyasyonlar', href: '/menu/varyasyonlar', icon: '◇' },
       { id: 'tables', label: 'Masalar', href: '/masalar', icon: '◍' },
       { id: 'team', label: 'Ekip', href: '/ekip', icon: '◐', comingSoon: true },
     ],

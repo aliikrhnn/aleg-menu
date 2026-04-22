@@ -29,9 +29,23 @@ export default async function ProductsPage() {
   // Ürünler
   const { data: products } = await supabase
     .from('products')
-    .select('id, category_id, name, description, price, status, is_featured, print_station, hero_icon, sort_order')
+    .select('id, category_id, name, description, price, status, is_featured, print_station, hero_icon, hero_image_url, sort_order')
     .eq('business_id', businessId || '')
     .order('sort_order', { ascending: true });
+
+  // Ürün başına varyasyon sayısı
+  const productIds = (products || []).map((p) => p.id);
+  const { data: productPresets } = productIds.length
+    ? await supabase
+        .from('product_option_presets')
+        .select('product_id')
+        .in('product_id', productIds)
+    : { data: [] };
+
+  const presetCountMap = new Map<string, number>();
+  (productPresets || []).forEach((pp) => {
+    presetCountMap.set(pp.product_id, (presetCountMap.get(pp.product_id) || 0) + 1);
+  });
 
   const formattedCategories = (categories || []).map((c) => ({
     id: c.id,
@@ -43,6 +57,7 @@ export default async function ProductsPage() {
     ...p,
     name: p.name as LocalizedText,
     description: p.description as LocalizedText | null,
+    preset_count: presetCountMap.get(p.id) || 0,
   }));
 
   return (
@@ -53,7 +68,7 @@ export default async function ProductsPage() {
           Ana Sayfa
         </Link>
         <span className="text-ink-3">/</span>
-        <Link href="/menu" className="text-ink-3 hover:text-ink-2 transition-colors">
+        <Link href="/panel/menu" className="text-ink-3 hover:text-ink-2 transition-colors">
           Menü
         </Link>
         <span className="text-ink-3">/</span>
@@ -99,7 +114,7 @@ export default async function ProductsPage() {
             Ürün ekleyebilmek için en az bir kategorinize ihtiyacınız var.
           </div>
           <Link
-            href="/menu"
+            href="/panel/menu"
             className="inline-block h-10 px-5 rounded-[var(--r-sm)] bg-accent text-card font-semibold text-sm hover:opacity-90 transition-opacity leading-10"
             style={{ color: '#FAF5EA' }}
           >

@@ -1,6 +1,7 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { revalidatePath } from 'next/cache';
 import type { LocalizedText } from '@/types/database';
 
@@ -428,4 +429,151 @@ export async function updateProductStatus(
   status: 'active' | 'soldout' | 'draft' | 'archived'
 ): Promise<{ success: boolean; error?: string }> {
   return updateProduct(productId, { status });
+}
+
+// ============================================================
+// ÜRÜN RESİMLERİ
+// ============================================================
+
+/**
+ * Ürün resmi yükle (data URL alır, Supabase Storage'a koyar)
+ * Client tarafında kırpılmış resim data URL olarak gelir.
+ */
+export async function uploadProductImage(
+  productId: string,
+  dataUrl: string,
+  mimeType: string
+): Promise<{ success: boolean; imageUrl?: string; error?: string }> {
+  try {
+    const { businessId } = await requireBusinessAccess();
+    const admin = createAdminClient();
+
+    // Ürünün bu businessa ait olduğunu doğrula
+    const { data: product } = await admin
+      .from('products')
+      .select('id, business_id')
+      .eq('id', productId)
+      .eq('business_id', businessId)
+      .maybeSingle();
+
+    if (!product) {
+      return { success: false, error: 'Ürün bulunamadı' };
+    }
+
+    // data URL'i buffer'a çevir
+    const base64 = dataUrl.split(',')[1];
+    if (!base64) {
+      return { success: false, error: 'Geçersiz görsel verisi' };
+    }
+
+    const buffer = Buffer.from(base64, 'base64');
+
+    // Max 5MB (sıkıştırılmış olmalı)
+    if (buffer.length > 5 * 1024 * 1024) {
+      return { success: false, error: 'Resim 5MB üzerinde olamaz' };
+    }
+
+    // Uzantı belirle
+    const extMap: Record<string, string> = {
+      'image/png': 'png',
+      'image/jpeg': 'jpg',
+      'image/webp': 'webp',
+    };
+    const ext = extMap[mimeType] || 'jpg';
+
+    // Yol: {business_id}/products/{product_id}-{timestamp}.{ext}
+    const ts = Date.now();
+    const path = `${businessId}/products/${productId}-${ts}.${ext}`;
+
+    const { error: uploadError } = await admin.storage
+      .from('business-assets')
+      .upload(path, buffer, {
+        contentType: mimeType,
+        upsert: true,
+      });
+
+    if (uploadError) {
+      return { success: false, error: uploadError.message };
+    }
+
+    // Public URL
+    const { data: urlData } = admin.storage
+      .from('business-assets')
+      .getPublicUrl(path);
+
+    const imageUrl = urlData.publicUrl;
+
+    // products.hero_image_url güncelle
+    const { error: updateError } = await admin
+      .from('products')
+      .update({ hero_image_url: imageUrl })
+      .eq('id', productId);
+
+    if (updateError) {
+      return { success: false, error: updateError.message };
+    }
+
+    revalidatePath('/panel/menu/urunler');
+    revalidatePath('/menu/[slug]', 'page');
+
+    return { success: true, imageUrl };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Bilinmeyen hata',
+    };
+  }
+}
+
+/**
+ * Ürün resmi kaldır
+ */
+export async function removeProductImage(
+  productId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { businessId } = await requireBusinessAccess();
+    const admin = createAdminClient();
+
+    // Ürünün bu businessa ait olduğunu doğrula
+    const { data: product } = await admin
+      .from('products')
+      .select('id, business_id, hero_image_url')
+      .eq('id', productId)
+      .eq('business_id', businessId)
+      .maybeSingle();
+
+    if (!product) {
+      return { success: false, error: 'Ürün bulunamadı' };
+    }
+
+    // DB'den hero_image_url temizle
+    await admin
+      .from('products')
+      .update({ hero_image_url: null })
+      .eq('id', productId);
+
+    // Storage'daki dosyaları temizle
+    const { data: files } = await admin.storage
+      .from('business-assets')
+      .list(`${businessId}/products`, { limit: 100 });
+
+    if (files) {
+      const productFiles = files.filter((f) => f.name.startsWith(`${productId}-`));
+      if (productFiles.length > 0) {
+        const paths = productFiles.map((f) => `${businessId}/products/${f.name}`);
+        await admin.storage.from('business-assets').remove(paths);
+      }
+    }
+
+    revalidatePath('/panel/menu/urunler');
+    revalidatePath('/menu/[slug]', 'page');
+
+    return { success: true };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Bilinmeyen hata',
+    };
+  }
 }

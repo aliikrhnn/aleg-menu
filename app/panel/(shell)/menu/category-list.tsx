@@ -442,24 +442,10 @@ function CategoryCard({
     >
       {/* Header */}
       <div className="flex items-start gap-3 mb-3">
-        {category.hero_icon ? (
-          <div
-            className="w-12 h-12 rounded-[var(--r-sm)] bg-accent/10 flex items-center justify-center text-2xl flex-shrink-0"
-          >
-            {category.hero_icon}
-          </div>
-        ) : (
-          <div
-            className="w-12 h-12 rounded-[var(--r-sm)] bg-paper-2 text-ink-3 flex items-center justify-center flex-shrink-0"
-            style={{
-              fontFamily: 'var(--f-serif)',
-              fontStyle: 'italic',
-              fontSize: 22,
-            }}
-          >
-            {category.name.tr.charAt(0).toUpperCase()}
-          </div>
-        )}
+        <CategoryIcon
+          heroIcon={category.hero_icon}
+          name={category.name.tr}
+        />
         <div className="flex-1 min-w-0">
           <h3
             className="font-semibold text-ink truncate"
@@ -623,5 +609,43 @@ function FormStyles() {
         line-height: 1.5;
       }
     `}</style>
+  );
+}
+
+// ============================================================
+// Kategori İkonu - Emoji veya İlk Harf
+// ============================================================
+function CategoryIcon({
+  heroIcon,
+  name,
+}: {
+  heroIcon: string | null;
+  name: string;
+}) {
+  // Emoji mi kontrol et (unicode emoji regex)
+  const isEmoji = heroIcon
+    ? /\p{Extended_Pictographic}|\p{Emoji_Presentation}/u.test(heroIcon)
+    : false;
+
+  if (heroIcon && isEmoji) {
+    return (
+      <div className="w-12 h-12 rounded-[var(--r-sm)] bg-accent/10 flex items-center justify-center text-2xl flex-shrink-0">
+        {heroIcon}
+      </div>
+    );
+  }
+
+  // Emoji değilse (düz metin veya boş) — kategori adının ilk harfi
+  return (
+    <div
+      className="w-12 h-12 rounded-[var(--r-sm)] bg-paper-2 text-ink-3 flex items-center justify-center flex-shrink-0"
+      style={{
+        fontFamily: 'var(--f-serif)',
+        fontStyle: 'italic',
+        fontSize: 22,
+      }}
+    >
+      {name.charAt(0).toUpperCase()}
+    </div>
   );
 }

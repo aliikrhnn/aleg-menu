@@ -1,16 +1,32 @@
-# Types Fix - ai_usage tablosu TypeScript
+# TEMİZLİK PAKETİ
 
-## DEĞİŞEN DOSYA (üstüne yaz)
+## DEĞİŞEN DOSYALAR (üstüne yaz)
 
-types/database.ts
+1. lib/actions/orders.ts   ([ORDER DEBUG] log'ları silindi)
+2. lib/actions/pos.ts      ([POS DEBUG] log'ları silindi)
 
-## NE DEĞIŞTI
 
-ai_usage tablosu için TypeScript tipi eklendi (stations'dan sonra).
-Bu olmadan rate-limit.ts'de "ai_usage tablosu bilinmiyor" build hatası alınıyordu.
+## EL İLE SİLECEKLERİN
+
+Aşağıdaki klasörleri tamamen sil (debug için eklemiştim):
+
+- app/api/debug/orders/    (tüm klasör)
+- app/api/debug/v2/        (tüm klasör)
+
+VEYA tek komutla:
+
+  Remove-Item -Recurse -Force app/api/debug
+
 
 ## KOMUT
 
-git add .
-git commit -m "ai_usage TypeScript tipi eklendi"
-git push
+Remove-Item -Recurse -Force .next
+Remove-Item -Recurse -Force app/api/debug
+npm run dev
+
+
+## SONUÇ
+
+- Terminal artık [ORDER DEBUG] ve [POS DEBUG] yazıları kirletmiyor
+- Debug API endpoint'leri (kullanıcılar görmemeli) silindi
+- Pilot için temiz, üretime hazır kod

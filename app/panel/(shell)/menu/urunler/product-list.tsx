@@ -1,16 +1,20 @@
 'use client';
+/* eslint-disable @next/next/no-img-element */
 
-import { useState, useTransition, useMemo } from 'react';
+import { useState, useTransition, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   createProduct,
   updateProduct,
   deleteProduct,
   updateProductStatus,
+  uploadProductImage,
+  removeProductImage,
   type ProductInput,
 } from '@/lib/actions/menu';
 import { aiGenerateProductDescription, aiTranslateText } from '@/lib/actions/ai';
 import type { LocalizedText } from '@/types/database';
+import { ProductImageCropModal } from '@/components/panel/product-image-crop-modal';
 
 type CategoryOption = {
   id: string;
@@ -28,7 +32,9 @@ type Product = {
   is_featured: boolean;
   print_station: string | null;
   hero_icon: string | null;
+  hero_image_url: string | null;
   sort_order: number;
+  preset_count?: number;
 };
 
 interface Props {
@@ -47,6 +53,59 @@ export function ProductList({ products, categories }: Props) {
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [search, setSearch] = useState('');
+
+  // Resim yükleme
+  const [cropModalProduct, setCropModalProduct] = useState<{
+    productId: string;
+    file: File;
+  } | null>(null);
+  const [uploadingProductId, setUploadingProductId] = useState<string | null>(null);
+  const fileInputsRef = useRef<Record<string, HTMLInputElement | null>>({});
+
+  function handleImageSelect(productId: string, file: File) {
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Resim en fazla 10MB olabilir');
+      return;
+    }
+    if (!file.type.match(/^image\/(png|jpeg|webp)$/)) {
+      alert('Sadece PNG, JPG ve WebP desteklenir');
+      return;
+    }
+    setCropModalProduct({ productId, file });
+  }
+
+  async function handleCropped(dataUrl: string, mimeType: string) {
+    if (!cropModalProduct) return;
+    const productId = cropModalProduct.productId;
+    setCropModalProduct(null);
+    setUploadingProductId(productId);
+
+    try {
+      const result = await uploadProductImage(productId, dataUrl, mimeType);
+      if (!result.success) {
+        alert(result.error || 'Resim yüklenemedi');
+      } else {
+        router.refresh();
+      }
+    } finally {
+      setUploadingProductId(null);
+    }
+  }
+
+  async function handleRemoveImage(productId: string) {
+    if (!confirm('Ürün resmini kaldırmak istediğine emin misin?')) return;
+    setUploadingProductId(productId);
+    try {
+      const result = await removeProductImage(productId);
+      if (!result.success) {
+        alert(result.error || 'Resim kaldırılamadı');
+      } else {
+        router.refresh();
+      }
+    } finally {
+      setUploadingProductId(null);
+    }
+  }
 
   const filtered = useMemo(() => {
     return products.filter((p) => {
@@ -212,24 +271,28 @@ export function ProductList({ products, categories }: Props) {
                 >
                   <td className="py-4 px-5">
                     <div className="flex items-center gap-3">
-                      {p.hero_icon ? (
-                        <div className="w-10 h-10 rounded-[var(--r-sm)] bg-accent/10 flex items-center justify-center text-xl flex-shrink-0">
-                          {p.hero_icon}
-                        </div>
-                      ) : (
-                        <div
-                          className="w-10 h-10 rounded-[var(--r-sm)] bg-paper-2 text-ink-3 flex items-center justify-center flex-shrink-0"
-                          style={{
-                            fontFamily: 'var(--f-serif)',
-                            fontStyle: 'italic',
-                            fontSize: 18,
-                          }}
-                        >
-                          {p.name.tr.charAt(0).toUpperCase()}
-                        </div>
-                      )}
+                      {/* Thumbnail - resim yüklenebilir */}
+                      <ProductThumbnail
+                        product={p}
+                        uploading={uploadingProductId === p.id}
+                        onUpload={() => fileInputsRef.current[p.id]?.click()}
+                        onRemove={() => handleRemoveImage(p.id)}
+                      />
+                      <input
+                        ref={(el) => {
+                          fileInputsRef.current[p.id] = el;
+                        }}
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleImageSelect(p.id, file);
+                          e.target.value = '';
+                        }}
+                      />
                       <div className="min-w-0">
-                        <div className="font-medium text-ink flex items-center gap-2">
+                        <div className="font-medium text-ink flex items-center gap-2 flex-wrap">
                           <span className="truncate">{p.name.tr}</span>
                           {p.is_featured && (
                             <span
@@ -241,6 +304,20 @@ export function ProductList({ products, categories }: Props) {
                               }}
                             >
                               ÖNE ÇIKAN
+                            </span>
+                          )}
+                          {p.preset_count !== undefined && p.preset_count > 0 && (
+                            <span
+                              className="text-[9px] px-1.5 py-0.5 rounded uppercase flex-shrink-0 inline-flex items-center gap-1"
+                              style={{
+                                fontFamily: 'var(--f-mono)',
+                                fontWeight: 700,
+                                letterSpacing: '0.06em',
+                                background: 'color-mix(in srgb, var(--accent) 12%, transparent)',
+                                color: 'var(--accent)',
+                              }}
+                            >
+                              ◇ {p.preset_count} VARYASYON
                             </span>
                           )}
                         </div>
@@ -329,7 +406,136 @@ export function ProductList({ products, categories }: Props) {
           loading={isPending}
         />
       )}
+
+      {/* Image crop modal */}
+      {cropModalProduct && (
+        <ProductImageCropModal
+          imageFile={cropModalProduct.file}
+          onCropped={handleCropped}
+          onClose={() => setCropModalProduct(null)}
+        />
+      )}
     </div>
+  );
+}
+
+// ============================================================
+// Ürün Thumbnail - resimli / resimsiz
+// ============================================================
+function ProductThumbnail({
+  product,
+  uploading,
+  onUpload,
+  onRemove,
+}: {
+  product: Product;
+  uploading: boolean;
+  onUpload: () => void;
+  onRemove: () => void;
+}) {
+  if (uploading) {
+    return (
+      <div
+        className="w-12 h-12 rounded-[var(--r-sm)] flex items-center justify-center flex-shrink-0"
+        style={{
+          background: 'var(--paper-2)',
+          border: '1px solid var(--line)',
+        }}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" className="animate-spin text-accent">
+          <circle
+            cx="12"
+            cy="12"
+            r="10"
+            stroke="currentColor"
+            strokeWidth="3"
+            fill="none"
+            strokeDasharray="32"
+            strokeDashoffset="8"
+            strokeLinecap="round"
+          />
+        </svg>
+      </div>
+    );
+  }
+
+  if (product.hero_image_url) {
+    return (
+      <div className="relative group flex-shrink-0">
+        <img
+          src={product.hero_image_url}
+          alt={product.name.tr}
+          className="w-12 h-12 rounded-[var(--r-sm)] object-cover"
+          style={{ border: '1px solid var(--line)' }}
+        />
+        {/* Hover overlay */}
+        <div
+          className="absolute inset-0 rounded-[var(--r-sm)] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1"
+          style={{
+            background: 'rgba(42, 31, 24, 0.75)',
+          }}
+        >
+          <button
+            onClick={onUpload}
+            className="w-7 h-7 rounded-full bg-white/95 grid place-items-center hover:bg-white transition-colors"
+            title="Değiştir"
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--ink)" strokeWidth="2">
+              <polyline points="23 4 23 10 17 10" />
+              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+            </svg>
+          </button>
+          <button
+            onClick={onRemove}
+            className="w-7 h-7 rounded-full bg-white/95 grid place-items-center hover:bg-white transition-colors"
+            title="Kaldır"
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Resim yok - upload butonu
+  const isEmoji = product.hero_icon
+    ? /\p{Extended_Pictographic}|\p{Emoji_Presentation}/u.test(product.hero_icon)
+    : false;
+  const showEmoji = product.hero_icon && isEmoji;
+
+  return (
+    <button
+      onClick={onUpload}
+      className="w-12 h-12 rounded-[var(--r-sm)] flex flex-col items-center justify-center gap-0.5 flex-shrink-0 transition-all hover:border-accent hover:bg-paper-3 group"
+      style={{
+        background: 'var(--paper-2)',
+        border: '1.5px dashed var(--line-2)',
+      }}
+      title="Resim ekle"
+    >
+      {showEmoji ? (
+        <span className="text-xl">{product.hero_icon}</span>
+      ) : (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="text-ink-3 group-hover:text-accent transition-colors">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+          <circle cx="8.5" cy="8.5" r="1.5" />
+          <polyline points="21 15 16 10 5 21" />
+        </svg>
+      )}
+      <span
+        className="text-[8px] text-ink-3 group-hover:text-accent uppercase transition-colors"
+        style={{
+          fontFamily: 'var(--f-mono)',
+          fontWeight: 700,
+          letterSpacing: '0.08em',
+        }}
+      >
+        EKLE
+      </span>
+    </button>
   );
 }
 

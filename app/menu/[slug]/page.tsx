@@ -83,10 +83,37 @@ export default async function CustomerMenuPage({ params, searchParams }: Props) 
   // 3. Aktif/tükendi ürünleri çek (taslakları gösterme)
   const { data: products } = await supabase
     .from('products')
-    .select('id, category_id, name, description, price, status, is_featured, hero_icon, sort_order')
+    .select('id, category_id, name, description, price, status, is_featured, hero_icon, hero_image_url, sort_order')
     .eq('business_id', business.id)
     .in('status', ['active', 'soldout'])
     .order('sort_order', { ascending: true });
+
+  // Ürünlerin varyasyonlarını çek
+  const productIds = (products || []).map((p) => p.id);
+  const { data: productPresets } = productIds.length
+    ? await supabase
+        .from('product_option_presets')
+        .select('product_id, preset_id, sort_order')
+        .in('product_id', productIds)
+        .order('sort_order', { ascending: true })
+    : { data: [] };
+
+  const presetIds = [...new Set((productPresets || []).map((pp) => pp.preset_id))];
+
+  const { data: presets } = presetIds.length
+    ? await supabase
+        .from('option_presets')
+        .select('id, name, type, required, sort_order')
+        .in('id', presetIds)
+    : { data: [] };
+
+  const { data: presetValues } = presetIds.length
+    ? await supabase
+        .from('option_preset_values')
+        .select('id, preset_id, name, price_delta, is_default, sort_order')
+        .in('preset_id', presetIds)
+        .order('sort_order', { ascending: true })
+    : { data: [] };
 
   // Tip dönüşümleri (LocalizedText)
   const formattedCategories = (categories || []).map((c) => ({
@@ -95,6 +122,36 @@ export default async function CustomerMenuPage({ params, searchParams }: Props) 
     description: c.description as LocalizedText | null,
     hero_icon: c.hero_icon,
   }));
+
+  // Her ürün için preset listesi
+  const productPresetsMap = new Map<string, string[]>();
+  (productPresets || []).forEach((pp) => {
+    if (!productPresetsMap.has(pp.product_id)) {
+      productPresetsMap.set(pp.product_id, []);
+    }
+    productPresetsMap.get(pp.product_id)!.push(pp.preset_id);
+  });
+
+  // Preset → values eşlemesi
+  const presetMap = new Map(
+    (presets || []).map((p) => [
+      p.id,
+      {
+        id: p.id,
+        name: p.name as LocalizedText,
+        type: p.type as 'single' | 'multi',
+        required: p.required,
+        values: (presetValues || [])
+          .filter((v) => v.preset_id === p.id)
+          .map((v) => ({
+            id: v.id,
+            name: v.name as LocalizedText,
+            price_delta: Number(v.price_delta),
+            is_default: v.is_default,
+          })),
+      },
+    ])
+  );
 
   const formattedProducts = (products || []).map((p) => ({
     id: p.id,
@@ -105,6 +162,10 @@ export default async function CustomerMenuPage({ params, searchParams }: Props) 
     status: p.status as 'active' | 'soldout',
     is_featured: p.is_featured,
     hero_icon: p.hero_icon,
+    hero_image_url: p.hero_image_url,
+    presets: (productPresetsMap.get(p.id) || [])
+      .map((pid) => presetMap.get(pid))
+      .filter((p): p is NonNullable<typeof p> => p !== undefined),
   }));
 
   return (

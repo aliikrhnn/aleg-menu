@@ -311,9 +311,11 @@ function OrderCard({
   onCancel: (id: string) => void;
   busy: boolean;
 }) {
-  const [elapsed, setElapsed] = useState(getElapsed(order.created_at));
+  // Hydration mismatch'i önlemek için: ilk render'da boş, useEffect ile set
+  const [elapsed, setElapsed] = useState<string>('');
 
   useEffect(() => {
+    setElapsed(getElapsed(order.created_at));
     const t = setInterval(() => setElapsed(getElapsed(order.created_at)), 30000);
     return () => clearInterval(t);
   }, [order.created_at]);
@@ -387,7 +389,7 @@ function OrderCard({
 
       {/* Items */}
       <div className="px-3.5 py-2.5">
-        <ul className="space-y-1">
+        <ul className="space-y-1.5">
           {order.items.map((item) => (
             <li key={item.id} className="flex items-start gap-2 text-sm text-ink">
               <span
@@ -399,7 +401,17 @@ function OrderCard({
               >
                 {item.quantity}×
               </span>
-              <span className="flex-1">{item.product_name}</span>
+              <div className="flex-1 min-w-0">
+                <div>{item.product_name}</div>
+                {item.options && item.options.length > 0 && (
+                  <div
+                    className="text-[11px] text-ink-3 mt-0.5 leading-tight"
+                    style={{ fontFamily: 'var(--f-mono)' }}
+                  >
+                    {item.options.map((o) => o.value_name).join(' · ')}
+                  </div>
+                )}
+              </div>
             </li>
           ))}
         </ul>

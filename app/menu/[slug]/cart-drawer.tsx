@@ -5,11 +5,23 @@ import { submitOrder } from '@/lib/actions/orders';
 
 type Lang = 'tr' | 'en';
 
+export type CartDrawerSelection = {
+  preset_id: string;
+  preset_name: string;
+  value_id: string;
+  value_name: string;
+  price_delta: number;
+};
+
 export type CartDrawerItem = {
+  key: string;
   product_id: string;
   product_name: string;
   qty: number;
   unit_price: number;
+  hero_image_url?: string | null;
+  hero_icon?: string | null;
+  selections?: CartDrawerSelection[];
 };
 
 type Mode = 'dinein' | 'pickup' | 'delivery';
@@ -24,7 +36,7 @@ interface CartDrawerProps {
   businessId: string;
   tableId?: string | null;
   tableName?: string | null;
-  onQtyChange: (productId: string, newQty: number) => void;
+  onQtyChange: (cartItemKey: string, newQty: number) => void;
   onClearCart: () => void;
 }
 
@@ -100,6 +112,7 @@ export function CartDrawer({
         product_id: i.product_id,
         quantity: i.qty,
         unit_price: i.unit_price,
+        options: i.selections || [],
       })),
     });
 
@@ -299,17 +312,66 @@ export function CartDrawer({
                 <>
                   {/* Items */}
                   <div className="space-y-2 mb-5">
-                    {items.map((item) => (
+                    {items.map((item) => {
+                      const isEmoji = item.hero_icon
+                        ? /\p{Extended_Pictographic}|\p{Emoji_Presentation}/u.test(item.hero_icon)
+                        : false;
+                      return (
                       <div
-                        key={item.product_id}
-                        className="flex items-center gap-3 p-3 bg-card border border-line rounded-[14px]"
+                        key={item.key}
+                        className="flex items-start gap-3 p-3 bg-card border border-line rounded-[14px]"
                       >
+                        {/* Ürün resmi / ikon */}
+                        <div className="w-12 h-12 rounded-[10px] bg-paper-2 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                          {item.hero_image_url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={item.hero_image_url}
+                              alt={item.product_name}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : isEmoji ? (
+                            <span className="text-2xl">{item.hero_icon}</span>
+                          ) : (
+                            <span
+                              className="text-ink/30"
+                              style={{
+                                fontFamily: 'var(--f-serif)',
+                                fontStyle: 'italic',
+                                fontSize: 22,
+                                fontWeight: 400,
+                              }}
+                            >
+                              {item.product_name.charAt(0)}
+                            </span>
+                          )}
+                        </div>
+
                         <div className="flex-1 min-w-0">
                           <div className="text-sm font-semibold text-ink truncate">
                             {item.product_name}
                           </div>
+                          {/* Seçimler - rozet olarak göster */}
+                          {item.selections && item.selections.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {item.selections.map((s, idx) => (
+                                <span
+                                  key={`${s.preset_id}-${s.value_id}-${idx}`}
+                                  className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold"
+                                  style={{
+                                    background: 'color-mix(in srgb, var(--accent) 12%, transparent)',
+                                    color: 'var(--accent)',
+                                    fontFamily: 'var(--f-mono)',
+                                    letterSpacing: '0.04em',
+                                  }}
+                                >
+                                  {s.value_name}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                           <div
-                            className="text-ink-3 text-xs mt-0.5"
+                            className="text-ink-3 text-xs mt-1"
                             style={{ fontFamily: 'var(--f-mono)' }}
                           >
                             {money(item.unit_price, lang)} × {item.qty} ={' '}
@@ -320,9 +382,9 @@ export function CartDrawer({
                         </div>
 
                         {/* Qty controls */}
-                        <div className="flex items-center gap-1 flex-shrink-0">
+                        <div className="flex items-center gap-1 flex-shrink-0 mt-1">
                           <button
-                            onClick={() => onQtyChange(item.product_id, item.qty - 1)}
+                            onClick={() => onQtyChange(item.key, item.qty - 1)}
                             className="w-8 h-8 rounded-full bg-paper-2 border border-line grid place-items-center text-ink hover:bg-paper-3 transition-colors"
                             aria-label="azalt"
                           >
@@ -337,7 +399,7 @@ export function CartDrawer({
                             {item.qty}
                           </span>
                           <button
-                            onClick={() => onQtyChange(item.product_id, item.qty + 1)}
+                            onClick={() => onQtyChange(item.key, item.qty + 1)}
                             className="w-8 h-8 rounded-full bg-accent grid place-items-center hover:opacity-90 transition-opacity"
                             style={{ color: '#FAF5EA' }}
                             aria-label="artır"
@@ -348,7 +410,8 @@ export function CartDrawer({
                           </button>
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
 
                   {/* Customer info */}

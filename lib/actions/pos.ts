@@ -54,6 +54,11 @@ export type ActiveOrder = {
     quantity: number;
     unit_price: number;
     note: string | null;
+    options: Array<{
+      preset_name: string;
+      value_name: string;
+      price_delta: number;
+    }>;
   }>;
 };
 
@@ -105,7 +110,7 @@ export async function getActiveOrders(): Promise<{
     const orderIds = orders.map((o) => o.id);
     const { data: items } = await admin
       .from('order_items')
-      .select('id, order_id, product_name, quantity, unit_price, note')
+      .select('id, order_id, product_name, quantity, unit_price, note, options')
       .in('order_id', orderIds);
 
     // Kalemleri sipariş bazında grupla
@@ -120,6 +125,13 @@ export async function getActiveOrders(): Promise<{
         quantity: item.quantity,
         unit_price: Number(item.unit_price),
         note: item.note,
+        options: Array.isArray(item.options)
+          ? (item.options as Array<{
+              preset_name: string;
+              value_name: string;
+              price_delta: number;
+            }>)
+          : [],
       });
     });
 

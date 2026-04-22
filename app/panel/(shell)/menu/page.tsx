@@ -83,7 +83,7 @@ export default async function MenuPage() {
         </div>
 
         <Link
-          href="/menu/urunler"
+          href="/panel/menu/urunler"
           className="h-11 px-5 rounded-[var(--r-sm)] bg-card border border-line hover:border-accent text-ink-2 hover:text-accent font-semibold text-sm flex items-center gap-2 transition-colors"
           style={{ fontFamily: 'var(--f-sans)' }}
         >

@@ -178,13 +178,13 @@ export default async function PanelHomePage() {
               n={1}
               title="Kategorilerinizi ekleyin"
               desc="Kahve, yiyecek, tatlı..."
-              href="/menu"
+              href="/panel/menu"
             />
             <Step
               n={2}
               title="Ürünleri ekleyin"
               desc="Fotoğraf, fiyat, açıklama"
-              href="/menu"
+              href="/panel/menu"
             />
             <Step
               n={3}

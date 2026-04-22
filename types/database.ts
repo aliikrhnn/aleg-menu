@@ -382,15 +382,62 @@ export interface Database {
           id: string;
           business_id: string;
           user_id: string | null;
-          feature: 'slogan' | 'monogram' | 'chat';
+          feature: 'slogan' | 'monogram' | 'chat' | 'variation';
           tokens_used: number;
           created_at: string;
         };
         Insert: Partial<Database['public']['Tables']['ai_usage']['Row']> & {
           business_id: string;
-          feature: 'slogan' | 'monogram' | 'chat';
+          feature: 'slogan' | 'monogram' | 'chat' | 'variation';
         };
         Update: Partial<Database['public']['Tables']['ai_usage']['Row']>;
+      };
+      option_presets: {
+        Row: {
+          id: string;
+          business_id: string;
+          name: LocalizedText;
+          type: 'single' | 'multi';
+          required: boolean;
+          sort_order: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Partial<Database['public']['Tables']['option_presets']['Row']> & {
+          business_id: string;
+          name: LocalizedText;
+        };
+        Update: Partial<Database['public']['Tables']['option_presets']['Row']>;
+      };
+      option_preset_values: {
+        Row: {
+          id: string;
+          preset_id: string;
+          name: LocalizedText;
+          price_delta: number;
+          is_default: boolean;
+          sort_order: number;
+          created_at: string;
+        };
+        Insert: Partial<Database['public']['Tables']['option_preset_values']['Row']> & {
+          preset_id: string;
+          name: LocalizedText;
+        };
+        Update: Partial<Database['public']['Tables']['option_preset_values']['Row']>;
+      };
+      product_option_presets: {
+        Row: {
+          id: string;
+          product_id: string;
+          preset_id: string;
+          sort_order: number;
+          created_at: string;
+        };
+        Insert: Partial<Database['public']['Tables']['product_option_presets']['Row']> & {
+          product_id: string;
+          preset_id: string;
+        };
+        Update: Partial<Database['public']['Tables']['product_option_presets']['Row']>;
       };
     };
     Views: {

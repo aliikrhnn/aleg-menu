@@ -19,7 +19,7 @@ export function KitchenBoard({ initialOrders, businessId, businessName }: Kitche
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [busyOrderId, setBusyOrderId] = useState<string | null>(null);
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState<number>(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const prevReceivedIds = useRef<Set<string>>(
     new Set(initialOrders.filter((o) => o.status === 'received').map((o) => o.id))
@@ -27,6 +27,7 @@ export function KitchenBoard({ initialOrders, businessId, businessName }: Kitche
 
   // Her dakikada bir zaman göstergesini güncelle
   useEffect(() => {
+    setNow(Date.now()); // ilk değer client'ta set edilir (hydration mismatch yok)
     const t = setInterval(() => setNow(Date.now()), 30000);
     return () => clearInterval(t);
   }, []);
@@ -521,6 +522,27 @@ function TicketCard({
                   {item.product_name}
                 </span>
               </div>
+              {/* Varyasyon seçimleri - mutfak için kritik */}
+              {item.options && item.options.length > 0 && (
+                <div
+                  className="mt-1 ml-[48px] flex flex-wrap gap-1"
+                >
+                  {item.options.map((opt, idx) => (
+                    <span
+                      key={idx}
+                      className="px-2 py-0.5 rounded text-[12px] font-semibold"
+                      style={{
+                        background: 'color-mix(in srgb, var(--accent) 15%, transparent)',
+                        color: 'var(--accent)',
+                        fontFamily: 'var(--f-mono)',
+                        letterSpacing: '0.03em',
+                      }}
+                    >
+                      {opt.value_name}
+                    </span>
+                  ))}
+                </div>
+              )}
               {item.note && (
                 <div
                   className="mt-1 ml-[48px] px-2 py-1 rounded text-xs italic"
