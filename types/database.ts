@@ -353,6 +353,7 @@ export interface Database {
           unit_price: number;
           options: Json;
           note: string | null;
+          station_id: string | null;
           status: 'ordered' | 'preparing' | 'ready' | 'delivered' | 'cancelled';
         };
         Insert: Partial<Database['public']['Tables']['order_items']['Row']> & {
@@ -452,8 +453,9 @@ export interface Database {
           printer_id: string | null;
           order_id: string | null;
           station_id: string | null;
+          agent_id: string | null;
           job_type: 'kitchen' | 'cashier' | 'reprint_kitchen' | 'reprint_cashier' | 'test';
-          status: 'pending' | 'success' | 'failed';
+          status: 'pending' | 'printing' | 'success' | 'failed';
           error_message: string | null;
           triggered_by: string | null;
           user_id: string | null;
@@ -488,6 +490,26 @@ export interface Database {
           rating: number;
         };
         Update: Partial<Database['public']['Tables']['reviews']['Row']>;
+      };
+      printer_agents: {
+        Row: {
+          id: string;
+          business_id: string;
+          name: string;
+          version: string | null;
+          last_seen_at: string | null;
+          last_job_at: string | null;
+          jobs_processed: number;
+          is_active: boolean;
+          token: string;
+          created_at: string;
+        };
+        Insert: Partial<Database['public']['Tables']['printer_agents']['Row']> & {
+          business_id: string;
+          name: string;
+          token: string;
+        };
+        Update: Partial<Database['public']['Tables']['printer_agents']['Row']>;
       };
       ai_usage: {
         Row: {
