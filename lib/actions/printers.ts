@@ -58,7 +58,7 @@ export type PrintJob = {
   station_id: string | null;
   station_name: string | null;
   job_type: 'kitchen' | 'cashier' | 'reprint_kitchen' | 'reprint_cashier' | 'test';
-  status: 'pending' | 'success' | 'failed';
+  status: 'pending' | 'printing' | 'success' | 'failed';
   error_message: string | null;
   created_at: string;
 };
