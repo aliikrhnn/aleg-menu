@@ -62,7 +62,7 @@ export async function submitOrder(input: SubmitOrderInput): Promise<SubmitOrderR
     const productIds = input.items.map((i) => i.product_id);
     const { data: products, error: productsError } = await supabase
       .from('products')
-      .select('id, name, price, status, business_id')
+      .select('id, name, price, status, business_id, station_id')
       .in('id', productIds)
       .eq('business_id', input.business_id);
 
@@ -175,6 +175,7 @@ export async function submitOrder(input: SubmitOrderInput): Promise<SubmitOrderR
         quantity,
         unit_price: realUnitPrice,
         note: clientItem.note || null,
+        station_id: (product as { station_id?: string | null }).station_id || null,
         options: serverOptions,
       };
     });
@@ -214,6 +215,18 @@ export async function submitOrder(input: SubmitOrderInput): Promise<SubmitOrderR
       await supabase.from('orders').delete().eq('id', order.id);
       console.error('Order items insert error:', itemsError);
       return { success: false, error: 'Sipariş kalemleri kaydedilemedi' };
+    }
+
+    // Auto-print job'larını oluştur (arka planda, sipariş akışını bloklamaz)
+    try {
+      const { triggerAutoPrint } = await import('@/lib/printer/auto-print');
+      await triggerAutoPrint({
+        businessId: input.business_id,
+        orderId: order.id,
+        orderType: input.order_type,
+      });
+    } catch (err) {
+      console.error('[auto-print] tetiklenemedi:', err);
     }
 
     return {

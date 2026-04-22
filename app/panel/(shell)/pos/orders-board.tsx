@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import { updateOrderStatus, cancelOrder, getActiveOrders, type ActiveOrder } from '@/lib/actions/pos';
+import { PrintButton } from '@/components/panel/print-button';
 
 interface OrdersBoardProps {
   initialOrders: ActiveOrder[];
@@ -446,7 +447,20 @@ function OrderCard({
           ₺{order.total.toFixed(0)}
         </span>
 
-        <div className="flex gap-1.5">
+        <div className="flex gap-1.5 items-center">
+          <PrintButton
+            orderId={order.id}
+            mode="reprint_kitchen"
+            variant="icon"
+            label="Mutfağa tekrar yazdır"
+          />
+          <PrintButton
+            orderId={order.id}
+            mode="cashier"
+            variant="secondary"
+            label="Hesap"
+            className="!h-8 !px-3 !text-[11px]"
+          />
           <button
             onClick={() => onCancel(order.id)}
             disabled={busy}

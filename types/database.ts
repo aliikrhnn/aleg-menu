@@ -21,6 +21,41 @@ export type LocalizedText = {
   [lang: string]: string | undefined;
 };
 
+export type ReceiptSettings = {
+  header_text: string;
+  footer_text: string;
+  show_logo: boolean;
+  show_tagline: boolean;
+  show_phone: boolean;
+  show_address: boolean;
+  paper_width: 32 | 48;
+  kitchen_show_prices: boolean;
+  kitchen_big_font: boolean;
+  kitchen_show_note_highlight: boolean;
+  // Değerlendirme QR
+  review_qr_enabled: boolean;
+  review_qr_text: string; // "Deneyiminizi değerlendirin"
+  review_smart_redirect: boolean; // 4-5 yıldız → Google
+  google_place_id: string; // Google Maps Place ID
+};
+
+export const DEFAULT_RECEIPT_SETTINGS: ReceiptSettings = {
+  header_text: '',
+  footer_text: 'Tercih ettiğiniz için teşekkürler!',
+  show_logo: true,
+  show_tagline: true,
+  show_phone: true,
+  show_address: true,
+  paper_width: 48,
+  kitchen_show_prices: false,
+  kitchen_big_font: true,
+  kitchen_show_note_highlight: true,
+  review_qr_enabled: false,
+  review_qr_text: 'Deneyiminizi değerlendirin',
+  review_smart_redirect: false,
+  google_place_id: '',
+};
+
 export interface Database {
   public: {
     Tables: {
@@ -380,6 +415,79 @@ export interface Database {
           name: string;
         };
         Update: Partial<Database['public']['Tables']['table_zones']['Row']>;
+      };
+      printers: {
+        Row: {
+          id: string;
+          business_id: string;
+          name: string;
+          role: 'kitchen' | 'cashier';
+          connection_type: 'bluetooth' | 'network';
+          bluetooth_device_id: string | null;
+          ip_address: string | null;
+          port: number;
+          paper_width: 32 | 48;
+          model: string | null;
+          station_id: string | null;
+          copies: number;
+          auto_print_new_orders: boolean;
+          auto_print_takeaway: boolean;
+          is_active: boolean;
+          last_tested_at: string | null;
+          last_test_success: boolean | null;
+          last_test_error: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Partial<Database['public']['Tables']['printers']['Row']> & {
+          business_id: string;
+          name: string;
+        };
+        Update: Partial<Database['public']['Tables']['printers']['Row']>;
+      };
+      print_jobs: {
+        Row: {
+          id: string;
+          business_id: string;
+          printer_id: string | null;
+          order_id: string | null;
+          station_id: string | null;
+          job_type: 'kitchen' | 'cashier' | 'reprint_kitchen' | 'reprint_cashier' | 'test';
+          status: 'pending' | 'success' | 'failed';
+          error_message: string | null;
+          triggered_by: string | null;
+          user_id: string | null;
+          created_at: string;
+          completed_at: string | null;
+        };
+        Insert: Partial<Database['public']['Tables']['print_jobs']['Row']> & {
+          business_id: string;
+          job_type: 'kitchen' | 'cashier' | 'reprint_kitchen' | 'reprint_cashier' | 'test';
+        };
+        Update: Partial<Database['public']['Tables']['print_jobs']['Row']>;
+      };
+      reviews: {
+        Row: {
+          id: string;
+          business_id: string;
+          order_id: string | null;
+          rating: number;
+          comment: string | null;
+          customer_name: string | null;
+          customer_phone: string | null;
+          customer_email: string | null;
+          redirected_to_google: boolean;
+          reply_text: string | null;
+          reply_at: string | null;
+          reply_user_id: string | null;
+          is_archived: boolean;
+          created_at: string;
+        };
+        Insert: Partial<Database['public']['Tables']['reviews']['Row']> & {
+          business_id: string;
+          rating: number;
+        };
+        Update: Partial<Database['public']['Tables']['reviews']['Row']>;
       };
       ai_usage: {
         Row: {

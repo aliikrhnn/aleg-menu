@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
+import { PrintButton } from '@/components/panel/print-button';
 import {
   advanceKitchenOrder,
   getKitchenOrders,
@@ -466,6 +467,7 @@ export function KitchenBoard({
                 busy={busyOrderId === order.id}
                 onAdvance={handleAdvance}
                 stations={stations}
+                activeStationId={activeStationId}
               />
             ))}
             {/* Hazırlananlar sonra */}
@@ -477,6 +479,7 @@ export function KitchenBoard({
                 busy={busyOrderId === order.id}
                 onAdvance={handleAdvance}
                 stations={stations}
+                activeStationId={activeStationId}
               />
             ))}
           </div>
@@ -496,12 +499,14 @@ function TicketCard({
   busy,
   onAdvance,
   stations,
+  activeStationId,
 }: {
   order: KitchenOrder;
   now: number;
   busy: boolean;
   onAdvance: (id: string) => void;
   stations: KitchenStation[];
+  activeStationId: string | null;
 }) {
   const ageMin = Math.max(0, Math.floor((now - new Date(order.created_at).getTime()) / 60000));
   const urgent = ageMin > 10;
@@ -714,13 +719,13 @@ function TicketCard({
 
       {/* Action button */}
       <div
-        className="px-3 pb-3 pt-1"
+        className="px-3 pb-3 pt-1 flex gap-2 items-center"
         style={{ borderTop: '1px solid var(--line)' }}
       >
         <button
           onClick={() => onAdvance(order.id)}
           disabled={busy}
-          className="w-full h-12 rounded-[12px] font-bold transition-opacity hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2 uppercase"
+          className="flex-1 h-12 rounded-[12px] font-bold transition-opacity hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2 uppercase"
           style={{
             background: isWaiting ? 'var(--accent)' : 'var(--olive)',
             color: '#FAF5EA',
@@ -745,6 +750,14 @@ function TicketCard({
             </>
           )}
         </button>
+        <PrintButton
+          orderId={order.id}
+          mode="reprint_kitchen"
+          stationId={activeStationId}
+          variant="icon"
+          label="Tekrar yazdır"
+          className="!h-12 !w-12 !rounded-[12px]"
+        />
       </div>
     </article>
   );

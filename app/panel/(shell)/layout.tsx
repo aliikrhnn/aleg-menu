@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { PanelSidebar } from '@/components/panel/sidebar';
 import { PanelTopbar } from '@/components/panel/topbar';
 import { AiAssistant } from '@/components/panel/ai-assistant';
+import { PrintQueueListener } from '@/components/panel/print-queue-listener';
 
 export default async function PanelShellLayout({
   children,
@@ -70,6 +71,7 @@ export default async function PanelShellLayout({
         <main className="flex-1 overflow-y-auto">{children}</main>
       </div>
       <AiAssistant businessName={business?.name} />
+      <PrintQueueListener businessId={membership.business_id} />
     </div>
   );
 }

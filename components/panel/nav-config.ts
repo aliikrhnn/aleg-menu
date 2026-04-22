@@ -45,6 +45,7 @@ export const PANEL_NAV: PanelNavGroup[] = [
     group: 'İÇGÖRÜ',
     items: [
       { id: 'reports', label: 'Raporlar', href: '/raporlar', icon: '◌' },
+      { id: 'reviews', label: 'Değerlendirmeler', href: '/degerlendirmeler', icon: '⭐' },
       { id: 'loyalty', label: 'Sadakat', href: '/sadakat', icon: '✆', comingSoon: true },
     ],
   },
@@ -52,6 +53,7 @@ export const PANEL_NAV: PanelNavGroup[] = [
     group: 'AYARLAR',
     items: [
       { id: 'settings', label: 'İşletme Ayarları', href: '/ayarlar', icon: '⚙' },
+      { id: 'printers', label: 'Yazıcılar & Fiş', href: '/yazicilar', icon: '🖨' },
       { id: 'billing', label: 'Abonelik', href: '/abonelik', icon: '◎', comingSoon: true },
     ],
   },

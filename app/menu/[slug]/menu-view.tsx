@@ -1,7 +1,7 @@
 'use client';
 /* eslint-disable @next/next/no-img-element */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import type { LocalizedText } from '@/types/database';
 import { CartDrawer } from './cart-drawer';
 
@@ -114,6 +114,25 @@ export function MenuView({ business, categories, products, qrTable }: Props) {
   );
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartDrawerOpen, setCartDrawerOpen] = useState(false);
+  const [toast, setToast] = useState<{ name: string; ts: number } | null>(null);
+
+  function showToast(product: Product) {
+    const name =
+      typeof product.name === 'object' && product.name !== null
+        ? (product.name as { tr?: string }).tr || 'Ürün'
+        : String(product.name || 'Ürün');
+    setToast({ name, ts: Date.now() });
+  }
+
+  // Toast 2 saniye sonra kapansın
+  useEffect(() => {
+    if (!toast) return;
+    const currentTs = toast.ts;
+    const t = setTimeout(() => {
+      setToast((prev) => (prev && prev.ts === currentTs ? null : prev));
+    }, 2200);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   // Aktif kategorideki ürünler (search uygulu)
   const catProducts = useMemo(() => {
@@ -175,8 +194,8 @@ export function MenuView({ business, categories, products, qrTable }: Props) {
         },
       ];
     });
-    // Sepet drawer'ı otomatik aç (kullanıcı not ekleyebilsin, görsel feedback olsun)
-    setCartDrawerOpen(true);
+    // Sepeti otomatik açma - sadece toast göster
+    showToast(p);
   };
 
   // Modal'dan onaylı ürün ekle
@@ -205,7 +224,7 @@ export function MenuView({ business, categories, products, qrTable }: Props) {
       ];
     });
     setOptionModal(null);
-    setCartDrawerOpen(true); // varyasyon modal kapanınca sepeti aç
+    showToast(p);
   };
 
   const handleQtyChange = (cartItemKey: string, newQty: number) => {
@@ -583,6 +602,55 @@ export function MenuView({ business, categories, products, qrTable }: Props) {
         onClearCart={handleClearCart}
       />
 
+      {/* ============ TOAST (sepete eklendi) ============ */}
+      {toast && !cartDrawerOpen && (
+        <div
+          key={toast.ts}
+          style={{
+            position: 'fixed',
+            bottom: 96, // alt bar/cart button üstünde
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 60,
+            background: 'var(--ink, #2A1F18)',
+            color: 'var(--paper, #F4EEE2)',
+            padding: '12px 20px',
+            borderRadius: 999,
+            fontSize: 13,
+            fontWeight: 600,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.25), 0 2px 6px rgba(0,0,0,0.1)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            maxWidth: '90vw',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            animation: 'toastSlideUp 0.24s cubic-bezier(0.2, 0.8, 0.2, 1)',
+          }}
+        >
+          <span
+            style={{
+              background: 'var(--ok, #6B8E4E)',
+              color: 'white',
+              width: 18,
+              height: 18,
+              borderRadius: 999,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 11,
+              flexShrink: 0,
+            }}
+          >
+            ✓
+          </span>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <strong>{toast.name}</strong> {lang === 'en' ? 'added to cart' : 'sepete eklendi'}
+          </span>
+        </div>
+      )}
+
       {/* ============ OPTION PICKER MODAL ============ */}
       {optionModal && (
         <OptionPickerModal
@@ -602,6 +670,16 @@ export function MenuView({ business, categories, products, qrTable }: Props) {
           -webkit-line-clamp: 2;
           -webkit-box-orient: vertical;
           overflow: hidden;
+        }
+        @keyframes toastSlideUp {
+          from {
+            opacity: 0;
+            transform: translate(-50%, 20px);
+          }
+          to {
+            opacity: 1;
+            transform: translate(-50%, 0);
+          }
         }
       `}</style>
     </div>
