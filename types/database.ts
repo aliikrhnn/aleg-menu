@@ -101,6 +101,8 @@ export interface Database {
           currency: string;
           working_hours: Json;
           order_config: Json;
+          // 0016 migration
+          receipt_settings: Json;
         };
         Insert: Partial<Database['public']['Tables']['businesses']['Row']> & {
           slug: string;
