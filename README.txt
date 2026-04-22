@@ -1,32 +1,28 @@
-# TEMİZLİK PAKETİ
+# Pre-push Lint Fix
 
 ## DEĞİŞEN DOSYALAR (üstüne yaz)
 
-1. lib/actions/orders.ts   ([ORDER DEBUG] log'ları silindi)
-2. lib/actions/pos.ts      ([POS DEBUG] log'ları silindi)
-
-
-## EL İLE SİLECEKLERİN
-
-Aşağıdaki klasörleri tamamen sil (debug için eklemiştim):
-
-- app/api/debug/orders/    (tüm klasör)
-- app/api/debug/v2/        (tüm klasör)
-
-VEYA tek komutla:
-
-  Remove-Item -Recurse -Force app/api/debug
-
+1. app/panel/(shell)/menu/varyasyonlar/attach-products-modal.tsx  (initiallyAttached unused sil)
+2. app/panel/(shell)/menu/varyasyonlar/presets-manager.tsx        (attachPresetToProducts unused import sil)
+3. app/menu/[slug]/menu-view.tsx                                  (img warning disable)
+4. components/panel/product-image-crop-modal.tsx                  (img warning disable)
 
 ## KOMUT
 
-Remove-Item -Recurse -Force .next
-Remove-Item -Recurse -Force app/api/debug
-npm run dev
+git add .
+git commit -m "Lint düzeltmeleri: unused vars + img warnings"
+git push
 
+## NE DÜZELTİLDİ
 
-## SONUÇ
+ERRORS (build durdurur):
+- attach-products-modal.tsx: kullanılmayan initiallyAttached useMemo silindi
+- presets-manager.tsx: kullanılmayan attachPresetToProducts import silindi
 
-- Terminal artık [ORDER DEBUG] ve [POS DEBUG] yazıları kirletmiyor
-- Debug API endpoint'leri (kullanıcılar görmemeli) silindi
-- Pilot için temiz, üretime hazır kod
+WARNINGS (uyarı):
+- menu-view.tsx: /* eslint-disable @next/next/no-img-element */
+- product-image-crop-modal.tsx: aynı disable
+
+img tag uyarıları next/image yerine kullanmamızdan ama bizim
+durumumuzda Supabase Storage URL'leri ve data URL'ler için
+img daha pratik (next.config'de allowed hosts ayarı gerekmiyor).

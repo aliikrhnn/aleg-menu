@@ -1,4 +1,5 @@
 'use client';
+/* eslint-disable @next/next/no-img-element */
 
 import { useState, useMemo } from 'react';
 import type { LocalizedText } from '@/types/database';

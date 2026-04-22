@@ -37,11 +37,6 @@ export function AttachProductsModal({
   const [selected, setSelected] = useState<Set<string>>(
     () => new Set(preset.product_ids || [])
   );
-  // Hangi ürünler zaten bağlıydı (referans için, değişmez)
-  const initiallyAttached = useMemo(
-    () => new Set(preset.product_ids || []),
-    [preset.product_ids]
-  );
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [search, setSearch] = useState('');
 

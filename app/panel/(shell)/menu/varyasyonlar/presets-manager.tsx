@@ -7,7 +7,6 @@ import {
   createPreset,
   updatePreset,
   deletePreset,
-  attachPresetToProducts,
   syncPresetProducts,
   type Preset,
   type PresetInput,
