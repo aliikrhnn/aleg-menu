@@ -179,6 +179,7 @@ export interface Database {
           id: string;
           business_id: string;
           category_id: string | null;
+          station_id: string | null;
           name: LocalizedText;
           description: LocalizedText | null;
           price: number;
@@ -202,6 +203,25 @@ export interface Database {
           price: number;
         };
         Update: Partial<Database['public']['Tables']['products']['Row']>;
+      };
+      stations: {
+        Row: {
+          id: string;
+          business_id: string;
+          name: string;
+          slug: string;
+          icon: string;
+          color: string;
+          sort_order: number;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Partial<Database['public']['Tables']['stations']['Row']> & {
+          business_id: string;
+          name: string;
+        };
+        Update: Partial<Database['public']['Tables']['stations']['Row']>;
       };
       tables: {
         Row: {

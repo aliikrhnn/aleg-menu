@@ -8,6 +8,7 @@ export type PanelNavItem = {
   label: string;
   href: string;
   icon: string;
+  color?: string;
   badge?: string | number;
   comingSoon?: boolean;
 };
@@ -23,15 +24,20 @@ export const PANEL_NAV: PanelNavGroup[] = [
     items: [
       { id: 'dashboard', label: 'Ana Sayfa', href: '/', icon: '◇' },
       { id: 'pos', label: 'Sipariş & Masa', href: '/pos', icon: '◉' },
-      { id: 'kds', label: 'Mutfak Ekranı', href: '/kds', icon: '◈' },
     ],
   },
   {
-    group: 'YÖNETİM',
+    group: 'MENÜ',
     items: [
       { id: 'menu', label: 'Menü', href: '/menu', icon: '⊟' },
       { id: 'variations', label: 'Varyasyonlar', href: '/menu/varyasyonlar', icon: '◇' },
+    ],
+  },
+  {
+    group: 'OPERASYON',
+    items: [
       { id: 'tables', label: 'Masalar', href: '/masalar', icon: '◍' },
+      { id: 'stations', label: 'İstasyonlar', href: '/istasyonlar', icon: '⊙' },
       { id: 'team', label: 'Ekip', href: '/ekip', icon: '◐', comingSoon: true },
     ],
   },

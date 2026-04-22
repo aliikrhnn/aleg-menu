@@ -54,6 +54,7 @@ export type KitchenOrder = {
     product_name: string;
     quantity: number;
     note: string | null;
+    station_id: string | null;
     options: Array<{
       preset_name: string;
       value_name: string;
@@ -62,9 +63,18 @@ export type KitchenOrder = {
   }>;
 };
 
+export type KitchenStation = {
+  id: string;
+  name: string;
+  slug: string;
+  icon: string;
+  color: string;
+};
+
 export async function getKitchenOrders(): Promise<{
   success: boolean;
   orders?: KitchenOrder[];
+  stations?: KitchenStation[];
   businessId?: string;
   error?: string;
 }> {
@@ -99,14 +109,47 @@ export async function getKitchenOrders(): Promise<{
     }
 
     if (!orders || orders.length === 0) {
-      return { success: true, orders: [], businessId };
+      return { success: true, orders: [], stations: [], businessId };
     }
 
     const orderIds = orders.map((o) => o.id);
     const { data: items } = await admin
       .from('order_items')
-      .select('id, order_id, product_name, quantity, note, options')
+      .select('id, order_id, product_id, product_name, quantity, note, options')
       .in('order_id', orderIds);
+
+    // Ürünlerin station_id'lerini çek
+    const productIds = [
+      ...new Set((items || []).map((i) => i.product_id).filter(Boolean)),
+    ] as string[];
+
+    const { data: products } = productIds.length
+      ? await admin
+          .from('products')
+          .select('id, station_id')
+          .in('id', productIds)
+      : { data: [] };
+
+    const productStationMap = new Map<string, string | null>();
+    (products || []).forEach((p) => {
+      productStationMap.set(p.id, (p.station_id as string | null) || null);
+    });
+
+    // İstasyonları çek
+    const { data: stationsData } = await admin
+      .from('stations')
+      .select('id, name, slug, icon, color, sort_order')
+      .eq('business_id', businessId)
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true });
+
+    const stationsList: KitchenStation[] = (stationsData || []).map((s) => ({
+      id: s.id as string,
+      name: s.name as string,
+      slug: (s.slug as string) || (s.id as string).slice(0, 8),
+      icon: (s.icon as string) || '●',
+      color: (s.color as string) || '#C4553A',
+    }));
 
     const itemsByOrder = new Map<string, KitchenOrder['items']>();
     (items || []).forEach((item) => {
@@ -118,6 +161,9 @@ export async function getKitchenOrders(): Promise<{
         product_name: item.product_name,
         quantity: item.quantity,
         note: item.note,
+        station_id: item.product_id
+          ? productStationMap.get(item.product_id) || null
+          : null,
         options: Array.isArray(item.options)
           ? (item.options as Array<{
               preset_name: string;
@@ -143,7 +189,7 @@ export async function getKitchenOrders(): Promise<{
       };
     });
 
-    return { success: true, orders: formatted, businessId };
+    return { success: true, orders: formatted, stations: stationsList, businessId };
   } catch (err) {
     return {
       success: false,

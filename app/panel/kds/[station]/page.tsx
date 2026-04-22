@@ -1,20 +1,21 @@
-import { redirect } from 'next/navigation';
+import { redirect, notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getKitchenOrders } from '@/lib/actions/kds';
-import { KitchenBoard } from './kitchen-board';
+import { KitchenBoard } from '../kitchen-board';
 
 export const dynamic = 'force-dynamic';
 
-export default async function KdsPage() {
-  // Auth kontrolü (bu sayfanın kendi layout'u yok, manuel)
+export default async function KdsStationPage({
+  params,
+}: {
+  params: { station: string };
+}) {
   const supabase = createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) {
-    redirect('/panel/giris');
-  }
+  if (!user) redirect('/panel/giris');
 
   const { data: membership } = await supabase
     .from('business_members')
@@ -23,9 +24,7 @@ export default async function KdsPage() {
     .eq('status', 'active')
     .maybeSingle();
 
-  if (!membership) {
-    redirect('/panel/giris?error=no_business');
-  }
+  if (!membership) redirect('/panel/giris?error=no_business');
 
   const { data: business } = await supabase
     .from('businesses')
@@ -33,7 +32,6 @@ export default async function KdsPage() {
     .eq('id', membership.business_id)
     .maybeSingle();
 
-  // İlk veriyi çek
   const result = await getKitchenOrders();
 
   if (!result.success || !result.businessId) {
@@ -62,10 +60,7 @@ export default async function KdsPage() {
           <a
             href="/panel/pos"
             className="inline-block mt-6 px-5 py-2.5 rounded-full text-sm font-semibold transition-opacity hover:opacity-80"
-            style={{
-              background: 'var(--accent)',
-              color: '#FAF5EA',
-            }}
+            style={{ background: 'var(--accent)', color: '#FAF5EA' }}
           >
             Panele dön
           </a>
@@ -74,11 +69,17 @@ export default async function KdsPage() {
     );
   }
 
+  // İstasyonu bul
+  const station = (result.stations || []).find((s) => s.slug === params.station);
+  if (!station) {
+    notFound();
+  }
+
   return (
     <KitchenBoard
       initialOrders={result.orders || []}
       initialStations={result.stations || []}
-      initialStationSlug={null}
+      initialStationSlug={params.station}
       businessId={result.businessId}
       businessName={business?.name || 'İşletme'}
     />

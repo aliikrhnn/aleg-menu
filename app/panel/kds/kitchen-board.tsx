@@ -6,16 +6,31 @@ import {
   advanceKitchenOrder,
   getKitchenOrders,
   type KitchenOrder,
+  type KitchenStation,
 } from '@/lib/actions/kds';
 
 interface KitchenBoardProps {
   initialOrders: KitchenOrder[];
+  initialStations: KitchenStation[];
+  initialStationSlug: string | null; // null = Tümü
   businessId: string;
   businessName: string;
 }
 
-export function KitchenBoard({ initialOrders, businessId, businessName }: KitchenBoardProps) {
+export function KitchenBoard({
+  initialOrders,
+  initialStations,
+  initialStationSlug,
+  businessId,
+  businessName,
+}: KitchenBoardProps) {
   const [orders, setOrders] = useState<KitchenOrder[]>(initialOrders);
+  const [stations, setStations] = useState<KitchenStation[]>(initialStations);
+  // Slug'dan id'ye çevir (başlangıçta)
+  const initialStationId = initialStationSlug
+    ? initialStations.find((s) => s.slug === initialStationSlug)?.id || null
+    : null;
+  const [activeStationId, setActiveStationId] = useState<string | null>(initialStationId);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [busyOrderId, setBusyOrderId] = useState<string | null>(null);
@@ -64,6 +79,16 @@ export function KitchenBoard({ initialOrders, businessId, businessName }: Kitche
         },
         () => refreshOrders()
       )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'stations',
+          filter: `business_id=eq.${businessId}`,
+        },
+        () => refreshOrders()
+      )
       .subscribe();
 
     const interval = setInterval(refreshOrders, 15000);
@@ -89,6 +114,7 @@ export function KitchenBoard({ initialOrders, businessId, businessName }: Kitche
       if (hasNew) playDing();
       prevReceivedIds.current = currentReceivedIds;
       setOrders(result.orders);
+      if (result.stations) setStations(result.stations);
     }
   }
 
@@ -131,9 +157,41 @@ export function KitchenBoard({ initialOrders, businessId, businessName }: Kitche
     return () => document.removeEventListener('fullscreenchange', onFsChange);
   }, []);
 
+  // İstasyona göre filtreleme: activeStationId null ise "Tümü"
+  // Bir sipariş, o istasyonda en az 1 item'ı varsa "o istasyonda" sayılır
+  const filteredOrders = activeStationId
+    ? orders
+        .map((o) => {
+          // Sadece o istasyonun item'ları
+          const filteredItems = o.items.filter(
+            (i) => i.station_id === activeStationId
+          );
+          if (filteredItems.length === 0) return null;
+          return { ...o, items: filteredItems };
+        })
+        .filter((o): o is KitchenOrder => o !== null)
+    : orders;
+
+  // İstasyon bazında bekleyen sayısı (tab rozeti için)
+  const stationWaitingCounts = new Map<string, number>();
+  orders
+    .filter((o) => o.status === 'received')
+    .forEach((o) => {
+      const seenStations = new Set<string>();
+      o.items.forEach((i) => {
+        if (i.station_id && !seenStations.has(i.station_id)) {
+          seenStations.add(i.station_id);
+          stationWaitingCounts.set(
+            i.station_id,
+            (stationWaitingCounts.get(i.station_id) || 0) + 1
+          );
+        }
+      });
+    });
+
   // Sıralama: Bekleyenler önce, bekleyenler ve hazırlananlar ayrı grup
-  const waiting = orders.filter((o) => o.status === 'received');
-  const preparing = orders.filter((o) => o.status === 'preparing');
+  const waiting = filteredOrders.filter((o) => o.status === 'received');
+  const preparing = filteredOrders.filter((o) => o.status === 'preparing');
 
   return (
     <div
@@ -180,16 +238,28 @@ export function KitchenBoard({ initialOrders, businessId, businessName }: Kitche
                 {businessName}
               </span>
               <span
-                className="uppercase"
+                className="uppercase flex items-center gap-1.5"
                 style={{
                   fontFamily: 'var(--f-mono)',
                   fontSize: 9,
                   fontWeight: 700,
                   letterSpacing: '0.14em',
-                  color: 'var(--accent)',
+                  color: activeStationId
+                    ? stations.find((s) => s.id === activeStationId)?.color ||
+                      'var(--accent)'
+                    : 'var(--accent)',
                 }}
               >
-                MUTFAK EKRANI
+                {activeStationId ? (
+                  <>
+                    <span style={{ fontSize: 12 }}>
+                      {stations.find((s) => s.id === activeStationId)?.icon}
+                    </span>
+                    {stations.find((s) => s.id === activeStationId)?.name || 'İSTASYON'} · MUTFAK
+                  </>
+                ) : (
+                  'MUTFAK EKRANI'
+                )}
               </span>
             </div>
           </div>
@@ -319,9 +389,40 @@ export function KitchenBoard({ initialOrders, businessId, businessName }: Kitche
         </div>
       </header>
 
+      {/* ============ İSTASYON TAB'LARI (sadece Tümü sayfasında) ============ */}
+      {stations.length > 0 && initialStationSlug === null && (
+        <div
+          className="flex items-center gap-1 px-4 md:px-6 py-2 overflow-x-auto flex-shrink-0"
+          style={{
+            borderBottom: '1px solid var(--line)',
+            background: 'var(--card)',
+          }}
+        >
+          <StationTab
+            label="Tümü"
+            icon="◈"
+            count={orders.filter((o) => o.status === 'received').length}
+            active={activeStationId === null}
+            color="var(--accent)"
+            onClick={() => setActiveStationId(null)}
+          />
+          {stations.map((s) => (
+            <StationTab
+              key={s.id}
+              label={s.name}
+              icon={s.icon}
+              count={stationWaitingCounts.get(s.id) || 0}
+              active={activeStationId === s.id}
+              color={s.color}
+              onClick={() => setActiveStationId(s.id)}
+            />
+          ))}
+        </div>
+      )}
+
       {/* ============ KARTLAR GRID ============ */}
       <main className="flex-1 overflow-y-auto px-4 md:px-6 py-4 md:py-6">
-        {orders.length === 0 ? (
+        {filteredOrders.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center py-20">
             <div
               className="text-6xl md:text-7xl mb-4 opacity-30"
@@ -364,6 +465,7 @@ export function KitchenBoard({ initialOrders, businessId, businessName }: Kitche
                 now={now}
                 busy={busyOrderId === order.id}
                 onAdvance={handleAdvance}
+                stations={stations}
               />
             ))}
             {/* Hazırlananlar sonra */}
@@ -374,6 +476,7 @@ export function KitchenBoard({ initialOrders, businessId, businessName }: Kitche
                 now={now}
                 busy={busyOrderId === order.id}
                 onAdvance={handleAdvance}
+                stations={stations}
               />
             ))}
           </div>
@@ -392,11 +495,13 @@ function TicketCard({
   now,
   busy,
   onAdvance,
+  stations,
 }: {
   order: KitchenOrder;
   now: number;
   busy: boolean;
   onAdvance: (id: string) => void;
+  stations: KitchenStation[];
 }) {
   const ageMin = Math.max(0, Math.floor((now - new Date(order.created_at).getTime()) / 60000));
   const urgent = ageMin > 10;
@@ -495,7 +600,11 @@ function TicketCard({
       {/* Items — BÜYÜK FONT (mutfakta 3m'den okunabilsin) */}
       <div className="px-4 py-3 flex-1">
         <ul className="space-y-2">
-          {order.items.map((item) => (
+          {order.items.map((item) => {
+            const itemStation = item.station_id
+              ? stations.find((s) => s.id === item.station_id)
+              : null;
+            return (
             <li key={item.id}>
               <div className="flex items-baseline gap-3">
                 <span
@@ -521,6 +630,21 @@ function TicketCard({
                 >
                   {item.product_name}
                 </span>
+                {itemStation && (
+                  <span
+                    className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase"
+                    style={{
+                      background: `color-mix(in srgb, ${itemStation.color} 15%, transparent)`,
+                      color: itemStation.color,
+                      fontFamily: 'var(--f-mono)',
+                      letterSpacing: '0.08em',
+                      border: `1px solid ${itemStation.color}`,
+                    }}
+                    title={`${itemStation.name} istasyonu`}
+                  >
+                    {itemStation.icon} {itemStation.name}
+                  </span>
+                )}
               </div>
               {/* Varyasyon seçimleri - mutfak için kritik */}
               {item.options && item.options.length > 0 && (
@@ -556,7 +680,8 @@ function TicketCard({
                 </div>
               )}
             </li>
-          ))}
+            );
+          })}
         </ul>
 
         {/* Sipariş notu (üst seviye, müşteri notu) */}
@@ -622,5 +747,57 @@ function TicketCard({
         </button>
       </div>
     </article>
+  );
+}
+
+// ============================================================
+// Station Tab (üstteki filtre)
+// ============================================================
+
+function StationTab({
+  label,
+  icon,
+  count,
+  active,
+  color,
+  onClick,
+}: {
+  label: string;
+  icon: string;
+  count: number;
+  active: boolean;
+  color: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex-shrink-0 h-9 px-3 rounded-full flex items-center gap-2 transition-all"
+      style={{
+        background: active ? color : 'transparent',
+        color: active ? 'var(--paper)' : 'var(--ink-2)',
+        border: `1px solid ${active ? color : 'var(--line)'}`,
+      }}
+    >
+      <span style={{ fontSize: 14 }}>{icon}</span>
+      <span
+        className="text-[12px] font-semibold uppercase"
+        style={{ letterSpacing: '0.08em' }}
+      >
+        {label}
+      </span>
+      {count > 0 && (
+        <span
+          className="inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full text-[10px] font-bold px-1"
+          style={{
+            background: active ? 'rgba(255,255,255,0.2)' : color,
+            color: active ? 'var(--paper)' : 'var(--paper)',
+            fontFamily: 'var(--f-mono)',
+          }}
+        >
+          {count}
+        </span>
+      )}
+    </button>
   );
 }

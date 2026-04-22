@@ -35,11 +35,29 @@ export default async function PanelShellLayout({
     .eq('id', membership.business_id)
     .maybeSingle();
 
+  // Aktif istasyonları çek (sidebar'da KDS alt menüsü için)
+  const { data: stationsRaw } = await supabase
+    .from('stations')
+    .select('id, name, slug, icon, color, sort_order')
+    .eq('business_id', membership.business_id)
+    .eq('is_active', true)
+    .order('sort_order', { ascending: true });
+
+  const initialStations = (stationsRaw || []).map((s) => ({
+    id: s.id as string,
+    name: s.name as string,
+    slug: (s.slug as string) || (s.id as string).slice(0, 8),
+    icon: (s.icon as string) || '●',
+    color: (s.color as string) || '#C4553A',
+  }));
+
   return (
     <div data-theme="warm" className="flex h-screen overflow-hidden bg-paper text-ink">
       <PanelSidebar
         businessName={business?.name || 'İşletme'}
         logoUrl={business?.logo_url || null}
+        businessId={membership.business_id}
+        initialStations={initialStations}
       />
       <div className="flex-1 flex flex-col overflow-hidden">
         <PanelTopbar

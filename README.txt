@@ -1,32 +1,19 @@
-# TYPE FIX - ai_usage feature enum
+# KDS BUG FIX - stations is not defined
 
 ## SORUN
 
-types/database.ts'te ai_usage.feature tipi:
-  'slogan' | 'monogram' | 'chat' | 'variation'
+TicketCard bileşeninde stations değişkeni scope'ta yoktu,
+istasyon rozeti render ederken "ReferenceError: stations is not defined"
+hatası veriyordu.
 
-insights yok, bu yüzden recordUsage('insights') TS hatası veriyor.
+## ÇÖZÜM
 
+TicketCard'a stations prop'u eklendi. Caller'lardan geçiliyor.
 
 ## DOSYA (üstüne yaz)
 
-1. types/database.ts     (feature enum'a 'insights' eklendi)
+app/panel/kds/kitchen-board.tsx
 
-## YENİ MIGRATION (opsiyonel ama önerilir)
+## KOMUT (.next cache temizlemeye gerek yok, hot reload yeter)
 
-2. supabase/migrations/0012_ai_usage_insights.sql
-
-Bu migration Supabase'deki CHECK constraint'i günceller.
-DB'de 'insights' yazılmaya çalışınca reddedilmesin diye.
-
-Supabase Dashboard > SQL Editor'da çalıştır, VEYA Supabase CLI ile:
-  supabase db push
-
-
-## KOMUT
-
-git add .
-git commit -m "AI insights tip + migration - pre-push fix"
-git push
-
-Bu sefer geçer inşallah.
+# Tarayıcıda sayfayı yenile
