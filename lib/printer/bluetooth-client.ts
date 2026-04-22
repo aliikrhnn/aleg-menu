@@ -13,6 +13,25 @@
  * - 49535343-fe7d-4ae5-8fa9-9fafd205e455 (MicroChip transparent UART)
  */
 
+// WebBluetooth API minimum tip tanımları (TypeScript lib henüz tam desteklemiyor)
+/* eslint-disable @typescript-eslint/no-explicit-any */
+type BluetoothDevice = any;
+type BluetoothRemoteGATTCharacteristic = any;
+type NavigatorBluetooth = {
+  bluetooth: {
+    requestDevice: (opts: object) => Promise<BluetoothDevice>;
+    getDevices?: () => Promise<BluetoothDevice[]>;
+  };
+};
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+function getBluetoothNavigator(): NavigatorBluetooth | null {
+  if (typeof navigator === 'undefined') return null;
+  const nav = navigator as unknown as NavigatorBluetooth;
+  if (!nav.bluetooth) return null;
+  return nav;
+}
+
 // Yaygın yazıcı GATT service UUID'leri
 const PRINTER_SERVICES = [
   '000018f0-0000-1000-8000-00805f9b34fb', // Generic
@@ -48,15 +67,15 @@ export async function pairBluetoothPrinter(): Promise<{
   error?: string;
 }> {
   try {
-    if (!('bluetooth' in navigator)) {
+    const nav = getBluetoothNavigator();
+    if (!nav) {
       return {
         success: false,
         error: 'Bu tarayıcı Bluetooth desteklemiyor. Chrome, Edge veya Opera kullanın.',
       };
     }
 
-    // @ts-expect-error - navigator.bluetooth tip desteği kısıtlı
-    const device: BluetoothDevice = await navigator.bluetooth.requestDevice({
+    const device: BluetoothDevice = await nav.bluetooth.requestDevice({
       // Tüm cihazları göster (ESC/POS yazıcılar çok farklı isimler kullanıyor)
       acceptAllDevices: true,
       optionalServices: PRINTER_SERVICES,
@@ -92,11 +111,14 @@ async function connectToPrinter(deviceId: string): Promise<BluetoothPrinterDevic
   // Bu yüzden eşleştirme diyaloğu her yazdırmada açılabilir
   let device: BluetoothDevice | null = null;
 
+  const nav = getBluetoothNavigator();
+  if (!nav) {
+    throw new Error('Bu tarayıcı Bluetooth desteklemiyor');
+  }
+
   try {
-    // @ts-expect-error - getDevices experimental API
-    if (navigator.bluetooth?.getDevices) {
-      // @ts-expect-error - getDevices henüz TypeScript lib'inde yok
-      const devices = await navigator.bluetooth.getDevices();
+    if (nav.bluetooth.getDevices) {
+      const devices = await nav.bluetooth.getDevices();
       device = devices.find((d: BluetoothDevice) => d.id === deviceId) || null;
     }
   } catch {
@@ -105,8 +127,7 @@ async function connectToPrinter(deviceId: string): Promise<BluetoothPrinterDevic
 
   if (!device) {
     // Re-pair zorunlu - user dialog açılacak
-    // @ts-expect-error - WebBluetooth tipler henüz TypeScript lib'inde eksik
-    device = await navigator.bluetooth.requestDevice({
+    device = await nav.bluetooth.requestDevice({
       acceptAllDevices: true,
       optionalServices: PRINTER_SERVICES,
     });
