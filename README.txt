@@ -1,26 +1,32 @@
-# BUILD FIX - Recharts Tooltip Formatter Tipleri
+# TYPE FIX - ai_usage feature enum
 
 ## SORUN
 
-Recharts'ın tooltip formatter callback'i çok sıkı tiplendirilmiş:
-  Type 'ValueType | undefined' is not assignable to type 'number'
+types/database.ts'te ai_usage.feature tipi:
+  'slogan' | 'monogram' | 'chat' | 'variation'
 
-## ÇÖZÜM
+insights yok, bu yüzden recordUsage('insights') TS hatası veriyor.
 
-3 yerdeki formatter'ı tip güvenli hale getirdim:
-- Top Products (Bar) formatter
-- Order Type (Pie) formatter
-- Hourly Area Chart formatter
-
-Artık value'yu number olarak varsaymak yerine, Recharts'ın döndürdüğü
-tipi kabul edip Number() ya da String() ile güvenli şekilde kullanıyoruz.
 
 ## DOSYA (üstüne yaz)
 
-app/panel/(shell)/raporlar/reports-view.tsx
+1. types/database.ts     (feature enum'a 'insights' eklendi)
+
+## YENİ MIGRATION (opsiyonel ama önerilir)
+
+2. supabase/migrations/0012_ai_usage_insights.sql
+
+Bu migration Supabase'deki CHECK constraint'i günceller.
+DB'de 'insights' yazılmaya çalışınca reddedilmesin diye.
+
+Supabase Dashboard > SQL Editor'da çalıştır, VEYA Supabase CLI ile:
+  supabase db push
+
 
 ## KOMUT
 
 git add .
-git commit -m "Raporlar + saatlik yoğunluk - recharts tip fix"
+git commit -m "AI insights tip + migration - pre-push fix"
 git push
+
+Bu sefer geçer inşallah.
