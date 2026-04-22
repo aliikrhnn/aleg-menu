@@ -1,22 +1,19 @@
-# LINT FIX - react/no-unescaped-entities
+# DUPLICATE FIX
 
 ## SORUN
 
-JSX text içinde Türkçe metinlerde ' ve " karakterleri var:
-  KDS'de → KDS&apos;de
-  barista'ya → barista&apos;ya
-  "Ürünleri ata" → &quot;Ürünleri ata&quot;
+types/database.ts'te stations tipi 2 kere tanımlanmıştı:
+- 207. satır: Yeni versiyon (slug, icon, color ile)
+- 384. satır: Eski versiyon (branch_id, kind, active ile)
 
-React'ın JSX kuralı: text içinde apostrof ve tırnak escape edilmeli.
+Eski versiyon (DB'de olmayan kolonlarla) silindi.
 
 ## DOSYA (üstüne yaz)
 
-app/panel/(shell)/istasyonlar/stations-manager.tsx
+types/database.ts
 
 ## KOMUT
 
 git add .
-git commit -m "Lint: JSX unescaped entities (apostrof/tırnak)"
+git commit -m "types: duplicate stations identifier kaldırıldı"
 git push
-
-Bu sefer geçer.

@@ -381,22 +381,6 @@ export interface Database {
         };
         Update: Partial<Database['public']['Tables']['table_zones']['Row']>;
       };
-      stations: {
-        Row: {
-          id: string;
-          business_id: string;
-          branch_id: string | null;
-          name: string;
-          kind: 'kitchen' | 'bar' | 'cold' | 'bakery' | 'other';
-          active: boolean;
-          created_at: string;
-        };
-        Insert: Partial<Database['public']['Tables']['stations']['Row']> & {
-          business_id: string;
-          name: string;
-        };
-        Update: Partial<Database['public']['Tables']['stations']['Row']>;
-      };
       ai_usage: {
         Row: {
           id: string;
