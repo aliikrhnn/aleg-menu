@@ -1,24 +1,26 @@
-# LINT DÜZELTMESİ
+# BUILD FIX - Recharts Tooltip Formatter Tipleri
 
 ## SORUN
 
-Pre-push hook:
-  Error: 'getDateRange' is defined but never used.
+Recharts'ın tooltip formatter callback'i çok sıkı tiplendirilmiş:
+  Type 'ValueType | undefined' is not assignable to type 'number'
 
-Önceki paketlerde tanımlanmış ama kullanılmayan helper fonksiyon
-lokal kopyanda hala duruyordu. Bu paketteki versiyonda zaten
-getDateRange silinmiş durumda.
+## ÇÖZÜM
 
+3 yerdeki formatter'ı tip güvenli hale getirdim:
+- Top Products (Bar) formatter
+- Order Type (Pie) formatter
+- Hourly Area Chart formatter
+
+Artık value'yu number olarak varsaymak yerine, Recharts'ın döndürdüğü
+tipi kabul edip Number() ya da String() ile güvenli şekilde kullanıyoruz.
 
 ## DOSYA (üstüne yaz)
 
-  lib/actions/reports.ts
-
+app/panel/(shell)/raporlar/reports-view.tsx
 
 ## KOMUT
 
 git add .
-git commit -m "Raporlar + saatlik yoğunluk + lint fix"
+git commit -m "Raporlar + saatlik yoğunluk - recharts tip fix"
 git push
-
-Bu sefer lint geçer, deploy olur.

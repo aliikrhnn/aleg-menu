@@ -571,10 +571,7 @@ function TopProductsChart({
               borderRadius: 10,
               fontSize: 12,
             }}
-            formatter={(value: number, name: string) => {
-              if (name === 'ciro') return [money(value), 'Ciro'];
-              return [value, 'Adet'];
-            }}
+            formatter={(value) => [money(Number(value)), 'Ciro']}
           />
           <Bar dataKey="ciro" fill="var(--accent)" radius={[0, 4, 4, 0]} />
         </BarChart>
@@ -677,10 +674,10 @@ function OrderTypeChart({
               borderRadius: 10,
               fontSize: 12,
             }}
-            formatter={(value: number, _name: string, props: { payload?: { revenue?: number } }) => [
-              `${value} sipariş · ${money(props.payload?.revenue || 0)}`,
-              '',
-            ]}
+            formatter={(value, _name, props) => {
+              const revenue = (props as { payload?: { revenue?: number } })?.payload?.revenue || 0;
+              return [`${value} sipariş · ${money(revenue)}`, ''];
+            }}
           />
           <Legend
             verticalAlign="bottom"
@@ -838,12 +835,9 @@ function HourlyHeatmapBlock({
                     fontSize: 12,
                   }}
                   labelFormatter={(h) =>
-                    `${h.toString().padStart(2, '0')}:00`
+                    `${Number(h).toString().padStart(2, '0')}:00`
                   }
-                  formatter={(v: number) => [
-                    `${v} ortalama sipariş`,
-                    'Saat',
-                  ]}
+                  formatter={(v) => [`${v} ortalama sipariş`, 'Saat']}
                 />
                 <Area
                   type="monotone"
