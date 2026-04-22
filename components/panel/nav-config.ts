@@ -38,7 +38,7 @@ export const PANEL_NAV: PanelNavGroup[] = [
   {
     group: 'İÇGÖRÜ',
     items: [
-      { id: 'reports', label: 'Raporlar', href: '/raporlar', icon: '◌', comingSoon: true },
+      { id: 'reports', label: 'Raporlar', href: '/raporlar', icon: '◌' },
       { id: 'loyalty', label: 'Sadakat', href: '/sadakat', icon: '✆', comingSoon: true },
     ],
   },
