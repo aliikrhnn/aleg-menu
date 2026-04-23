@@ -1,359 +1,238 @@
-import Link from 'next/link';
-import { createClient } from '@/lib/supabase/server';
+import { Suspense } from 'react';
+import { getDashboardData } from '@/lib/actions/dashboard';
+import { DynamicGreeting } from './dashboard/greeting';
+import { HeroMetrics } from './dashboard/hero-metrics';
+import { HourlyChart } from './dashboard/hourly-chart';
+import { TopProductsCard } from './dashboard/top-products';
+import { LiveOps } from './dashboard/live-ops';
+import { LatestReviewCard } from './dashboard/latest-review';
+import { QuickActionsCard } from './dashboard/quick-actions';
+import { OnboardingCard } from './dashboard/onboarding';
+import { DashboardRealtime } from './dashboard/realtime';
+import { DashboardSkeleton } from './dashboard/skeleton';
+import { LiveClock } from './dashboard/live-clock';
+import { SoldOutAlert } from './dashboard/soldout-alert';
 
-export default async function PanelHomePage() {
-  const supabase = createClient();
+export const dynamic = 'force-dynamic';
+export const revalidate = 30;
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+export default function PanelHomePage() {
+  return (
+    <Suspense fallback={<DashboardSkeleton />}>
+      <DashboardContent />
+    </Suspense>
+  );
+}
 
-  const { data: membership } = await supabase
-    .from('business_members')
-    .select('business_id, full_name')
-    .eq('user_id', user?.id || '')
-    .eq('status', 'active')
-    .maybeSingle();
+async function DashboardContent() {
+  const result = await getDashboardData();
 
-  const { data: business } = membership
-    ? await supabase
-        .from('businesses')
-        .select('*')
-        .eq('id', membership.business_id)
-        .maybeSingle()
-    : { data: null };
+  if (!result.success || !result.data) {
+    return (
+      <div className="px-8 py-10 max-w-[1200px] mx-auto">
+        <div className="bg-card border border-line rounded-[var(--r)] p-8 text-center">
+          <div className="text-accent text-3xl mb-3">⚠</div>
+          <h2
+            className="mb-2"
+            style={{
+              fontFamily: 'var(--f-serif)',
+              fontStyle: 'italic',
+              fontSize: 22,
+              fontWeight: 400,
+            }}
+          >
+            Veriler yüklenemedi
+          </h2>
+          <p className="text-ink-3 text-sm">{result.error}</p>
+        </div>
+      </div>
+    );
+  }
 
-  const { data: plan } = business?.plan_id
-    ? await supabase
-        .from('platform_plans')
-        .select('name')
-        .eq('id', business.plan_id)
-        .maybeSingle()
-    : { data: null };
+  const { data } = result;
 
-  // Ürün ve masa sayıları
-  const { count: productCount } = business
-    ? await supabase
-        .from('products')
-        .select('*', { count: 'exact', head: true })
-        .eq('business_id', business.id)
-    : { count: 0 };
-
-  const { count: tableCount } = business
-    ? await supabase
-        .from('tables')
-        .select('*', { count: 'exact', head: true })
-        .eq('business_id', business.id)
-    : { count: 0 };
-
-  const firstName = membership?.full_name?.split(' ')[0] || 'dostum';
-  const greeting = getGreeting();
-
-  // Kuruluş günlerini hesapla
-  const daysSinceCreation = business?.created_at
-    ? Math.floor((Date.now() - new Date(business.created_at).getTime()) / (1000 * 60 * 60 * 24))
-    : 0;
+  // Akıllı mantık: henüz hiç ürün yok mu?
+  const isBrandNew = data.business.product_count === 0;
+  // Ürün var ama henüz sipariş gelmeyen kafeler
+  const hasProductsNoOrders =
+    data.business.product_count > 0 && data.month.order_count === 0;
 
   return (
-    <div className="px-8 py-10 max-w-[1200px] mx-auto">
-      {/* Hero */}
-      <div className="mb-10">
-        <div
-          className="text-accent uppercase mb-3"
-          style={{
-            fontFamily: 'var(--f-mono)',
-            fontSize: 10,
-            fontWeight: 700,
-            letterSpacing: '0.14em',
-          }}
-        >
-          ANA SAYFA · {new Date().toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}
-        </div>
-        <h1
-          style={{
-            fontFamily: 'var(--f-serif)',
-            fontStyle: 'italic',
-            fontSize: 48,
-            fontWeight: 400,
-            letterSpacing: '-0.02em',
-            lineHeight: 1.05,
-          }}
-        >
-          {greeting}, {firstName}
-        </h1>
-        <p className="text-ink-2 text-base mt-3">
-          {daysSinceCreation === 0 ? 'Hoşgeldin — işletmene bakalım.' : `${daysSinceCreation} gündür Aleg'tesin.`}
-        </p>
-      </div>
+    <div className="px-6 md:px-8 py-8 md:py-10 max-w-[1200px] mx-auto">
+      {/* Realtime dinleyici (görünmez) */}
+      <DashboardRealtime
+        businessId={data.business.id}
+        initialTodayOrderCount={data.today.order_count}
+      />
 
-      {/* 3 kart - özet */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
-        <MetricCard
-          label="DURUM"
-          value={statusLabel(business?.subscription_status)}
-          sublabel={plan?.name ? `${plan.name} plan` : ''}
+      {/* Selam */}
+      <DynamicGreeting
+        firstName={data.user.first_name}
+        todayOrderCount={data.today.order_count}
+        activeOrders={data.live.activeOrders}
+        todayRevenue={data.today.revenue}
+      />
+
+      {/* Onboarding - yalnızca hiç ürünü yoksa veya hiç sipariş almamışsa */}
+      {(isBrandNew || hasProductsNoOrders) && (
+        <OnboardingCard
+          productCount={data.business.product_count}
+          tableCount={data.business.table_count}
+          slug={data.business.slug}
         />
-        <MetricCard
-          label="MENÜDEKİ ÜRÜN"
-          value={(productCount ?? 0).toString()}
-          sublabel="aktif ürün sayısı"
+      )}
+
+      {/* Tükendi uyarı şeridi (varsa) */}
+      <SoldOutAlert />
+
+      {/* 4 hero metrics */}
+      <HeroMetrics
+        todayRevenue={data.today.revenue}
+        todayOrderCount={data.today.order_count}
+        avgBasket={data.today.avg_basket}
+        monthRevenue={data.month.revenue}
+        monthOrderCount={data.month.order_count}
+        activeOrders={data.live.activeOrders}
+        revenueChangePct={data.today.revenue_change_pct}
+        orderChangePct={data.today.order_change_pct}
+      />
+
+      {/* Canlı operasyon — panelin kalbi, tam genişlikte */}
+      <div className="mb-6">
+        <LiveOps live={data.live} realtime={true} />
+      </div>
+
+      {/* 2 kolon: saatlik chart + popüler ürünler */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+        <HourlyChart
+          hourly={data.hourly}
+          peakHour={data.peakHour}
+          totalRevenue={data.today.revenue}
         />
-        <MetricCard
-          label="MASA"
-          value={(tableCount ?? 0).toString()}
-          sublabel="kayıtlı masa"
-        />
+        <TopProductsCard topProducts={data.topProducts} />
       </div>
 
-      {/* İki kolon: QR preview + Sonraki adımlar */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-10">
-        {/* QR Menu önizleme */}
-        <div className="bg-card border border-line rounded-[var(--r)] p-6">
-          <div
-            className="text-ink-3 uppercase mb-3"
-            style={{
-              fontFamily: 'var(--f-mono)',
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: '0.14em',
-            }}
-          >
-            QR MENÜ URL
-          </div>
-          <h2
-            style={{
-              fontFamily: 'var(--f-serif)',
-              fontStyle: 'italic',
-              fontSize: 26,
-              fontWeight: 400,
-              letterSpacing: '-0.02em',
-            }}
-            className="mb-3"
-          >
-            Müşterilerin göreceği link
-          </h2>
-          <a
-            href={`https://${business?.slug}.alegstudio.com`}
-            target="_blank"
-            rel="noreferrer"
-            className="text-accent hover:underline text-sm break-all"
-            style={{ fontFamily: 'var(--f-mono)' }}
-          >
-            {business?.slug}.alegstudio.com ↗
-          </a>
-          <div className="mt-4 text-sm text-ink-3">
-            Bu linki QR koda çevirip masalarınıza yapıştırabilirsiniz. Müşteriler telefonlarıyla
-            okutup menünüze anında erişir.
-          </div>
-        </div>
-
-        {/* Sıradaki adımlar */}
-        <div className="bg-accent/5 border border-accent/20 rounded-[var(--r)] p-6">
-          <div
-            className="text-accent uppercase mb-3"
-            style={{
-              fontFamily: 'var(--f-mono)',
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: '0.14em',
-            }}
-          >
-            BAŞLAMAK İÇİN
-          </div>
-          <h2
-            style={{
-              fontFamily: 'var(--f-serif)',
-              fontStyle: 'italic',
-              fontSize: 26,
-              fontWeight: 400,
-              letterSpacing: '-0.02em',
-            }}
-            className="mb-4"
-          >
-            İlk 3 adım
-          </h2>
-
-          <div className="space-y-3">
-            <Step
-              n={1}
-              title="Kategorilerinizi ekleyin"
-              desc="Kahve, yiyecek, tatlı..."
-              href="/panel/menu"
-            />
-            <Step
-              n={2}
-              title="Ürünleri ekleyin"
-              desc="Fotoğraf, fiyat, açıklama"
-              href="/panel/menu"
-            />
-            <Step
-              n={3}
-              title="QR koddan test edin"
-              desc="Müşteri gözünden bakın"
-              href={`https://${business?.slug}.alegstudio.com`}
-              external
-            />
-          </div>
-        </div>
+      {/* 2 kolon: son değerlendirme + hızlı aksiyon */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+        <LatestReviewCard review={data.latestReview} />
+        <QuickActionsCard slug={data.business.slug} />
       </div>
 
-      {/* Yakında bölümü */}
-      <div className="bg-card border border-line rounded-[var(--r)] p-6">
-        <div
-          className="text-ink-3 uppercase mb-3"
-          style={{
-            fontFamily: 'var(--f-mono)',
-            fontSize: 10,
-            fontWeight: 700,
-            letterSpacing: '0.14em',
-          }}
-        >
-          YAKINDA
-        </div>
-        <h2
-          style={{
-            fontFamily: 'var(--f-serif)',
-            fontStyle: 'italic',
-            fontSize: 24,
-            fontWeight: 400,
-            letterSpacing: '-0.02em',
-          }}
-          className="mb-4"
-        >
-          Çalışmaları süren özellikler
-        </h2>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-          <FeatureBox icon="◉" title="POS & Masa Yönetimi" desc="Sipariş alma, ödeme, hesap bölüşme" />
-          <FeatureBox icon="◈" title="KDS (Mutfak Ekranı)" desc="Siparişleri gerçek zamanlı takip" />
-          <FeatureBox icon="◌" title="Raporlar" desc="Günlük satış, popüler ürünler" />
-        </div>
-      </div>
+      {/* Alt bilgi şeridi — durum */}
+      <StatusBar
+        subscriptionStatus={data.business.subscription_status}
+        planName={data.business.plan_name}
+        daysSinceCreation={data.business.days_since_creation}
+        slug={data.business.slug}
+      />
     </div>
   );
 }
 
-function getGreeting() {
-  const hour = new Date().getHours();
-  if (hour < 6) return 'İyi geceler';
-  if (hour < 12) return 'Günaydın';
-  if (hour < 18) return 'İyi günler';
-  return 'İyi akşamlar';
-}
-
-function statusLabel(status?: string): string {
-  const labels: Record<string, string> = {
-    trial: 'Deneme',
-    active: 'Aktif',
-    past_due: 'Gecikmiş',
-    cancelled: 'İptal',
-    suspended: 'Askıda',
+function StatusBar({
+  subscriptionStatus,
+  planName,
+  daysSinceCreation,
+  slug,
+}: {
+  subscriptionStatus: string | null;
+  planName: string | null;
+  daysSinceCreation: number;
+  slug: string;
+}) {
+  const statusLabels: Record<string, { text: string; color: string }> = {
+    trial: { text: 'DENEME', color: 'var(--gold)' },
+    active: { text: 'AKTİF', color: 'var(--ok)' },
+    past_due: { text: 'GECİKMİŞ', color: 'var(--warn)' },
+    cancelled: { text: 'İPTAL', color: 'var(--danger)' },
+    suspended: { text: 'ASKIDA', color: 'var(--danger)' },
   };
-  return labels[status || ''] || '—';
-}
-
-// ============================================================
-// Bileşenler
-// ============================================================
-
-function MetricCard({
-  label,
-  value,
-  sublabel,
-}: {
-  label: string;
-  value: string;
-  sublabel: string;
-}) {
-  return (
-    <div className="bg-card border border-line rounded-[var(--r)] p-5 min-h-[120px] grid gap-2 content-between">
-      <div
-        className="text-ink-3 uppercase"
-        style={{
-          fontFamily: 'var(--f-mono)',
-          fontSize: 10,
-          fontWeight: 700,
-          letterSpacing: '0.14em',
-        }}
-      >
-        {label}
-      </div>
-      <div
-        style={{
-          fontFamily: 'var(--f-serif)',
-          fontStyle: 'italic',
-          fontSize: 36,
-          fontWeight: 400,
-          letterSpacing: '-0.02em',
-          lineHeight: 1,
-        }}
-      >
-        {value}
-      </div>
-      <div className="text-xs text-ink-3" style={{ fontFamily: 'var(--f-mono)', letterSpacing: '0.04em' }}>
-        {sublabel}
-      </div>
-    </div>
-  );
-}
-
-function Step({
-  n,
-  title,
-  desc,
-  href,
-  external,
-}: {
-  n: number;
-  title: string;
-  desc: string;
-  href: string;
-  external?: boolean;
-}) {
-  const Component = external ? 'a' : Link;
-  const extraProps = external ? { target: '_blank', rel: 'noreferrer' } : {};
+  const status = statusLabels[subscriptionStatus || ''] || {
+    text: '—',
+    color: 'var(--ink-3)',
+  };
 
   return (
-    <Component
-      href={href}
-      {...extraProps}
-      className="flex items-start gap-3 py-2.5 group cursor-pointer"
+    <div
+      className="rounded-[var(--r)] px-5 py-3.5 flex items-center gap-4 flex-wrap"
+      style={{
+        background: 'var(--card-2)',
+        border: '1px solid var(--line)',
+      }}
     >
+      <div className="flex items-center gap-2">
+        <span
+          className="inline-block rounded-full"
+          style={{ width: 6, height: 6, background: status.color }}
+        />
+        <span
+          style={{
+            fontFamily: 'var(--f-mono)',
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: '0.08em',
+            color: status.color,
+          }}
+        >
+          {status.text}
+        </span>
+        {planName && (
+          <span
+            className="text-ink-3"
+            style={{ fontFamily: 'var(--f-mono)', fontSize: 11 }}
+          >
+            · {planName}
+          </span>
+        )}
+      </div>
+
       <div
-        className="w-7 h-7 rounded-full bg-accent text-card flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform"
+        className="text-ink-3"
+        style={{ fontFamily: 'var(--f-mono)', fontSize: 11 }}
+      >
+        {daysSinceCreation === 0
+          ? 'Bugün katıldın'
+          : `${daysSinceCreation} gündür Aleg'tesin`}
+      </div>
+
+      <div className="flex-1" />
+
+      {/* Canlı saat */}
+      <div className="flex items-center gap-1.5">
+        <span
+          className="inline-block rounded-full"
+          style={{
+            width: 5,
+            height: 5,
+            background: 'var(--ok)',
+          }}
+        />
+        <LiveClock
+          showSeconds
+          style={{
+            fontFamily: 'var(--f-mono)',
+            fontSize: 13,
+            fontWeight: 700,
+            color: 'var(--ink)',
+            letterSpacing: '0.04em',
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        />
+      </div>
+
+      <a
+        href={`https://${slug}.alegstudio.com`}
+        target="_blank"
+        rel="noreferrer"
+        className="text-accent hover:underline flex items-center gap-1"
         style={{
           fontFamily: 'var(--f-mono)',
           fontSize: 11,
-          fontWeight: 700,
+          fontWeight: 600,
         }}
       >
-        {n}
-      </div>
-      <div className="flex-1">
-        <div className="text-sm font-medium text-ink group-hover:text-accent transition-colors">
-          {title} {external && <span className="text-xs">↗</span>}
-        </div>
-        <div className="text-xs text-ink-3 mt-0.5">{desc}</div>
-      </div>
-    </Component>
-  );
-}
-
-function FeatureBox({ icon, title, desc }: { icon: string; title: string; desc: string }) {
-  return (
-    <div className="p-4 rounded-[var(--r-sm)] bg-paper-2 border border-line">
-      <div className="flex items-start gap-3">
-        <div
-          className="w-8 h-8 rounded-[var(--r-sm)] bg-accent/10 text-accent flex items-center justify-center flex-shrink-0"
-          style={{ fontFamily: 'var(--f-mono)' }}
-        >
-          {icon}
-        </div>
-        <div className="flex-1">
-          <div className="text-sm font-medium text-ink">{title}</div>
-          <div className="text-xs text-ink-3 mt-0.5">{desc}</div>
-        </div>
-      </div>
+        {slug}.alegstudio.com <span>↗</span>
+      </a>
     </div>
   );
 }

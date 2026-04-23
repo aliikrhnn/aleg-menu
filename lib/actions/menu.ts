@@ -244,6 +244,7 @@ export type ProductInput = {
   price: number;
   status?: 'active' | 'soldout' | 'draft' | 'archived';
   print_station?: string;
+  station_id?: string | null;
   is_featured?: boolean;
   hero_icon?: string;
 };
@@ -305,6 +306,7 @@ export async function createProduct(
         price: input.price,
         status: input.status || 'active',
         print_station: input.print_station || null,
+        station_id: input.station_id || null,
         is_featured: input.is_featured || false,
         hero_icon: input.hero_icon || null,
         sort_order: sortOrder,
@@ -377,6 +379,7 @@ export async function updateProduct(
     if (input.price !== undefined) updates.price = input.price;
     if (input.status !== undefined) updates.status = input.status;
     if (input.print_station !== undefined) updates.print_station = input.print_station || null;
+    if (input.station_id !== undefined) updates.station_id = input.station_id || null;
     if (input.is_featured !== undefined) updates.is_featured = input.is_featured;
     if (input.hero_icon !== undefined) updates.hero_icon = input.hero_icon || null;
 
@@ -573,6 +576,214 @@ export async function removeProductImage(
   } catch (err) {
     return {
       success: false,
+      error: err instanceof Error ? err.message : 'Bilinmeyen hata',
+    };
+  }
+}
+
+
+// ============================================================
+// TOPLU ISTASYON ATAMA
+// ============================================================
+
+export async function bulkAssignStation(
+  productIds: string[],
+  stationId: string | null
+): Promise<{ success: boolean; updated: number; error?: string }> {
+  try {
+    const { supabase, businessId } = await requireBusinessAccess();
+
+    if (!productIds || productIds.length === 0) {
+      return { success: false, updated: 0, error: 'Ürün seçilmedi' };
+    }
+
+    // Güvenlik: bu business'a ait ürünleri süz
+    const { data: owned } = await supabase
+      .from('products')
+      .select('id')
+      .eq('business_id', businessId)
+      .in('id', productIds);
+
+    const ownedIds = (owned || []).map((p) => p.id as string);
+    if (ownedIds.length === 0) {
+      return { success: false, updated: 0, error: 'Erişim yok' };
+    }
+
+    const { error } = await supabase
+      .from('products')
+      .update({ station_id: stationId })
+      .in('id', ownedIds);
+
+    if (error) return { success: false, updated: 0, error: error.message };
+
+    revalidatePath('/panel/menu');
+    revalidatePath('/panel/menu/urunler');
+    return { success: true, updated: ownedIds.length };
+  } catch (err) {
+    return {
+      success: false,
+      updated: 0,
+      error: err instanceof Error ? err.message : 'Bilinmeyen hata',
+    };
+  }
+}
+
+
+// ============================================================
+// STOK TOGGLE (tek tıkla) + TOPLU STATUS ATAMA
+// ============================================================
+
+export async function toggleSoldOut(
+  productId: string
+): Promise<{ success: boolean; newStatus?: 'active' | 'soldout'; error?: string }> {
+  try {
+    const { supabase, businessId } = await requireBusinessAccess();
+
+    const { data: existing } = await supabase
+      .from('products')
+      .select('status, business_id')
+      .eq('id', productId)
+      .maybeSingle();
+
+    if (!existing || existing.business_id !== businessId) {
+      return { success: false, error: 'Ürün bulunamadı veya erişim yok' };
+    }
+
+    // Sadece active <-> soldout arası geçiş (draft/archived'a dokunmuyoruz)
+    const current = existing.status as string;
+    if (current !== 'active' && current !== 'soldout') {
+      return {
+        success: false,
+        error: 'Sadece aktif veya tükenmiş ürünler için kullanılabilir',
+      };
+    }
+
+    const next: 'active' | 'soldout' =
+      current === 'active' ? 'soldout' : 'active';
+
+    const { error } = await supabase
+      .from('products')
+      .update({ status: next })
+      .eq('id', productId);
+
+    if (error) return { success: false, error: error.message };
+
+    revalidatePath('/panel/menu/urunler');
+    revalidatePath('/panel');
+    revalidatePath('/menu/[slug]', 'page');
+    return { success: true, newStatus: next };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Bilinmeyen hata',
+    };
+  }
+}
+
+export async function bulkSetStatus(
+  productIds: string[],
+  status: 'active' | 'soldout'
+): Promise<{ success: boolean; updated: number; error?: string }> {
+  try {
+    const { supabase, businessId } = await requireBusinessAccess();
+
+    if (!productIds || productIds.length === 0) {
+      return { success: false, updated: 0, error: 'Ürün seçilmedi' };
+    }
+
+    // Güvenlik: bu business'a ait olanları süz (draft/archived hariç)
+    const { data: owned } = await supabase
+      .from('products')
+      .select('id, status')
+      .eq('business_id', businessId)
+      .in('id', productIds)
+      .in('status', ['active', 'soldout']);
+
+    const ownedIds = (owned || []).map((p) => p.id as string);
+    if (ownedIds.length === 0) {
+      return {
+        success: false,
+        updated: 0,
+        error: 'Erişim yok veya ürünler stok dışı statüde',
+      };
+    }
+
+    const { error } = await supabase
+      .from('products')
+      .update({ status })
+      .in('id', ownedIds);
+
+    if (error) return { success: false, updated: 0, error: error.message };
+
+    revalidatePath('/panel/menu');
+    revalidatePath('/panel/menu/urunler');
+    revalidatePath('/panel');
+    revalidatePath('/menu/[slug]', 'page');
+    return { success: true, updated: ownedIds.length };
+  } catch (err) {
+    return {
+      success: false,
+      updated: 0,
+      error: err instanceof Error ? err.message : 'Bilinmeyen hata',
+    };
+  }
+}
+
+// ============================================================
+// TÜKENDİ ÖZETİ (dashboard için)
+// ============================================================
+
+export async function getSoldOutSummary(): Promise<{
+  success: boolean;
+  count: number;
+  products?: Array<{
+    id: string;
+    name: string;
+    hours_ago: number | null;
+  }>;
+  error?: string;
+}> {
+  try {
+    const { supabase, businessId } = await requireBusinessAccess();
+
+    const { data: products, error } = await supabase
+      .from('products')
+      .select('id, name, updated_at')
+      .eq('business_id', businessId)
+      .eq('status', 'soldout')
+      .order('updated_at', { ascending: false });
+
+    if (error) return { success: false, count: 0, error: error.message };
+
+    const now = Date.now();
+    const list = (products || []).map((p) => {
+      const rawName = p.name as unknown;
+      let displayName = 'Ürün';
+      if (typeof rawName === 'string') displayName = rawName;
+      else if (rawName && typeof rawName === 'object') {
+        const n = rawName as Record<string, string>;
+        displayName = n.tr || n.en || Object.values(n)[0] || 'Ürün';
+      }
+
+      const updated = p.updated_at
+        ? new Date(p.updated_at as string).getTime()
+        : null;
+      const hours_ago = updated
+        ? Math.floor((now - updated) / (1000 * 60 * 60))
+        : null;
+
+      return {
+        id: p.id as string,
+        name: displayName,
+        hours_ago,
+      };
+    });
+
+    return { success: true, count: list.length, products: list };
+  } catch (err) {
+    return {
+      success: false,
+      count: 0,
       error: err instanceof Error ? err.message : 'Bilinmeyen hata',
     };
   }

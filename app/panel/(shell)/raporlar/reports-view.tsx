@@ -39,6 +39,23 @@ function formatNum(n: number): string {
 
 const WEEKDAYS = ['PZT', 'SAL', 'ÇAR', 'PER', 'CUM', 'CMT', 'PAZ'];
 
+function rangeDescription(range: ReportsData['range']): string {
+  switch (range.preset) {
+    case 'today': return 'Bugünün verileri.';
+    case 'yesterday': return 'Dünün verileri.';
+    case 'week': return 'Bu haftanın özeti.';
+    case 'month': return 'Bu ayın özeti.';
+    case 'last7': return 'Son 7 günün özeti.';
+    case 'last30': return 'Son 30 günün özeti.';
+    case 'custom': {
+      const from = new Date(range.from).toLocaleDateString('tr-TR');
+      const to = new Date(new Date(range.to).getTime() - 1).toLocaleDateString('tr-TR');
+      return `${from} — ${to} arası.`;
+    }
+    default: return '';
+  }
+}
+
 // ============================================================
 // Main component
 // ============================================================
@@ -88,7 +105,7 @@ export function ReportsView({
   return (
     <div className="px-6 md:px-8 py-8 md:py-10 max-w-[1400px] mx-auto">
       {/* Header */}
-      <div className="mb-8">
+      <div className="mb-6">
         <div
           className="uppercase mb-2"
           style={{
@@ -115,9 +132,12 @@ export function ReportsView({
           İşletmen bir bakışta
         </h1>
         <p className="text-ink-2 text-[15px]">
-          Son 30 günün özeti. Satış trendleri, en sevilen ürünler ve yoğun saatler.
+          {rangeDescription(data.range)} Satış trendleri, en sevilen ürünler ve yoğun saatler.
         </p>
       </div>
+
+      {/* Tarih Filtresi */}
+      <DateFilter range={data.range} />
 
       {/* Özet Kartlar */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
@@ -158,10 +178,10 @@ export function ReportsView({
       {/* Best Day Banner */}
       <BestDayBanner bestDay={data.bestDay} />
 
-      {/* Top Products + Order Types (2'li grid) */}
+      {/* Top Products + Station Distribution (2'li grid) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">
         <TopProductsChart products={data.topProducts} />
-        <OrderTypeChart breakdown={data.orderTypes} />
+        <StationDistributionChart breakdown={data.stationBreakdown} days={data.range.days} />
       </div>
 
       {/* Heatmap */}
@@ -581,31 +601,28 @@ function TopProductsChart({
 }
 
 // ============================================================
-// Order Type Chart (Pie)
+// Station Distribution Chart (Pie)
 // ============================================================
 
-function OrderTypeChart({
+function StationDistributionChart({
   breakdown,
+  days,
 }: {
-  breakdown: ReportsData['orderTypes'];
+  breakdown: ReportsData['stationBreakdown'];
+  days: number;
 }) {
-  const typeLabels: Record<string, string> = {
-    dine_in: 'Masada',
-    pickup: 'Gel-Al',
-    delivery: 'Paket',
-  };
-  const colors = ['var(--accent)', 'var(--gold)', 'var(--ok)'];
-
-  const data = (['dine_in', 'pickup', 'delivery'] as const)
-    .map((t, i) => ({
-      name: typeLabels[t],
-      value: breakdown[t].count,
-      revenue: breakdown[t].revenue,
-      color: colors[i],
-    }))
-    .filter((d) => d.value > 0);
+  const data = breakdown
+    .filter((s) => s.item_count > 0)
+    .map((s) => ({
+      name: s.station_name,
+      value: s.item_count,
+      revenue: s.revenue,
+      color: s.station_color,
+      icon: s.station_icon,
+    }));
 
   const total = data.reduce((s, d) => s + d.value, 0);
+  const rangeLabel = days === 1 ? '1 GÜN' : `SON ${days} GÜN`;
 
   if (total === 0) {
     return (
@@ -635,7 +652,7 @@ function OrderTypeChart({
             color: 'var(--ink-3)',
           }}
         >
-          SON 7 GÜN
+          {rangeLabel}
         </div>
         <h3
           style={{
@@ -645,7 +662,7 @@ function OrderTypeChart({
             fontWeight: 400,
           }}
         >
-          Sipariş tipi dağılımı
+          İstasyon dağılımı
         </h3>
       </div>
 
@@ -676,7 +693,7 @@ function OrderTypeChart({
             }}
             formatter={(value, _name, props) => {
               const revenue = (props as { payload?: { revenue?: number } })?.payload?.revenue || 0;
-              return [`${value} sipariş · ${money(revenue)}`, ''];
+              return [`${value} ürün · ${money(revenue)}`, ''];
             }}
           />
           <Legend
@@ -1043,6 +1060,127 @@ function DayStripe({
       >
         {dayTotal}
       </div>
+    </div>
+  );
+}
+
+// ============================================================
+// Date Filter
+// ============================================================
+
+type DateFilterProps = {
+  range: ReportsData['range'];
+};
+
+function DateFilter({ range }: DateFilterProps) {
+  const router = useRouter();
+  const [customOpen, setCustomOpen] = useState(range.preset === 'custom');
+  const [customFrom, setCustomFrom] = useState(
+    range.preset === 'custom' ? range.from.slice(0, 10) : ''
+  );
+  const [customTo, setCustomTo] = useState(
+    range.preset === 'custom' ? new Date(new Date(range.to).getTime() - 1).toISOString().slice(0, 10) : ''
+  );
+
+  function applyPreset(preset: string) {
+    if (preset === 'custom') {
+      setCustomOpen(true);
+      return;
+    }
+    setCustomOpen(false);
+    router.push(`/panel/raporlar?preset=${preset}`);
+  }
+
+  function applyCustom() {
+    if (!customFrom || !customTo) return;
+    router.push(`/panel/raporlar?preset=custom&from=${customFrom}&to=${customTo}`);
+  }
+
+  const presets = [
+    { key: 'today', label: 'Bugün' },
+    { key: 'yesterday', label: 'Dün' },
+    { key: 'week', label: 'Bu hafta' },
+    { key: 'last7', label: 'Son 7 gün' },
+    { key: 'month', label: 'Bu ay' },
+    { key: 'last30', label: 'Son 30 gün' },
+    { key: 'custom', label: 'Özel' },
+  ];
+
+  return (
+    <div
+      className="rounded-[var(--r)] p-3 mb-6 flex flex-wrap items-center gap-2"
+      style={{ background: 'var(--card)', border: '1px solid var(--line)' }}
+    >
+      <div
+        className="uppercase px-2"
+        style={{
+          fontFamily: 'var(--f-mono)',
+          fontSize: 10,
+          letterSpacing: '0.14em',
+          color: 'var(--ink-3)',
+          fontWeight: 700,
+        }}
+      >
+        TARİH
+      </div>
+
+      {presets.map((p) => {
+        const active = range.preset === p.key;
+        return (
+          <button
+            key={p.key}
+            onClick={() => applyPreset(p.key)}
+            className="px-3 py-1.5 rounded-[10px] text-[13px] transition-all"
+            style={{
+              background: active ? 'var(--ink)' : 'transparent',
+              color: active ? 'var(--paper)' : 'var(--ink-2)',
+              border: active ? '1px solid var(--ink)' : '1px solid var(--line)',
+              fontWeight: active ? 600 : 500,
+            }}
+          >
+            {p.label}
+          </button>
+        );
+      })}
+
+      {customOpen && (
+        <div className="flex items-center gap-2 ml-2">
+          <input
+            type="date"
+            value={customFrom}
+            onChange={(e) => setCustomFrom(e.target.value)}
+            className="px-3 py-1.5 rounded-[10px] text-[13px]"
+            style={{
+              background: 'var(--paper)',
+              border: '1px solid var(--line)',
+              color: 'var(--ink)',
+            }}
+          />
+          <span className="text-ink-3 text-sm">—</span>
+          <input
+            type="date"
+            value={customTo}
+            onChange={(e) => setCustomTo(e.target.value)}
+            className="px-3 py-1.5 rounded-[10px] text-[13px]"
+            style={{
+              background: 'var(--paper)',
+              border: '1px solid var(--line)',
+              color: 'var(--ink)',
+            }}
+          />
+          <button
+            onClick={applyCustom}
+            disabled={!customFrom || !customTo}
+            className="px-3 py-1.5 rounded-[10px] text-[13px] font-semibold disabled:opacity-40"
+            style={{
+              background: 'var(--accent)',
+              color: 'var(--paper)',
+            }}
+          >
+            Uygula
+          </button>
+        </div>
+      )}
     </div>
   );
 }

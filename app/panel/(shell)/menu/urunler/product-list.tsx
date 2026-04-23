@@ -1,8 +1,8 @@
 'use client';
 /* eslint-disable @next/next/no-img-element */
 
-import { useState, useTransition, useMemo, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useTransition, useMemo, useRef, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   createProduct,
   updateProduct,
@@ -10,6 +10,9 @@ import {
   updateProductStatus,
   uploadProductImage,
   removeProductImage,
+  bulkAssignStation,
+  toggleSoldOut,
+  bulkSetStatus,
   type ProductInput,
 } from '@/lib/actions/menu';
 import { aiGenerateProductDescription, aiTranslateText } from '@/lib/actions/ai';
@@ -31,19 +34,29 @@ type Product = {
   status: 'active' | 'soldout' | 'draft' | 'archived';
   is_featured: boolean;
   print_station: string | null;
+  station_id: string | null;
   hero_icon: string | null;
   hero_image_url: string | null;
   sort_order: number;
   preset_count?: number;
 };
 
+type StationOption = {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+};
+
 interface Props {
   products: Product[];
   categories: CategoryOption[];
+  stations: StationOption[];
 }
 
-export function ProductList({ products, categories }: Props) {
+export function ProductList({ products, categories, stations }: Props) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [showForm, setShowForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -51,8 +64,24 @@ export function ProductList({ products, categories }: Props) {
 
   // Filtreleme
   const [filterCategory, setFilterCategory] = useState<string>('all');
-  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<string>(() => {
+    const urlFilter = searchParams?.get('filter');
+    return urlFilter === 'soldout' ? 'soldout' : 'all';
+  });
+  const [filterStation, setFilterStation] = useState<string>('all'); // 'all' | stationId | 'none'
   const [search, setSearch] = useState('');
+
+  // URL query değişirse filtreyi güncelle (dashboard'dan gelindi)
+  useEffect(() => {
+    const urlFilter = searchParams?.get('filter');
+    if (urlFilter === 'soldout') {
+      setFilterStatus('soldout');
+    }
+  }, [searchParams]);
+
+  // Toplu seçim
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkStationPickerOpen, setBulkStationPickerOpen] = useState(false);
 
   // Resim yükleme
   const [cropModalProduct, setCropModalProduct] = useState<{
@@ -111,13 +140,20 @@ export function ProductList({ products, categories }: Props) {
     return products.filter((p) => {
       if (filterCategory !== 'all' && p.category_id !== filterCategory) return false;
       if (filterStatus !== 'all' && p.status !== filterStatus) return false;
+      if (filterStation !== 'all') {
+        if (filterStation === 'none') {
+          if (p.station_id) return false;
+        } else {
+          if (p.station_id !== filterStation) return false;
+        }
+      }
       if (search) {
         const s = search.toLowerCase();
         if (!p.name.tr.toLowerCase().includes(s) && !p.name.en?.toLowerCase().includes(s)) return false;
       }
       return true;
     });
-  }, [products, filterCategory, filterStatus, search]);
+  }, [products, filterCategory, filterStatus, filterStation, search]);
 
   const handleAdd = () => {
     setEditingProduct(null);
@@ -179,6 +215,75 @@ export function ProductList({ products, categories }: Props) {
   };
 
   const categoryMap = new Map(categories.map((c) => [c.id, c.name.tr]));
+  const stationMap = useMemo(
+    () => new Map(stations.map((s) => [s.id, s])),
+    [stations]
+  );
+
+  // Toplu seçim helpers
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filtered.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filtered.map((p) => p.id)));
+    }
+  };
+
+  const clearSelection = () => {
+    setSelectedIds(new Set());
+    setBulkStationPickerOpen(false);
+  };
+
+  const handleBulkAssign = (stationId: string | null) => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    startTransition(async () => {
+      const res = await bulkAssignStation(ids, stationId);
+      if (!res.success) {
+        setError(res.error || 'Toplu atama başarısız');
+        return;
+      }
+      clearSelection();
+      router.refresh();
+    });
+  };
+
+  // Tek tıkla stok toggle (active <-> soldout)
+  const handleToggleSoldOut = (p: Product) => {
+    if (p.status !== 'active' && p.status !== 'soldout') return;
+    startTransition(async () => {
+      const res = await toggleSoldOut(p.id);
+      if (!res.success) {
+        setError(res.error || 'Stok durumu değiştirilemedi');
+        return;
+      }
+      router.refresh();
+    });
+  };
+
+  // Toplu stok durumu
+  const handleBulkSetStatus = (status: 'active' | 'soldout') => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    startTransition(async () => {
+      const res = await bulkSetStatus(ids, status);
+      if (!res.success) {
+        setError(res.error || 'Toplu stok değişimi başarısız');
+        return;
+      }
+      clearSelection();
+      router.refresh();
+    });
+  };
 
   return (
     <div>
@@ -229,7 +334,227 @@ export function ProductList({ products, categories }: Props) {
           <option value="soldout">Tükendi</option>
           <option value="draft">Taslak</option>
         </select>
+
+        {stations.length > 0 && (
+          <select
+            value={filterStation}
+            onChange={(e) => setFilterStation(e.target.value)}
+            className="h-10 px-3 rounded-[var(--r-sm)] bg-card border border-line text-sm focus:outline-none focus:border-accent cursor-pointer"
+            style={{ fontFamily: 'var(--f-sans)' }}
+          >
+            <option value="all">Tüm istasyonlar</option>
+            {stations.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.icon} {s.name}
+              </option>
+            ))}
+            <option value="none">— Atanmamış</option>
+          </select>
+        )}
       </div>
+
+      {/* Hızlı stok kısayolları */}
+      {(() => {
+        const soldoutCount = products.filter((p) => p.status === 'soldout').length;
+        if (soldoutCount === 0 && filterStatus === 'all') return null;
+        return (
+          <div className="flex items-center gap-2 mb-4 flex-wrap">
+            <span
+              className="text-ink-3 text-xs"
+              style={{
+                fontFamily: 'var(--f-mono)',
+                letterSpacing: '0.08em',
+              }}
+            >
+              HIZLI:
+            </span>
+            <ChipFilter
+              active={filterStatus === 'all'}
+              onClick={() => setFilterStatus('all')}
+              label="Tümü"
+              count={products.length}
+            />
+            <ChipFilter
+              active={filterStatus === 'active'}
+              onClick={() => setFilterStatus('active')}
+              label="Stokta"
+              count={products.filter((p) => p.status === 'active').length}
+              dotColor="var(--ok)"
+            />
+            <ChipFilter
+              active={filterStatus === 'soldout'}
+              onClick={() => setFilterStatus('soldout')}
+              label="Tükendi"
+              count={soldoutCount}
+              dotColor="var(--warn)"
+            />
+          </div>
+        );
+      })()}
+
+      {/* Boş istasyon uyarısı — hiç istasyon yoksa */}
+      {stations.length === 0 && (
+        <div
+          className="mb-4 p-3 rounded-[var(--r-sm)] flex items-center gap-3 flex-wrap"
+          style={{
+            background: 'color-mix(in srgb, var(--gold) 10%, var(--card))',
+            border: '1px solid color-mix(in srgb, var(--gold) 25%, var(--line))',
+          }}
+        >
+          <div style={{ color: 'var(--gold)', fontSize: 16 }}>⚠</div>
+          <div className="flex-1 text-sm text-ink-2">
+            Henüz istasyon oluşturmamışsın. Ürünlerinin hangi yazıcıya
+            düşeceğini belirtmek için önce istasyon eklemen gerek.
+          </div>
+          <a
+            href="/panel/istasyonlar"
+            className="text-accent font-semibold text-sm hover:underline flex items-center gap-1"
+            style={{ fontFamily: 'var(--f-mono)', fontSize: 12 }}
+          >
+            İstasyon oluştur ↗
+          </a>
+        </div>
+      )}
+
+      {/* Toplu aksiyon bar — seçili ürün varsa */}
+      {selectedIds.size > 0 && (
+        <div
+          className="mb-4 p-3 rounded-[var(--r-sm)] flex items-center gap-3 flex-wrap sticky top-0 z-10"
+          style={{
+            background: 'var(--ink)',
+            border: '1px solid var(--ink)',
+            boxShadow: 'var(--shadow-md)',
+          }}
+        >
+          <span
+            className="text-sm font-semibold flex items-center gap-2"
+            style={{ color: 'var(--paper)' }}
+          >
+            <span
+              className="inline-flex items-center justify-center rounded-full"
+              style={{
+                width: 22,
+                height: 22,
+                background: 'var(--accent)',
+                color: 'var(--paper)',
+                fontFamily: 'var(--f-mono)',
+                fontSize: 11,
+                fontWeight: 700,
+              }}
+            >
+              {selectedIds.size}
+            </span>
+            ürün seçili
+          </span>
+
+          <div className="flex-1" />
+
+          {/* Toplu stok aksiyonları */}
+          <button
+            onClick={() => handleBulkSetStatus('soldout')}
+            disabled={isPending}
+            className="h-9 px-3 rounded-[var(--r-sm)] text-sm font-semibold flex items-center gap-1.5 transition-all hover:opacity-90 disabled:opacity-50"
+            style={{
+              background: 'color-mix(in srgb, var(--warn) 20%, transparent)',
+              color: 'var(--paper)',
+              border: '1px solid color-mix(in srgb, var(--warn) 40%, transparent)',
+            }}
+            title="Seçili ürünleri tükendi yap (menüden çeker)"
+          >
+            <span
+              className="inline-block rounded-full"
+              style={{ width: 6, height: 6, background: 'var(--warn)' }}
+            />
+            Tükendi yap
+          </button>
+          <button
+            onClick={() => handleBulkSetStatus('active')}
+            disabled={isPending}
+            className="h-9 px-3 rounded-[var(--r-sm)] text-sm font-semibold flex items-center gap-1.5 transition-all hover:opacity-90 disabled:opacity-50"
+            style={{
+              background: 'color-mix(in srgb, var(--ok) 20%, transparent)',
+              color: 'var(--paper)',
+              border: '1px solid color-mix(in srgb, var(--ok) 40%, transparent)',
+            }}
+            title="Seçili ürünleri stokta yap (menüye geri koyar)"
+          >
+            <span
+              className="inline-block rounded-full"
+              style={{ width: 6, height: 6, background: 'var(--ok)' }}
+            />
+            Stokta yap
+          </button>
+
+          {stations.length > 0 ? (
+            <div className="relative">
+              <button
+                onClick={() => setBulkStationPickerOpen((v) => !v)}
+                disabled={isPending}
+                className="h-9 px-4 rounded-[var(--r-sm)] text-sm font-semibold flex items-center gap-2 transition-opacity hover:opacity-90 disabled:opacity-50"
+                style={{
+                  background: 'var(--accent)',
+                  color: 'var(--paper)',
+                }}
+              >
+                İstasyona ata ▾
+              </button>
+              {bulkStationPickerOpen && (
+                <div
+                  className="absolute right-0 top-11 rounded-[var(--r-sm)] py-1.5 min-w-[220px] z-20"
+                  style={{
+                    background: 'var(--card-2)',
+                    border: '1px solid var(--line)',
+                    boxShadow: 'var(--shadow-md)',
+                  }}
+                >
+                  {stations.map((s) => (
+                    <button
+                      key={s.id}
+                      onClick={() => handleBulkAssign(s.id)}
+                      disabled={isPending}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-paper-2 flex items-center gap-2.5 disabled:opacity-50"
+                    >
+                      <span
+                        className="inline-flex items-center justify-center rounded"
+                        style={{
+                          width: 22,
+                          height: 22,
+                          background: `color-mix(in srgb, ${s.color} 15%, transparent)`,
+                          color: s.color,
+                          fontSize: 12,
+                        }}
+                      >
+                        {s.icon}
+                      </span>
+                      <span className="text-ink">{s.name}</span>
+                    </button>
+                  ))}
+                  <div
+                    className="my-1 mx-2"
+                    style={{ borderTop: '1px solid var(--line)' }}
+                  />
+                  <button
+                    onClick={() => handleBulkAssign(null)}
+                    disabled={isPending}
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-paper-2 text-ink-3 disabled:opacity-50"
+                  >
+                    — İstasyondan çıkar
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : null}
+
+          <button
+            onClick={clearSelection}
+            disabled={isPending}
+            className="h-9 px-3 rounded-[var(--r-sm)] text-sm transition-colors hover:bg-white/10 disabled:opacity-50"
+            style={{ color: 'var(--paper)' }}
+          >
+            İptal
+          </button>
+        </div>
+      )}
 
       {error && (
         <div className="mb-4 p-3 rounded-[var(--r-sm)] bg-danger/10 border border-danger/20 text-danger text-sm">
@@ -255,6 +580,24 @@ export function ProductList({ products, categories }: Props) {
           <table className="w-full">
             <thead>
               <tr className="border-b border-line bg-paper-2">
+                <th className="text-left py-3 px-4 w-10">
+                  <input
+                    type="checkbox"
+                    checked={
+                      filtered.length > 0 &&
+                      selectedIds.size === filtered.length
+                    }
+                    ref={(el) => {
+                      if (el) {
+                        el.indeterminate =
+                          selectedIds.size > 0 &&
+                          selectedIds.size < filtered.length;
+                      }
+                    }}
+                    onChange={toggleSelectAll}
+                    className="w-4 h-4 rounded border-line accent-accent cursor-pointer"
+                  />
+                </th>
                 <Th>ÜRÜN</Th>
                 <Th>KATEGORİ</Th>
                 <Th>FİYAT</Th>
@@ -267,8 +610,20 @@ export function ProductList({ products, categories }: Props) {
               {filtered.map((p) => (
                 <tr
                   key={p.id}
-                  className="border-b border-line last:border-0 hover:bg-paper-2/50 transition-colors"
+                  className={`group/row border-b border-line last:border-0 transition-colors ${
+                    selectedIds.has(p.id)
+                      ? 'bg-accent/5'
+                      : 'hover:bg-paper-2/50'
+                  }`}
                 >
+                  <td className="py-4 px-4">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(p.id)}
+                      onChange={() => toggleSelect(p.id)}
+                      className="w-4 h-4 rounded border-line accent-accent cursor-pointer"
+                    />
+                  </td>
                   <td className="py-4 px-5">
                     <div className="flex items-center gap-3">
                       {/* Thumbnail - resim yüklenebilir */}
@@ -346,20 +701,10 @@ export function ProductList({ products, categories }: Props) {
                     </span>
                   </td>
                   <td className="py-4 px-5">
-                    {p.print_station ? (
-                      <span
-                        className="text-xs px-2 py-1 rounded bg-paper-2 text-ink-2 uppercase"
-                        style={{
-                          fontFamily: 'var(--f-mono)',
-                          fontWeight: 700,
-                          letterSpacing: '0.06em',
-                        }}
-                      >
-                        {p.print_station}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-ink-3">—</span>
-                    )}
+                    <StationBadge
+                      product={p}
+                      station={p.station_id ? stationMap.get(p.station_id) : undefined}
+                    />
                   </td>
                   <td className="py-4 px-5">
                     <button
@@ -372,6 +717,49 @@ export function ProductList({ products, categories }: Props) {
                   </td>
                   <td className="py-4 px-5 text-right">
                     <div className="flex items-center gap-1 justify-end">
+                      {/* Hızlı stok toggle - hover'da belirir */}
+                      {(p.status === 'active' || p.status === 'soldout') && (
+                        <button
+                          onClick={() => handleToggleSoldOut(p)}
+                          disabled={isPending}
+                          className="h-8 px-2.5 rounded-full text-[11px] font-semibold flex items-center gap-1.5 transition-all opacity-0 group-hover/row:opacity-100 hover:scale-[1.05] active:scale-[0.97] disabled:opacity-30"
+                          style={{
+                            fontFamily: 'var(--f-mono)',
+                            letterSpacing: '0.04em',
+                            background:
+                              p.status === 'active'
+                                ? 'color-mix(in srgb, var(--warn) 12%, var(--card))'
+                                : 'color-mix(in srgb, var(--ok) 12%, var(--card))',
+                            color:
+                              p.status === 'active'
+                                ? 'var(--warn)'
+                                : 'var(--ok)',
+                            border: `1px solid ${
+                              p.status === 'active'
+                                ? 'color-mix(in srgb, var(--warn) 25%, var(--line))'
+                                : 'color-mix(in srgb, var(--ok) 25%, var(--line))'
+                            }`,
+                          }}
+                          title={
+                            p.status === 'active'
+                              ? 'Tükendi yap — müşteri menüden çekilir'
+                              : 'Stokta yap — müşteri menüye geri döner'
+                          }
+                        >
+                          <span
+                            className="inline-block rounded-full"
+                            style={{
+                              width: 5,
+                              height: 5,
+                              background:
+                                p.status === 'active'
+                                  ? 'var(--warn)'
+                                  : 'var(--ok)',
+                            }}
+                          />
+                          {p.status === 'active' ? 'Tükendi' : 'Stokta'}
+                        </button>
+                      )}
                       <button
                         onClick={() => handleEdit(p)}
                         disabled={isPending}
@@ -401,6 +789,7 @@ export function ProductList({ products, categories }: Props) {
         <ProductFormModal
           initial={editingProduct}
           categories={categories}
+          stations={stations}
           onSubmit={handleSubmit}
           onCancel={handleCancel}
           loading={isPending}
@@ -542,6 +931,107 @@ function ProductThumbnail({
 // ============================================================
 // Tablo başlığı
 // ============================================================
+function StationBadge({
+  product,
+  station,
+}: {
+  product: Product;
+  station: StationOption | undefined;
+}) {
+  // 1) Gerçek istasyon atanmışsa — renkli, iconlu rozet + tooltip
+  if (station) {
+    return (
+      <span
+        className="inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-semibold transition-all duration-300"
+        title={`Siparişi ${station.name} istasyonuna düşer`}
+        style={{
+          background: `color-mix(in srgb, ${station.color} 12%, transparent)`,
+          color: station.color,
+          border: `1px solid color-mix(in srgb, ${station.color} 25%, transparent)`,
+          fontFamily: 'var(--f-mono)',
+          letterSpacing: '0.04em',
+        }}
+      >
+        <span style={{ fontSize: 12 }}>{station.icon}</span>
+        <span>{station.name}</span>
+      </span>
+    );
+  }
+
+  // 2) Eski sistem — sadece print_station string'i varsa — sade gri rozet
+  if (product.print_station) {
+    return (
+      <span
+        className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded uppercase transition-all duration-300"
+        title="Eski hazırlama alanı — daha iyi deneyim için yeni istasyon ata"
+        style={{
+          background: 'var(--paper-2)',
+          color: 'var(--ink-3)',
+          fontFamily: 'var(--f-mono)',
+          fontWeight: 700,
+          letterSpacing: '0.06em',
+        }}
+      >
+        {product.print_station}
+      </span>
+    );
+  }
+
+  // 3) Hiç atanmamış
+  return (
+    <span
+      className="text-xs text-ink-3"
+      title="Henüz istasyona atanmamış — siparişi hiçbir yazıcıya düşmez"
+    >
+      —
+    </span>
+  );
+}
+
+function ChipFilter({
+  active,
+  onClick,
+  label,
+  count,
+  dotColor,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  count: number;
+  dotColor?: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="h-8 px-3 rounded-full text-[12px] font-semibold flex items-center gap-1.5 transition-all hover:scale-[1.02] active:scale-[0.98]"
+      style={{
+        background: active ? 'var(--ink)' : 'var(--card)',
+        color: active ? 'var(--paper)' : 'var(--ink-2)',
+        border: `1px solid ${active ? 'var(--ink)' : 'var(--line)'}`,
+        fontFamily: 'var(--f-mono)',
+        letterSpacing: '0.04em',
+      }}
+    >
+      {dotColor && (
+        <span
+          className="inline-block rounded-full"
+          style={{ width: 6, height: 6, background: dotColor }}
+        />
+      )}
+      <span>{label}</span>
+      <span
+        className="text-[10px] px-1.5 rounded"
+        style={{
+          background: active ? 'rgba(255,255,255,0.18)' : 'var(--paper-2)',
+        }}
+      >
+        {count}
+      </span>
+    </button>
+  );
+}
+
 function Th({ children }: { children: React.ReactNode }) {
   return (
     <th className="text-left py-3 px-5">
@@ -595,12 +1085,14 @@ function StatusBadge({ status }: { status: Product['status'] }) {
 function ProductFormModal({
   initial,
   categories,
+  stations,
   onSubmit,
   onCancel,
   loading,
 }: {
   initial: Product | null;
   categories: CategoryOption[];
+  stations: StationOption[];
   onSubmit: (input: ProductInput) => void;
   onCancel: () => void;
   loading: boolean;
@@ -613,7 +1105,8 @@ function ProductFormModal({
     description_en: initial?.description?.en || '',
     price: initial?.price || 0,
     status: initial?.status || 'active',
-    print_station: initial?.print_station || 'bar',
+    print_station: initial?.print_station || '',
+    station_id: initial?.station_id || null,
     is_featured: initial?.is_featured || false,
     hero_icon: initial?.hero_icon || '',
   });
@@ -837,16 +1330,40 @@ function ProductFormModal({
               />
             </Field>
 
-            <Field label="Hazırlama">
-              <select
-                value={form.print_station || 'bar'}
-                onChange={(e) => setForm((f) => ({ ...f, print_station: e.target.value }))}
-                className="form-input"
-              >
-                <option value="bar">Bar</option>
-                <option value="kitchen">Mutfak</option>
-                <option value="">—</option>
-              </select>
+            <Field label="Hazırlama İstasyonu">
+              {stations.length > 0 ? (
+                <select
+                  value={form.station_id || ''}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      station_id: e.target.value || null,
+                    }))
+                  }
+                  className="form-input"
+                >
+                  <option value="">— Atanmamış</option>
+                  {stations.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.icon} {s.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div className="h-11 flex items-center gap-2">
+                  <span className="text-sm text-ink-3">
+                    İstasyon yok —{' '}
+                  </span>
+                  <a
+                    href="/panel/istasyonlar"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-accent text-sm font-semibold hover:underline"
+                  >
+                    oluştur ↗
+                  </a>
+                </div>
+              )}
             </Field>
           </div>
 

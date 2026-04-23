@@ -29,8 +29,16 @@ export default async function ProductsPage() {
   // Ürünler
   const { data: products } = await supabase
     .from('products')
-    .select('id, category_id, name, description, price, status, is_featured, print_station, hero_icon, hero_image_url, sort_order')
+    .select('id, category_id, name, description, price, status, is_featured, print_station, station_id, hero_icon, hero_image_url, sort_order')
     .eq('business_id', businessId || '')
+    .order('sort_order', { ascending: true });
+
+  // İstasyonlar (rozet + filtre + form dropdown için)
+  const { data: stations } = await supabase
+    .from('stations')
+    .select('id, name, icon, color, sort_order, is_active')
+    .eq('business_id', businessId || '')
+    .eq('is_active', true)
     .order('sort_order', { ascending: true });
 
   // Ürün başına varyasyon sayısı
@@ -122,7 +130,16 @@ export default async function ProductsPage() {
           </Link>
         </div>
       ) : (
-        <ProductList products={formattedProducts} categories={formattedCategories} />
+        <ProductList
+          products={formattedProducts}
+          categories={formattedCategories}
+          stations={(stations || []).map((s) => ({
+            id: s.id as string,
+            name: s.name as string,
+            icon: (s.icon as string) || '●',
+            color: (s.color as string) || '#C4553A',
+          }))}
+        />
       )}
     </div>
   );

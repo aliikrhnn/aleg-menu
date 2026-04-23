@@ -19,6 +19,7 @@ import { Footer } from '@/components/landing/footer';
 import { DemoModal } from '@/components/landing/demo-modal';
 import { WhatsAppFloat } from '@/components/landing/whatsapp-float';
 import { RevealOnScroll } from '@/components/landing/reveal-on-scroll';
+import { CookieBanner } from '@/components/cookie-banner';
 
 export default function HomePage() {
   const [demoOpen, setDemoOpen] = useState(false);
@@ -46,6 +47,7 @@ export default function HomePage() {
       <DemoModal open={demoOpen} onClose={closeDemo} />
       <WhatsAppFloat />
       <RevealOnScroll />
+      <CookieBanner />
     </main>
   );
 }

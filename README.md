@@ -1,92 +1,127 @@
-# Aleg — Kafe İşletim Sistemi
+# LANDING DÜZELTMELERİ — FOOTER + SMOOTH SCROLL + INSTAGRAM
 
-Multi-tenant SaaS kafe ve restoran yönetim platformu.
-QR menü · POS · Mutfak ekranı · Sadakat · Delivery — tek platformda.
+Üç küçük ama kritik düzeltme:
 
-## Özellikler (Planlanan)
+1. **Ürün kısmındaki linkler çalışmıyordu** — Özellikler/Fiyatlar/Modüller
+   linkleri yanlış id'lere gidiyordu, bu yüzden tıklayınca hiçbir şey oluyordu
+2. **Kayma efekti yoktu** — anchor linklere bastığında sayfa direkt zıplıyordu
+3. **Instagram eksikti** — @alegstudio footer'da görünmüyordu
 
-- 🎨 QR tabanlı dijital menü (her kafe için özel subdomain)
-- 🧾 POS / Kasa sistemi (adisyon, masa yönetimi)
-- 👨‍🍳 Mutfak ve bar istasyon ekranları (KDS)
-- 💳 Sadakat programı ve puan sistemi
-- 🛵 Paket servis ve kurye yönetimi
-- 📊 Detaylı raporlar ve analitik
-- 📱 Offline-first PWA (internet kesilse bile çalışır)
-- 🌍 Multi-tenant (tek platformda yüzlerce kafe)
-- 🌐 Çok dilli (TR/EN)
+## ✨ Neler Değişti
 
-## Teknoloji
+### 1. Footer Ürün Linkleri Düzeltildi
 
-- **Frontend:** Next.js 14 (App Router) + TypeScript + Tailwind CSS
-- **Backend:** Supabase (PostgreSQL + Auth + Realtime + Storage)
-- **Hosting:** Vercel
-- **Offline:** IndexedDB (Dexie.js) + Service Worker
+**Önceden (çalışmıyordu):**
+- `/#ozellikler` → eşleşen section yok → hiçbir şey olmaz
+- `/#fiyatlar` → eşleşen section yok
+- `/#moduller` → eşleşen section yok
 
-## Subdomain Yapısı
+**Şimdi (çalışıyor):**
+- `/#features` → `<Features id="features">` section'ına kayarak gider
+- `/#pricing` → `<Pricing id="pricing">` section'ına
+- `/#modules` → `<Modules id="modules">` section'ına
 
-| URL | İçerik |
-|-----|--------|
-| `alegstudio.com` | Pazarlama sitesi |
-| `admin.alegstudio.com` | Süper admin paneli |
-| `panel.alegstudio.com` | İşletme paneli (kafe sahipleri) |
-| `[kafe-slug].alegstudio.com` | Müşteri menüsü (QR'dan açılır) |
+### 2. Smooth Scroll Efekti
 
-## Kurulum
+`globals.css`'e eklenen 3 yeni CSS kuralı:
 
-Adım adım rehber için [KURULUM.md](./KURULUM.md) dosyasına bak.
+```css
+html {
+  scroll-behavior: smooth;
+}
 
-Hızlı özet:
+section[id], [id] {
+  scroll-margin-top: 88px;  /* Sabit nav yüksekliği kadar offset */
+}
 
-```bash
-# 1. Bağımlılıkları yükle
-npm install
-
-# 2. Env dosyasını oluştur
-cp .env.example .env.local
-# .env.local'e Supabase değerlerini gir
-
-# 3. Geliştirme sunucusunu başlat
-npm run dev
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  /* Erişilebilirlik: hareket azalt tercihi */
+}
 ```
 
-## Proje Yapısı
+**Neden 88px scroll-margin?** Landing nav sabit (fixed), 72px yüksekliğinde.
+Anchor'a kayarken section'ın üst kenarı nav'ın altına kırpılmasın diye 88px
+boşluk bıraktık.
+
+**Erişilebilirlik:** Cihaz "reduce motion" ayarı açıksa (iOS/Android
+erişilebilirlik, Windows "show animations" kapalı) smooth scroll devre dışı
+kalır — animasyon hassasiyeti olan kullanıcıları rahatsız etmez.
+
+### 3. Instagram @alegstudio
+
+- Sağ alt footer'da `● @ALEGSTUDIO` metin linki eklendi (mono font, accent
+  dot)
+- Instagram ikonu aktif hale getirildi — tıklanınca
+  `https://instagram.com/alegstudio` yeni sekmede açılır
+- Hover'da **110% scale** animasyonu
+- Title tooltip: `Instagram · @alegstudio`
+- Twitter ve LinkedIn ikonları **pasif** durumda (`opacity: 0.4`,
+  `cursor: not-allowed`, tooltip: "Yakında") — hazır olunca aktif edilir
+
+### 4. Nav Logo'su Düzeltildi
+
+- Önceden `href="#"` → anchor'a gidiyordu, sayfa en üste zıplıyordu
+- Şimdi `href="/"` → ana sayfaya gider
+
+## 📦 Dosyalar (3)
 
 ```
-aleg/
-├── app/                      # Next.js App Router sayfaları
-│   ├── admin/                # Süper admin (admin.alegstudio.com)
-│   ├── panel/                # İşletme paneli (panel.alegstudio.com)
-│   ├── menu/[slug]/          # Müşteri menüsü
-│   └── page.tsx              # Pazarlama ana sayfası
-├── components/
-│   └── ui/                   # Ortak UI bileşenleri
-├── lib/
-│   ├── supabase/             # Supabase istemcileri
-│   └── utils/                # Yardımcı fonksiyonlar
-├── supabase/
-│   ├── migrations/           # SQL şema dosyaları (sırayla çalıştırılır)
-│   └── seed.sql              # Test verisi
-├── types/
-│   └── database.ts           # Supabase tipleri
-├── middleware.ts             # Subdomain yönlendirmesi
-└── tailwind.config.ts        # Tasarım sistemi
+app/globals.css                          ← Smooth scroll + scroll-margin CSS
+components/landing/footer.tsx            ← Ürün linkleri + Instagram handle
+components/landing/nav.tsx               ← Logo href düzeltmesi
 ```
 
-## Yol Haritası
+## 🚀 Kurulum
 
-Detaylı yol haritası için [ALEG_PROJE_DOKUMANI.md](./ALEG_PROJE_DOKUMANI.md) dosyasına bak.
+1. Zip aç
+2. İçeriği proje köküne kopyala (3 dosya üstüne yazar)
+3. Dev sunucu çalışıyorsa otomatik yeniler
 
-- [x] Proje iskeleti
-- [x] Veritabanı şeması
-- [ ] Auth akışı
-- [ ] İşletme paneli — menü yönetimi
-- [ ] Müşteri menüsü
-- [ ] Süper admin paneli
-- [ ] POS ve masa yönetimi
-- [ ] Offline-first katmanı
-- [ ] Sadakat modülü
-- [ ] Delivery modülü
+## 🧪 Test
 
-## Lisans
+### A) Smooth Scroll
+1. Ana sayfayı aç (`/`)
+2. Üst nav'dan **"Özellikler"** tıkla → yumuşak kayarak özellikler bölümüne insin
+3. **"Fiyatlar"** → yumuşak kayma
+4. **"Harita"** → yumuşak kayma
+5. Nav üstte hâlâ görünür olmalı, section kırpılmamalı
 
-Özel — tüm hakları saklıdır.
+### B) Footer Ürün Linkleri
+1. Sayfanın en altına in (footer)
+2. **Ürün** başlığı altında:
+   - **Özellikler** → sayfa başına features bölümüne kaysın
+   - **Fiyatlar** → pricing bölümüne kaysın
+   - **Modüller** → modules bölümüne kaysın
+   - **Yenilikler** → `/yenilikler` sayfası
+   - **Yol Haritası** → `/yol-haritasi` sayfası
+
+### C) Instagram
+1. Footer'da sağ altta **"● @ALEGSTUDIO"** yazısı görünmeli (turuncu dot)
+2. Tıkla → yeni sekmede `instagram.com/alegstudio` açılmalı
+3. Yanındaki **Instagram ikonu** aktif — üzerine gelince büyümeli, tıklayınca
+   aynı yere gider
+4. **Twitter ve LinkedIn** ikonları soluk (opacity 0.4), tıklanmamalı
+
+### D) Erişilebilirlik (Opsiyonel)
+1. Sistem ayarlarından "Reduce motion" aç
+2. Ana sayfaya git → anchor'a tıkla → **direkt zıplama** olmalı (smooth yok)
+
+## 📍 Git Push
+
+```powershell
+cd C:\Users\aliik\OneDrive\Desktop\aleg-starter
+git add .
+git commit -m "fix: footer urun linkleri, smooth scroll, instagram handle"
+git push origin main
+```
+
+## 🔧 Detaylar
+
+- `scroll-behavior: smooth` modern tarayıcıların hepsinde destekli (Chrome 61+,
+  Firefox 36+, Safari 15.4+)
+- Mevcut FAQ section'ı `<section id="faq">` kullanıyor, buna ek kural ekledik
+- Twitter ve LinkedIn'i yakında aktif ederken, bu dosyadaki `active: false`'u
+  `true` yap + `url: 'https://twitter.com/alegstudio'` gibi ekle
+- Sosyal medyalarda başka bir platform eklemek istersen aynı objet yapısında
+  (`name`, `handle`, `url`, `active`, `d`) yenisini footer.tsx'e ekle

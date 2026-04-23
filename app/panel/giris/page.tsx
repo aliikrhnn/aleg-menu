@@ -1,4 +1,5 @@
 import { LoginForm } from './login-form';
+import { BrandSide } from './brand-side';
 
 interface Props {
   searchParams: { error?: string };
@@ -6,101 +7,172 @@ interface Props {
 
 export default function PanelLoginPage({ searchParams }: Props) {
   return (
-    <div data-theme="warm" className="min-h-screen bg-paper flex items-center justify-center px-6 py-12">
-      <div className="w-full max-w-md">
-        {/* Logo */}
-        <div className="flex flex-col items-center mb-10">
-          <div
-            className="w-14 h-14 rounded-[12px] bg-accent flex items-center justify-center mb-4"
-            style={{
-              fontFamily: 'var(--f-serif)',
-              fontStyle: 'italic',
-              fontSize: 28,
-              fontWeight: 500,
-              color: '#FAF5EA',
-              letterSpacing: '-0.04em',
-            }}
-          >
-            a
-          </div>
-          <div
-            style={{
-              fontFamily: 'var(--f-serif)',
-              fontStyle: 'italic',
-              fontSize: 32,
-              fontWeight: 400,
-              letterSpacing: '-0.02em',
-            }}
-          >
-            Aleg
-          </div>
-          <div
-            className="text-ink-3 uppercase mt-1"
-            style={{
-              fontFamily: 'var(--f-mono)',
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: '0.16em',
-            }}
-          >
-            İŞLETME PANELİ
-          </div>
-        </div>
+    <div
+      data-theme="warm"
+      className="min-h-screen flex flex-col lg:flex-row"
+      style={{ background: 'var(--paper)' }}
+    >
+      {/* Sol: Marka paneli — mobile'da kompakt üst bölüm */}
+      <div
+        className="w-full lg:w-1/2 lg:min-h-screen"
+        style={{
+          borderRight: '1px solid var(--line)',
+        }}
+      >
+        <BrandSide />
+      </div>
 
-        {/* Form Card */}
-        <div
-          className="bg-card rounded-[14px] border border-line p-8"
-          style={{
-            boxShadow: '0 1px 0 rgba(42,31,24,0.04), 0 12px 32px -18px rgba(42,31,24,0.18)',
-          }}
-        >
+      {/* Sağ: Form paneli */}
+      <div
+        className="w-full lg:w-1/2 flex items-center justify-center px-6 py-10 lg:py-16 lg:min-h-screen"
+        style={{ background: 'var(--card-2)' }}
+      >
+        <div className="w-full max-w-md">
+          {/* Üst etiket */}
+          <div className="flex items-center gap-2 mb-6">
+            <span
+              style={{
+                color: 'var(--accent)',
+                fontSize: 10,
+              }}
+              aria-hidden="true"
+            >
+              ◆
+            </span>
+            <span
+              className="uppercase"
+              style={{
+                fontFamily: 'var(--f-mono)',
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: '0.16em',
+                color: 'var(--accent)',
+              }}
+            >
+              İŞLETME GİRİŞİ
+            </span>
+          </div>
+
+          {/* Başlık */}
           <h1
+            className="mb-3"
             style={{
               fontFamily: 'var(--f-serif)',
-              fontStyle: 'italic',
-              fontSize: 32,
-              fontWeight: 400,
-              letterSpacing: '-0.02em',
-              lineHeight: 1.1,
+              fontSize: 'clamp(36px, 4vw, 52px)',
+              fontWeight: 700,
+              letterSpacing: '-0.035em',
+              lineHeight: 0.98,
+              color: 'var(--ink)',
             }}
-            className="mb-2"
           >
-            İşletmene gir
+            Tekrar{' '}
+            <span
+              style={{
+                fontStyle: 'italic',
+                fontWeight: 400,
+                color: 'var(--accent)',
+              }}
+            >
+              hoşgeldin.
+            </span>
           </h1>
-          <p className="text-ink-3 text-sm mb-6">
-            E-postanı ve şifreni gir, panel açılsın.
+
+          {/* Alt açıklama */}
+          <p
+            className="mb-7"
+            style={{
+              fontSize: 15,
+              lineHeight: 1.5,
+              color: 'var(--ink-2)',
+            }}
+          >
+            E-posta ve şifrenle işletme paneline gir. Oturumun güvenli,
+            bağlantın şifreli.
           </p>
 
+          {/* Hata mesajları (URL query'den) */}
           {searchParams.error === 'no_business' && (
-            <div className="mb-4 p-3 rounded-[10px] bg-warn/10 border border-warn/20 text-warn text-sm">
-              Bu hesabın bir işletme üyeliği yok. Süper adminle iletişime geç.
+            <div
+              className="mb-4 p-3 rounded-[10px] text-sm flex items-start gap-2"
+              style={{
+                background:
+                  'color-mix(in srgb, var(--warn) 8%, var(--card))',
+                border:
+                  '1px solid color-mix(in srgb, var(--warn) 25%, var(--line))',
+                color: 'var(--warn)',
+              }}
+            >
+              <span className="flex-shrink-0">⚠</span>
+              <span>
+                Bu hesabın bir işletme üyeliği yok. Süper adminle iletişime geç.
+              </span>
             </div>
           )}
 
           {searchParams.error === 'invalid_credentials' && (
-            <div className="mb-4 p-3 rounded-[10px] bg-danger/10 border border-danger/20 text-danger text-sm">
-              E-posta veya şifre hatalı.
+            <div
+              className="mb-4 p-3 rounded-[10px] text-sm flex items-start gap-2"
+              style={{
+                background:
+                  'color-mix(in srgb, var(--danger) 8%, var(--card))',
+                border:
+                  '1px solid color-mix(in srgb, var(--danger) 25%, var(--line))',
+                color: 'var(--danger)',
+              }}
+            >
+              <span className="flex-shrink-0">⚠</span>
+              <span>E-posta veya şifre hatalı.</span>
             </div>
           )}
 
+          {/* Form */}
           <LoginForm />
-        </div>
 
-        {/* Yardım linki */}
-        <div className="text-center mt-8 text-xs text-ink-3">
-          <span style={{ fontFamily: 'var(--f-mono)', letterSpacing: '0.04em' }}>
-            Yardıma mı ihtiyacın var?
-          </span>{' '}
-          <a href="https://alegstudio.com" className="text-accent hover:underline">
-            Bize yaz
-          </a>
-        </div>
-
-        <div
-          className="text-center mt-2 text-xs text-ink-3"
-          style={{ fontFamily: 'var(--f-mono)', letterSpacing: '0.06em' }}
-        >
-          alegstudio.com · v0.1
+          {/* Alt: Demo link + footer */}
+          <div
+            className="mt-8 pt-6 text-center"
+            style={{ borderTop: '1px solid var(--line)' }}
+          >
+            <div className="text-sm" style={{ color: 'var(--ink-2)' }}>
+              Hesabın yok mu?{' '}
+              <a
+                href="/iletisim"
+                className="font-semibold hover:underline"
+                style={{
+                  color: 'var(--accent)',
+                  textDecoration: 'underline',
+                  textDecorationColor:
+                    'color-mix(in srgb, var(--accent) 40%, transparent)',
+                  textUnderlineOffset: 3,
+                }}
+              >
+                Demo talep et →
+              </a>
+            </div>
+            <div
+              className="mt-4 flex items-center justify-center gap-3 flex-wrap"
+              style={{
+                fontFamily: 'var(--f-mono)',
+                fontSize: 10,
+                color: 'var(--ink-3)',
+                letterSpacing: '0.08em',
+              }}
+            >
+              <a href="/" className="hover:underline">
+                alegstudio.com
+              </a>
+              <span>·</span>
+              <a href="/gizlilik" className="hover:underline">
+                Gizlilik
+              </a>
+              <a href="/sartlar" className="hover:underline">
+                Şartlar
+              </a>
+              <a href="/cerezler" className="hover:underline">
+                Çerezler
+              </a>
+            </div>
+          </div>
         </div>
       </div>
     </div>

@@ -39,7 +39,7 @@ export function Nav({ onDemo }: NavProps) {
       >
         <div className="max-w-[1280px] mx-auto px-8 flex items-center justify-between h-[72px]">
           {/* Logo */}
-          <a href="#" className="flex items-center gap-2.5">
+          <a href="/" className="flex items-center gap-2.5">
             <div
               className="w-[34px] h-[34px] rounded-[10px] bg-ink text-paper grid place-items-center"
               style={{

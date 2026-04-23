@@ -701,13 +701,17 @@ function FeaturedCard({
   const isOut = product.status === 'soldout';
   return (
     <div
-      className="flex-shrink-0 w-44 bg-card border border-line rounded-[14px] overflow-hidden"
+      className="flex-shrink-0 w-44 bg-card border border-line rounded-[14px] overflow-hidden transition-all"
       style={{
         boxShadow: '0 1px 2px rgba(42,31,24,0.05)',
+        opacity: isOut ? 0.75 : 1,
       }}
     >
       {/* Hero alanı */}
-      <div className="h-24 bg-gradient-to-br from-accent-soft to-paper-2 relative flex items-center justify-center overflow-hidden">
+      <div
+        className="h-24 bg-gradient-to-br from-accent-soft to-paper-2 relative flex items-center justify-center overflow-hidden"
+        style={{ filter: isOut ? 'grayscale(0.85)' : 'none' }}
+      >
         {product.hero_image_url ? (
           <img
             src={product.hero_image_url}
@@ -729,18 +733,41 @@ function FeaturedCard({
             {tt(product.name, lang).charAt(0)}
           </span>
         )}
-        {/* ÖZEL rozeti */}
-        <span
-          className="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase"
-          style={{
-            background: 'var(--gold)',
-            color: '#FFF8EC',
-            fontFamily: 'var(--f-mono)',
-            letterSpacing: '0.1em',
-          }}
-        >
-          {lang === 'tr' ? 'ÖZEL' : 'FEATURED'}
-        </span>
+        {/* ÖZEL rozeti (sadece stokta) */}
+        {!isOut && product.is_featured && (
+          <span
+            className="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase"
+            style={{
+              background: 'var(--gold)',
+              color: '#FFF8EC',
+              fontFamily: 'var(--f-mono)',
+              letterSpacing: '0.1em',
+            }}
+          >
+            {lang === 'tr' ? 'ÖZEL' : 'FEATURED'}
+          </span>
+        )}
+        {/* TÜKENDİ overlay bandı */}
+        {isOut && (
+          <div
+            className="absolute inset-x-0 top-1/2 -translate-y-1/2 py-1 text-center pointer-events-none"
+            style={{
+              background: 'rgba(42, 31, 24, 0.82)',
+              backdropFilter: 'blur(2px)',
+            }}
+          >
+            <span
+              className="text-[10px] font-bold uppercase"
+              style={{
+                color: '#FAF5EA',
+                fontFamily: 'var(--f-mono)',
+                letterSpacing: '0.18em',
+              }}
+            >
+              {lang === 'tr' ? 'TÜKENDİ' : 'SOLD OUT'}
+            </span>
+          </div>
+        )}
       </div>
       {/* İçerik */}
       <div className="p-2.5">
@@ -759,6 +786,8 @@ function FeaturedCard({
               fontSize: 18,
               fontWeight: 400,
               letterSpacing: '-0.02em',
+              textDecoration: isOut ? 'line-through' : 'none',
+              color: isOut ? 'var(--ink-3)' : 'var(--ink)',
             }}
           >
             {money(product.price, lang)}
@@ -795,12 +824,17 @@ function ProductRow({
 
   return (
     <div
-      className={`flex items-center gap-3 p-3 bg-card border border-line rounded-[14px] transition-all ${
-        isOut ? 'opacity-50' : 'hover:border-line-2'
+      className={`flex items-center gap-3 p-3 bg-card border rounded-[14px] transition-all ${
+        isOut
+          ? 'opacity-70 border-line'
+          : 'border-line hover:border-line-2'
       }`}
     >
       {/* Sol: hero (resim, ikon veya inisyal) */}
-      <div className="w-14 h-14 rounded-[10px] bg-paper-2 flex items-center justify-center flex-shrink-0 overflow-hidden">
+      <div
+        className="w-14 h-14 rounded-[10px] bg-paper-2 flex items-center justify-center flex-shrink-0 overflow-hidden relative"
+        style={{ filter: isOut ? 'grayscale(0.85)' : 'none' }}
+      >
         {product.hero_image_url ? (
           <img
             src={product.hero_image_url}
@@ -822,14 +856,35 @@ function ProductRow({
             {name.charAt(0)}
           </span>
         )}
+        {isOut && (
+          <div
+            className="absolute inset-0 flex items-center justify-center pointer-events-none"
+            style={{ background: 'rgba(42,31,24,0.25)' }}
+          >
+            <span
+              style={{
+                fontFamily: 'var(--f-serif)',
+                fontStyle: 'italic',
+                fontSize: 22,
+                fontWeight: 400,
+                color: 'rgba(250, 245, 234, 0.85)',
+              }}
+            >
+              ✕
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Orta: bilgi */}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5 mb-0.5">
+        <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
           <span
-            className="text-[13px] font-semibold text-ink truncate"
-            style={{ fontFamily: 'var(--f-sans)' }}
+            className="text-[13px] font-semibold truncate"
+            style={{
+              fontFamily: 'var(--f-sans)',
+              color: isOut ? 'var(--ink-2)' : 'var(--ink)',
+            }}
           >
             {name}
           </span>
@@ -846,34 +901,44 @@ function ProductRow({
               {lang === 'tr' ? 'ÖZEL' : 'NEW'}
             </span>
           )}
-        </div>
-        {description && (
-          <div className="text-[11px] text-ink-3 leading-snug line-clamp-2">{description}</div>
-        )}
-        <div className="mt-1.5">
-          {isOut ? (
+          {isOut && (
             <span
-              className="text-[9px] uppercase font-bold"
+              className="text-[8px] px-1.5 py-0.5 rounded font-bold uppercase flex-shrink-0"
               style={{
-                color: 'var(--accent)',
+                background: 'color-mix(in srgb, var(--warn) 18%, transparent)',
+                color: 'var(--warn)',
                 fontFamily: 'var(--f-mono)',
                 letterSpacing: '0.12em',
+                border: '1px solid color-mix(in srgb, var(--warn) 30%, transparent)',
               }}
             >
               {lang === 'tr' ? 'TÜKENDİ' : 'SOLD OUT'}
             </span>
-          ) : (
+          )}
+        </div>
+        {description && (
+          <div className="text-[11px] text-ink-3 leading-snug line-clamp-2">{description}</div>
+        )}
+        <div className="mt-1.5 flex items-center gap-2">
+          <span
+            style={{
+              fontFamily: 'var(--f-serif)',
+              fontStyle: 'italic',
+              fontSize: 18,
+              fontWeight: 400,
+              letterSpacing: '-0.02em',
+              color: isOut ? 'var(--ink-3)' : 'var(--ink)',
+              textDecoration: isOut ? 'line-through' : 'none',
+            }}
+          >
+            {money(product.price, lang)}
+          </span>
+          {isOut && (
             <span
-              className="text-ink"
-              style={{
-                fontFamily: 'var(--f-serif)',
-                fontStyle: 'italic',
-                fontSize: 18,
-                fontWeight: 400,
-                letterSpacing: '-0.02em',
-              }}
+              className="text-[10px] text-ink-3"
+              style={{ fontStyle: 'italic' }}
             >
-              {money(product.price, lang)}
+              {lang === 'tr' ? 'şu an hazırlanamıyor' : 'not available now'}
             </span>
           )}
         </div>

@@ -189,3 +189,27 @@ body::before {
   text-transform: uppercase;
   font-weight: 500;
 }
+/* ==== SMOOTH SCROLL (anchor linkleri için kayma efekti) ==== */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Sabit nav height'ı kadar offset - section'ların üstü kırpılmasın */
+section[id],
+[id] {
+  scroll-margin-top: 88px;
+}
+
+/* Erişilebilirlik: kullanıcı "reduce motion" seçtiyse smooth scroll'u kapat */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

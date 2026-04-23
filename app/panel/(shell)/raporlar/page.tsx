@@ -4,9 +4,30 @@ import { ReportsView } from './reports-view';
 
 export const dynamic = 'force-dynamic';
 
-export default async function ReportsPage() {
+type ValidPreset = 'today' | 'yesterday' | 'week' | 'month' | 'last7' | 'last30' | 'custom';
+
+const VALID_PRESETS: ValidPreset[] = [
+  'today',
+  'yesterday',
+  'week',
+  'month',
+  'last7',
+  'last30',
+  'custom',
+];
+
+export default async function ReportsPage({
+  searchParams,
+}: {
+  searchParams: { preset?: string; from?: string; to?: string };
+}) {
+  const presetRaw = searchParams.preset || 'last30';
+  const preset: ValidPreset = VALID_PRESETS.includes(presetRaw as ValidPreset)
+    ? (presetRaw as ValidPreset)
+    : 'last30';
+
   const [reportsResult, settingsResult] = await Promise.all([
-    getReportsData(),
+    getReportsData(preset, searchParams.from, searchParams.to),
     getBusinessSettings(),
   ]);
 
