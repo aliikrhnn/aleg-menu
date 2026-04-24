@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { resolveQrSlug } from '@/lib/actions/qr';
 import { MenuView } from './menu-view';
 import type { LocalizedText } from '@/types/database';
@@ -14,7 +14,9 @@ interface Props {
 export const revalidate = 60;
 
 export default async function CustomerMenuPage({ params, searchParams }: Props) {
-  const supabase = createClient();
+  // Admin client - anonim müşteri için RLS bypass (sadece menüye okuma)
+  // businesses/categories/products public okuma policy'si olmadığı için admin gerekli
+  const supabase = createAdminClient();
 
   // 1. İşletmeyi slug'dan bul
   const { data: business } = await supabase
