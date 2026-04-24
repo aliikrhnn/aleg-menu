@@ -178,7 +178,7 @@ export function PanelSidebar({
           };
 
           // GÜNLÜK'ten sonra MUTFAK EKRANLARI ekle
-          const allGroups = [];
+          const allGroups: typeof PANEL_NAV = [];
           for (const group of PANEL_NAV) {
             allGroups.push(group);
             if (group.group === 'GÜNLÜK') {

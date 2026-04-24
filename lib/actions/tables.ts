@@ -337,7 +337,13 @@ export async function bulkCreateTables(
 
     const existingNames = new Set((existing || []).map((t) => t.name));
 
-    const rows = [];
+    const rows: Array<{
+      business_id: string;
+      name: string;
+      capacity: number;
+      zone_id: string | null;
+      status: 'available';
+    }> = [];
     for (let i = input.startNo; i <= input.endNo; i++) {
       const name = `${input.prefix}${i}`.trim();
       if (existingNames.has(name)) continue; // atla, tekrarlama
