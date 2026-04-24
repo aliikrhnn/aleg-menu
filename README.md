@@ -1,35 +1,32 @@
-# LINT FİX — JSX TIRNAK ESCAPE
+# TYPE FİX — confirmDialog API
 
 **1 dosya.**
 
 ## 🐛 Sorun
 
 ```
-Error: `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`.
-2442:31  react/no-unescaped-entities
+Type error: Object literal may only specify known properties, and 'message' does not exist in type 'ConfirmOptions'.
 ```
 
-JSX içinde **`"{call.note}"`** yazmıştım. ESLint çift tırnağı escape edilmiş HTML entity ile istiyor.
+`confirmDialog` API'si `message`/`confirmText` değil, `body`/`confirmLabel` bekliyor.
 
 ## ✅ Fix
 
 ```diff
-- "{call.note}"
-+ &ldquo;{call.note}&rdquo;
+- message: `"${b.name}" butonu silinecek...`,
+- confirmText: 'Sil',
++ body: `"${b.name}" butonu silinecek...`,
++ confirmLabel: 'Sil',
 ```
-
-`&ldquo;` ve `&rdquo;` daha şık görünür de — açık ve kapalı çift tırnak (typographic quotes). Browser'da `"` ve `"` olarak render olur, alıntı havası verir.
 
 ## 📦 Dosya
 
 ```
-app/kasa/register-panel.tsx
+app/panel/(shell)/cagrilar/call-buttons-manager.tsx
 ```
 
 ## 🚀 Push
 
 ```powershell
-git add .
-git commit -m "fix(lint): jsx escape quotes in call note"
-git push
+git add . && git commit -m "fix(types): confirmDialog API - body/confirmLabel" && git push
 ```

@@ -71,8 +71,8 @@ export function CallButtonsManager({ initialButtons, error }: Props) {
   const handleDelete = async (b: CallButton) => {
     const ok = await confirmDialog({
       title: 'Çağrı butonunu sil?',
-      message: `"${b.name}" butonu silinecek. Geçmiş çağrı kayıtları korunur.`,
-      confirmText: 'Sil',
+      body: `"${b.name}" butonu silinecek. Geçmiş çağrı kayıtları korunur.`,
+      confirmLabel: 'Sil',
       tone: 'danger',
     });
     if (!ok) return;
