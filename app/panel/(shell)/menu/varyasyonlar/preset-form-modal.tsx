@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import type { Preset, PresetInput } from '@/lib/actions/options';
+import { toast } from '@/components/ui/toast';
 
 interface Props {
   initial: Preset | null;
@@ -87,7 +88,7 @@ export function PresetFormModal({ initial, onSubmit, onClose, saving }: Props) {
       const data = await res.json();
 
       if (!res.ok) {
-        alert(data.error || 'AI hatası');
+        toast.error(data.error || 'AI hatası');
         if (data.rateLimited) {
           setAiRemaining(0);
           setAiHoursReset(data.hoursUntilReset);
@@ -122,7 +123,7 @@ export function PresetFormModal({ initial, onSubmit, onClose, saving }: Props) {
       setAiOpen(false);
       setAiPrompt('');
     } catch (err) {
-      alert('AI hatası: ' + (err instanceof Error ? err.message : 'bilinmeyen'));
+      toast.error('AI hatası: ' + (err instanceof Error ? err.message : 'bilinmeyen'));
     } finally {
       setAiLoading(false);
     }
@@ -147,7 +148,7 @@ export function PresetFormModal({ initial, onSubmit, onClose, saving }: Props) {
 
   function removeValue(id: string) {
     if (values.length <= 2) {
-      alert('En az 2 değer olmalı');
+      toast.error('En az 2 değer olmalı');
       return;
     }
     setValues((vs) => vs.filter((v) => v.id !== id));
@@ -168,12 +169,12 @@ export function PresetFormModal({ initial, onSubmit, onClose, saving }: Props) {
 
   function handleSubmit() {
     if (!name_tr.trim()) {
-      alert('Şablon adı gerekli (ör: Boy, Süt)');
+      toast.error('Şablon adı gerekli (ör: Boy, Süt)');
       return;
     }
     const filled = values.filter((v) => v.name_tr.trim());
     if (filled.length < 2) {
-      alert('En az 2 değer doldurulmalı');
+      toast.error('En az 2 değer doldurulmalı');
       return;
     }
 

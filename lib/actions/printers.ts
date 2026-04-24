@@ -957,3 +957,181 @@ export async function getPrintJobDetails(jobId: string): Promise<{
     };
   }
 }
+
+// ============================================================
+// PRINTER AGENT v2 — Retry / Durum / Fallback
+// ============================================================
+
+// Başarısız job'ı yeniden pending yap — Realtime yakalar, tekrar dener
+export async function retryPrintJob(
+  jobId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { businessId } = await requireBusinessAccess();
+    const admin = createAdminClient();
+
+    // Güvenlik: iş bu işletmeye ait ve gerçekten failed/pending
+    const { data: job } = await admin
+      .from('print_jobs')
+      .select('id, business_id, status')
+      .eq('id', jobId)
+      .maybeSingle();
+
+    if (!job || job.business_id !== businessId) {
+      return { success: false, error: 'Yazdırma işi bulunamadı' };
+    }
+    if (job.status === 'success') {
+      return { success: false, error: 'Bu iş zaten başarıyla tamamlandı' };
+    }
+
+    const { error } = await admin
+      .from('print_jobs')
+      .update({
+        status: 'pending',
+        error_message: null,
+        completed_at: null,
+      })
+      .eq('id', jobId)
+      .eq('business_id', businessId);
+
+    if (error) return { success: false, error: error.message };
+    return { success: true };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Bilinmeyen hata',
+    };
+  }
+}
+
+// Son 10 dakika içindeki başarısız işler (durum paneli için)
+export async function getRecentFailedJobs(): Promise<{
+  success: boolean;
+  jobs?: Array<{
+    id: string;
+    job_type: string;
+    created_at: string;
+    completed_at: string | null;
+    error_message: string | null;
+    printer_name: string | null;
+    order_no: string | null;
+  }>;
+  error?: string;
+}> {
+  try {
+    const { businessId } = await requireBusinessAccess();
+    const admin = createAdminClient();
+
+    const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+
+    const { data, error } = await admin
+      .from('print_jobs')
+      .select(`
+        id,
+        job_type,
+        created_at,
+        completed_at,
+        error_message,
+        printers ( name ),
+        orders ( id )
+      `)
+      .eq('business_id', businessId)
+      .eq('status', 'failed')
+      .gte('created_at', tenMinAgo)
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    if (error) return { success: false, error: error.message };
+
+    const jobs = (data || []).map((j) => {
+      const printer = Array.isArray(j.printers) ? j.printers[0] : j.printers;
+      const order = Array.isArray(j.orders) ? j.orders[0] : j.orders;
+      const orderId = (order as { id?: string } | null)?.id || null;
+      return {
+        id: j.id,
+        job_type: j.job_type,
+        created_at: j.created_at,
+        completed_at: j.completed_at,
+        error_message: j.error_message,
+        printer_name: (printer as { name?: string } | null)?.name || null,
+        order_no: orderId ? orderId.slice(0, 8).toUpperCase() : null,
+      };
+    });
+
+    return { success: true, jobs };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Bilinmeyen hata',
+    };
+  }
+}
+
+// Yazıcı durum özeti (durum widget'ı için)
+export async function getPrinterStatus(): Promise<{
+  success: boolean;
+  status?: {
+    total_printers: number;
+    bluetooth_printers: number;
+    network_printers: number;
+    pending_jobs: number;
+    failed_jobs_10min: number;
+    last_success_at: string | null;
+  };
+  error?: string;
+}> {
+  try {
+    const { businessId } = await requireBusinessAccess();
+    const admin = createAdminClient();
+
+    const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+
+    const [printersResp, pendingResp, failedResp, lastSuccessResp] = await Promise.all([
+      admin
+        .from('printers')
+        .select('id, connection_type')
+        .eq('business_id', businessId)
+        .eq('enabled', true),
+      admin
+        .from('print_jobs')
+        .select('id', { count: 'exact', head: true })
+        .eq('business_id', businessId)
+        .eq('status', 'pending'),
+      admin
+        .from('print_jobs')
+        .select('id', { count: 'exact', head: true })
+        .eq('business_id', businessId)
+        .eq('status', 'failed')
+        .gte('created_at', tenMinAgo),
+      admin
+        .from('print_jobs')
+        .select('completed_at')
+        .eq('business_id', businessId)
+        .eq('status', 'success')
+        .order('completed_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
+
+    const printers = printersResp.data || [];
+    const bluetooth = printers.filter((p) => p.connection_type === 'bluetooth').length;
+    const network = printers.filter((p) => p.connection_type === 'network').length;
+
+    return {
+      success: true,
+      status: {
+        total_printers: printers.length,
+        bluetooth_printers: bluetooth,
+        network_printers: network,
+        pending_jobs: pendingResp.count || 0,
+        failed_jobs_10min: failedResp.count || 0,
+        last_success_at: lastSuccessResp.data?.completed_at || null,
+      },
+    };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Bilinmeyen hata',
+    };
+  }
+}

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { toast } from '@/components/ui/toast';
 import {
   requestCashierReceipt,
   requestKitchenReprint,
@@ -39,7 +40,7 @@ export function PrintButton({
     setBusy(false);
 
     if (!result.success) {
-      alert(result.error || 'Yazdırma isteği başarısız');
+      toast.error(result.error || 'Yazdırma isteği başarısız');
     }
     // Başarılı ise print-queue-listener toast gösterir
   }

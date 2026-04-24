@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { toast } from '@/components/ui/toast';
 
 interface Props {
   businessName: string;
@@ -103,7 +104,7 @@ export function AiMonogramModal({ businessName, onSelect, onClose }: Props) {
         const ctx = canvas.getContext('2d');
         if (!ctx) {
           URL.revokeObjectURL(url);
-          alert('İndirme hatası');
+          toast.error('İndirme hatası');
           return;
         }
         // Şeffaf arka plan
@@ -115,7 +116,7 @@ export function AiMonogramModal({ businessName, onSelect, onClose }: Props) {
         // PNG olarak indir
         canvas.toBlob((blob) => {
           if (!blob) {
-            alert('PNG dönüşümü başarısız');
+            toast.error('PNG dönüşümü başarısız');
             return;
           }
           const pngUrl = URL.createObjectURL(blob);
@@ -134,11 +135,11 @@ export function AiMonogramModal({ businessName, onSelect, onClose }: Props) {
       };
       img.onerror = () => {
         URL.revokeObjectURL(url);
-        alert('SVG yüklenemedi');
+        toast.error('SVG yüklenemedi');
       };
       img.src = url;
     } catch (err) {
-      alert('İndirme hatası: ' + (err instanceof Error ? err.message : 'bilinmeyen'));
+      toast.error('İndirme hatası: ' + (err instanceof Error ? err.message : 'bilinmeyen'));
     }
   }
 

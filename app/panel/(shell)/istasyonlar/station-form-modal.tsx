@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import type { Station } from '@/lib/actions/stations';
+import { toast } from '@/components/ui/toast';
 
 const PRESET_ICONS = [
   '☕', '🍳', '🍰', '🍕', '🍔', '🍹', '🥤', '🍺', '🍷',
@@ -47,7 +48,7 @@ export function StationFormModal({
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) {
-      alert('İstasyon adı gerekli');
+      toast.error('İstasyon adı gerekli');
       return;
     }
     const input = { name: name.trim(), icon, color };

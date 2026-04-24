@@ -13,6 +13,8 @@ import {
 } from '@/lib/actions/options';
 import { PresetFormModal } from './preset-form-modal';
 import { AttachProductsModal } from './attach-products-modal';
+import { toast } from '@/components/ui/toast';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 type ProductOption = {
   id: string;
@@ -51,7 +53,7 @@ export function PresetsManager({ initialPresets, products, categories }: Props) 
     const result = await createPreset(input);
     setSaving(false);
     if (!result.success) {
-      alert(result.error || 'Oluşturulamadı');
+      toast.error(result.error || 'Oluşturulamadı');
       return;
     }
     setFormModal({ open: false, preset: null });
@@ -64,7 +66,7 @@ export function PresetsManager({ initialPresets, products, categories }: Props) 
     const result = await updatePreset(formModal.preset.id, input);
     setSaving(false);
     if (!result.success) {
-      alert(result.error || 'Güncellenemedi');
+      toast.error(result.error || 'Güncellenemedi');
       return;
     }
     setFormModal({ open: false, preset: null });
@@ -73,17 +75,24 @@ export function PresetsManager({ initialPresets, products, categories }: Props) 
 
   async function handleDelete(preset: Preset) {
     const count = preset.product_count || 0;
-    const msg =
+    const title = `"${preset.name.tr}" varyasyonunu sil?`;
+    const body =
       count > 0
-        ? `Bu varyasyon ${count} üründe kullanılıyor. Silersen tüm ürünlerden kaldırılır. Emin misin?`
-        : `"${preset.name.tr}" varyasyonunu silmek istediğine emin misin?`;
-    if (!confirm(msg)) return;
+        ? `Bu varyasyon ${count} üründe kullanılıyor. Silersen tüm ürünlerden kaldırılır.`
+        : undefined;
+    const ok = await confirmDialog({
+      title,
+      body,
+      tone: 'danger',
+      confirmLabel: 'Sil',
+    });
+    if (!ok) return;
 
     setSaving(true);
     const result = await deletePreset(preset.id);
     setSaving(false);
     if (!result.success) {
-      alert(result.error || 'Silinemedi');
+      toast.error(result.error || 'Silinemedi');
       return;
     }
     router.refresh();
@@ -95,7 +104,7 @@ export function PresetsManager({ initialPresets, products, categories }: Props) 
     const result = await syncPresetProducts(attachModal.preset.id, productIds);
     setSaving(false);
     if (!result.success) {
-      alert(result.error || 'Güncellenemedi');
+      toast.error(result.error || 'Güncellenemedi');
       return;
     }
     const added = result.added || 0;
@@ -110,7 +119,7 @@ export function PresetsManager({ initialPresets, products, categories }: Props) 
     } else {
       msg = `${removed} üründen kaldırıldı`;
     }
-    alert(msg);
+    toast.error(msg);
     setAttachModal({ open: false, preset: null });
     router.refresh();
   }

@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import { toast } from '@/components/ui/toast';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 import {
   replyToReview,
   archiveReview,
@@ -31,7 +33,7 @@ export function ReviewsManager({
     const r = await replyToReview(id, replyText);
     setSaving(false);
     if (!r.success) {
-      alert(r.error || 'Cevap gönderilemedi');
+      toast.error(r.error || 'Cevap gönderilemedi');
       return;
     }
     setReviews((prev) =>
@@ -46,12 +48,18 @@ export function ReviewsManager({
   }
 
   async function handleArchive(id: string) {
-    if (!confirm('Bu değerlendirmeyi arşivle?')) return;
+    const ok = await confirmDialog({
+      title: 'Değerlendirmeyi arşivle?',
+      body: 'Arşivlenen değerlendirmeler listede görünmez.',
+      tone: 'warn',
+      confirmLabel: 'Arşivle',
+    });
+    if (!ok) return;
     setSaving(true);
     const r = await archiveReview(id, true);
     setSaving(false);
     if (!r.success) {
-      alert(r.error || 'Arşivlenemedi');
+      toast.error(r.error || 'Arşivlenemedi');
       return;
     }
     setReviews((prev) => prev.filter((rev) => rev.id !== id));

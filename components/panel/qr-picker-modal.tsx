@@ -10,6 +10,7 @@ import {
   type QrDesign,
   type QrLang,
 } from '@/lib/utils/qr-design';
+import { toast } from '@/components/ui/toast';
 import {
   generateSingleQrPdf,
   generateBulkQrPdf,
@@ -81,7 +82,7 @@ export function QrPickerModal({ mode, onClose }: QrPickerModalProps) {
       const safeName = mode.item.tableName.replace(/[^a-zA-Z0-9]+/g, '-').toLowerCase();
       downloadDataUrl(png, `qr-${safeName}-${selected}.png`);
     } catch (e) {
-      alert('PNG oluşturulamadı: ' + (e instanceof Error ? e.message : 'hata'));
+      toast.error('PNG oluşturulamadı: ' + (e instanceof Error ? e.message : 'hata'));
     } finally {
       setBusy(null);
     }
@@ -95,7 +96,7 @@ export function QrPickerModal({ mode, onClose }: QrPickerModalProps) {
       const safeName = mode.item.tableName.replace(/[^a-zA-Z0-9]+/g, '-').toLowerCase();
       downloadBlob(blob, `qr-${safeName}-${selected}.pdf`);
     } catch (e) {
-      alert('PDF oluşturulamadı: ' + (e instanceof Error ? e.message : 'hata'));
+      toast.error('PDF oluşturulamadı: ' + (e instanceof Error ? e.message : 'hata'));
     } finally {
       setBusy(null);
     }
@@ -111,7 +112,7 @@ export function QrPickerModal({ mode, onClose }: QrPickerModalProps) {
       );
       downloadBlob(blob, `qr-kodlar-${selected}.pdf`);
     } catch (e) {
-      alert('PDF oluşturulamadı: ' + (e instanceof Error ? e.message : 'hata'));
+      toast.error('PDF oluşturulamadı: ' + (e instanceof Error ? e.message : 'hata'));
     } finally {
       setBusy(null);
       setProgress(null);

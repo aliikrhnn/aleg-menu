@@ -338,3 +338,125 @@ export async function removeBusinessLogo(): Promise<{
     };
   }
 }
+
+// ============================================================
+// ADMIN KASA PIN
+// ============================================================
+// Kasa sekmesine giriş için admin PIN'i. Hash'lenmiş olarak saklanır.
+// Yönetici /panel/ayarlar'dan belirler, kasiyer kasa sekmesinde girer.
+// ============================================================
+
+// SHA-256 basit hash (Edge-safe, crypto.subtle Node'da da var)
+async function hashPin(pin: string): Promise<string> {
+  const data = new TextEncoder().encode(pin);
+  const buf = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+// PIN durumunu getir (sadece set edilmiş mi, hash gösterilmez)
+export async function getAdminKasaPinStatus(): Promise<{
+  success: boolean;
+  hasPin?: boolean;
+  error?: string;
+}> {
+  try {
+    const { businessId } = await requireBusinessAccess();
+    const admin = createAdminClient();
+    const { data, error } = await admin
+      .from('businesses')
+      .select('admin_kasa_pin_hash')
+      .eq('id', businessId)
+      .maybeSingle();
+    if (error) return { success: false, error: error.message };
+    return { success: true, hasPin: !!data?.admin_kasa_pin_hash };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Bilinmeyen hata',
+    };
+  }
+}
+
+// PIN belirle veya güncelle (yönetici yapar)
+export async function setAdminKasaPin(
+  pin: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!/^\d{4,6}$/.test(pin)) {
+      return { success: false, error: 'PIN 4-6 haneli rakam olmalı' };
+    }
+    const { businessId } = await requireBusinessAccess();
+    const admin = createAdminClient();
+    const hash = await hashPin(pin);
+    const { error } = await admin
+      .from('businesses')
+      .update({ admin_kasa_pin_hash: hash })
+      .eq('id', businessId);
+    if (error) return { success: false, error: error.message };
+    revalidatePath('/panel/ayarlar');
+    return { success: true };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Bilinmeyen hata',
+    };
+  }
+}
+
+// PIN kaldır (yönetici yapar)
+export async function removeAdminKasaPin(): Promise<{
+  success: boolean;
+  error?: string;
+}> {
+  try {
+    const { businessId } = await requireBusinessAccess();
+    const admin = createAdminClient();
+    const { error } = await admin
+      .from('businesses')
+      .update({ admin_kasa_pin_hash: null })
+      .eq('id', businessId);
+    if (error) return { success: false, error: error.message };
+    revalidatePath('/panel/ayarlar');
+    return { success: true };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Bilinmeyen hata',
+    };
+  }
+}
+
+// PIN doğrula (kasiyer kasa sekmesine girince)
+// NOT: requireBusinessAccess kullanmaz, çünkü kasiyer normal auth user değil.
+// Bunun yerine: business_id'yi cashier session'dan alıyor.
+// Her rate limit için: gün içinde 10 başarısız denemeden sonra 5dk bekle.
+export async function verifyAdminKasaPin(
+  businessId: string,
+  pin: string
+): Promise<{ success: boolean; valid?: boolean; error?: string }> {
+  try {
+    if (!/^\d{4,6}$/.test(pin)) {
+      return { success: true, valid: false };
+    }
+    const admin = createAdminClient();
+    const { data, error } = await admin
+      .from('businesses')
+      .select('admin_kasa_pin_hash')
+      .eq('id', businessId)
+      .maybeSingle();
+    if (error) return { success: false, error: error.message };
+    if (!data?.admin_kasa_pin_hash) {
+      // PIN tanımlı değil; burada false dönüyoruz, UI tarafında kurulum gerekli uyarısı
+      return { success: true, valid: false };
+    }
+    const hash = await hashPin(pin);
+    return { success: true, valid: hash === data.admin_kasa_pin_hash };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Bilinmeyen hata',
+    };
+  }
+}

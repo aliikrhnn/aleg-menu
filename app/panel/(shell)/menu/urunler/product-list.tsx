@@ -18,6 +18,8 @@ import {
 import { aiGenerateProductDescription, aiTranslateText } from '@/lib/actions/ai';
 import type { LocalizedText } from '@/types/database';
 import { ProductImageCropModal } from '@/components/panel/product-image-crop-modal';
+import { toast } from '@/components/ui/toast';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 type CategoryOption = {
   id: string;
@@ -93,11 +95,11 @@ export function ProductList({ products, categories, stations }: Props) {
 
   function handleImageSelect(productId: string, file: File) {
     if (file.size > 10 * 1024 * 1024) {
-      alert('Resim en fazla 10MB olabilir');
+      toast.error('Resim en fazla 10MB olabilir');
       return;
     }
     if (!file.type.match(/^image\/(png|jpeg|webp)$/)) {
-      alert('Sadece PNG, JPG ve WebP desteklenir');
+      toast.error('Sadece PNG, JPG ve WebP desteklenir');
       return;
     }
     setCropModalProduct({ productId, file });
@@ -112,7 +114,7 @@ export function ProductList({ products, categories, stations }: Props) {
     try {
       const result = await uploadProductImage(productId, dataUrl, mimeType);
       if (!result.success) {
-        alert(result.error || 'Resim yüklenemedi');
+        toast.error(result.error || 'Resim yüklenemedi');
       } else {
         router.refresh();
       }
@@ -122,12 +124,17 @@ export function ProductList({ products, categories, stations }: Props) {
   }
 
   async function handleRemoveImage(productId: string) {
-    if (!confirm('Ürün resmini kaldırmak istediğine emin misin?')) return;
+    const ok = await confirmDialog({
+      title: 'Ürün resmini kaldır?',
+      tone: 'warn',
+      confirmLabel: 'Kaldır',
+    });
+    if (!ok) return;
     setUploadingProductId(productId);
     try {
       const result = await removeProductImage(productId);
       if (!result.success) {
-        alert(result.error || 'Resim kaldırılamadı');
+        toast.error(result.error || 'Resim kaldırılamadı');
       } else {
         router.refresh();
       }
@@ -190,7 +197,13 @@ export function ProductList({ products, categories, stations }: Props) {
   };
 
   const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`"${name}" ürününü silmek istediğine emin misin?`)) return;
+    const ok = await confirmDialog({
+      title: `"${name}" ürününü sil?`,
+      body: 'Ürün kalıcı olarak silinecek.',
+      tone: 'danger',
+      confirmLabel: 'Sil',
+    });
+    if (!ok) return;
     startTransition(async () => {
       const res = await deleteProduct(id);
       if (res.success) {

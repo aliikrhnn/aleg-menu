@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import type { LocalizedText } from '@/types/database';
 import type { Preset } from '@/lib/actions/options';
+import { toast } from '@/components/ui/toast';
 
 type ProductOption = {
   id: string;
@@ -76,7 +77,7 @@ export function AttachProductsModal({
 
   function handleSubmit() {
     if (selected.size === 0) {
-      alert('En az bir ürün seç');
+      toast.error('En az bir ürün seç');
       return;
     }
     onAttach(Array.from(selected));

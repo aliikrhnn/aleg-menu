@@ -40,6 +40,9 @@ export type ActiveOrder = {
   order_no: string; // id'nin ilk 8 karakteri
   order_type: 'dine_in' | 'pickup' | 'delivery';
   status: 'received' | 'confirmed' | 'preparing' | 'ready' | 'on_way' | 'delivered' | 'cancelled';
+  payment_status: 'pending' | 'paid' | 'failed' | 'refunded';
+  payment_method: string | null;
+  paid_at: string | null;
   table_id: string | null;
   table_label: string | null; // masa adı, join ile gelir
   customer_name: string | null;
@@ -54,6 +57,8 @@ export type ActiveOrder = {
     quantity: number;
     unit_price: number;
     note: string | null;
+    is_complimentary?: boolean;
+    complimentary_reason?: string | null;
     options: Array<{
       preset_name: string;
       value_name: string;
@@ -74,33 +79,65 @@ export async function getActiveOrders(): Promise<{
 
     // Son 24 saat + tamamlanmamış siparişler
     const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    // Son 2 saatteki ödenmiş siparişler de görünsün (kasiyer "tamam mı" diye bakabilsin)
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
 
-    const { data: orders, error } = await admin
-      .from('orders')
-      .select(
-        `
-        id,
-        order_type,
-        status,
-        table_id,
-        customer_name,
-        customer_phone,
-        note,
-        subtotal,
-        total,
-        created_at,
-        tables(name)
-      `
-      )
-      .eq('business_id', businessId)
-      .in('status', ['received', 'confirmed', 'preparing', 'ready', 'on_way'])
-      .gte('created_at', yesterday)
-      .order('created_at', { ascending: true });
+    // Aktif = in-process status VEYA delivered ama ödenmemiş
+    // Ayrıca: son 2 saatin ödenmiş siparişleri de dahil
+    const selectFields = `
+      id,
+      order_type,
+      status,
+      payment_status,
+      payment_method,
+      paid_at,
+      table_id,
+      customer_name,
+      customer_phone,
+      note,
+      subtotal,
+      total,
+      created_at,
+      tables(name)
+    `;
 
-    if (error) {
+    const [inProcessResp, deliveredUnpaidResp, recentlyPaidResp] = await Promise.all([
+      admin
+        .from('orders')
+        .select(selectFields)
+        .eq('business_id', businessId)
+        .in('status', ['received', 'confirmed', 'preparing', 'ready', 'on_way'])
+        .gte('created_at', yesterday),
+      admin
+        .from('orders')
+        .select(selectFields)
+        .eq('business_id', businessId)
+        .eq('status', 'delivered')
+        .not('payment_status', 'in', '(paid,refunded)')
+        .gte('created_at', yesterday),
+      // Son 2 saatteki ödenmiş siparişler (hızlı satış dahil)
+      admin
+        .from('orders')
+        .select(selectFields)
+        .eq('business_id', businessId)
+        .eq('payment_status', 'paid')
+        .gte('paid_at', twoHoursAgo),
+    ]);
+
+    if (inProcessResp.error || deliveredUnpaidResp.error || recentlyPaidResp.error) {
+      const error = inProcessResp.error || deliveredUnpaidResp.error || recentlyPaidResp.error;
       console.error('getActiveOrders error:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: error!.message };
     }
+
+    // Birleştir + dedup + kronolojik sırala (en yeni önce)
+    const ordersMap = new Map<string, NonNullable<typeof inProcessResp.data>[number]>();
+    (inProcessResp.data || []).forEach((o) => ordersMap.set(o.id, o));
+    (deliveredUnpaidResp.data || []).forEach((o) => ordersMap.set(o.id, o));
+    (recentlyPaidResp.data || []).forEach((o) => ordersMap.set(o.id, o));
+    const orders = Array.from(ordersMap.values()).sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
 
     if (!orders || orders.length === 0) {
       return { success: true, orders: [], businessId };
@@ -110,7 +147,7 @@ export async function getActiveOrders(): Promise<{
     const orderIds = orders.map((o) => o.id);
     const { data: items } = await admin
       .from('order_items')
-      .select('id, order_id, product_name, quantity, unit_price, note, options')
+      .select('id, order_id, product_name, quantity, unit_price, note, options, is_complimentary, complimentary_reason')
       .in('order_id', orderIds);
 
     // Kalemleri sipariş bazında grupla
@@ -125,6 +162,8 @@ export async function getActiveOrders(): Promise<{
         quantity: item.quantity,
         unit_price: Number(item.unit_price),
         note: item.note,
+        is_complimentary: item.is_complimentary || false,
+        complimentary_reason: item.complimentary_reason || null,
         options: Array.isArray(item.options)
           ? (item.options as Array<{
               preset_name: string;
@@ -142,6 +181,9 @@ export async function getActiveOrders(): Promise<{
         order_no: o.id.slice(0, 8).toUpperCase(),
         order_type: o.order_type as ActiveOrder['order_type'],
         status: o.status as ActiveOrder['status'],
+        payment_status: (o.payment_status as ActiveOrder['payment_status']) || 'pending',
+        payment_method: o.payment_method || null,
+        paid_at: o.paid_at || null,
         table_id: o.table_id,
         table_label: tableData?.name || null,
         customer_name: o.customer_name,

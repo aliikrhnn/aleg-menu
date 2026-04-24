@@ -788,3 +788,140 @@ export async function getSoldOutSummary(): Promise<{
     };
   }
 }
+
+// ============================================================
+// SIK SATILANLAR — son N gün en çok satılan ürünler
+// ============================================================
+
+type TopProduct = {
+  id: string;
+  name: string; // locale'a göre text (cashier için tek dilde)
+  price: number;
+  hero_image_url: string | null;
+  hero_icon: string | null;
+  sold_count: number; // son N gün toplam quantity
+};
+
+// Basit memory cache (5 dakika)
+const TOP_PRODUCTS_CACHE = new Map<string, { data: TopProduct[]; expiresAt: number }>();
+const TOP_PRODUCTS_TTL_MS = 5 * 60 * 1000;
+
+export async function getTopProducts(options?: {
+  limit?: number;
+  daysBack?: number;
+  bypassCache?: boolean;
+}): Promise<{
+  success: boolean;
+  products?: TopProduct[];
+  error?: string;
+}> {
+  try {
+    const { businessId } = await requireBusinessAccess();
+    const admin = createAdminClient();
+    const limit = options?.limit ?? 6;
+    const daysBack = options?.daysBack ?? 30;
+
+    const cacheKey = `${businessId}:${limit}:${daysBack}`;
+    if (!options?.bypassCache) {
+      const cached = TOP_PRODUCTS_CACHE.get(cacheKey);
+      if (cached && cached.expiresAt > Date.now()) {
+        return { success: true, products: cached.data };
+      }
+    }
+
+    const sinceDate = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000).toISOString();
+
+    // İptal edilmemiş siparişlerdeki order_items'ları çek
+    const { data: itemsRaw, error: itemsErr } = await admin
+      .from('order_items')
+      .select(`
+        product_id,
+        quantity,
+        orders!inner (
+          id,
+          business_id,
+          status,
+          created_at
+        )
+      `)
+      .eq('orders.business_id', businessId)
+      .neq('orders.status', 'cancelled')
+      .gte('orders.created_at', sinceDate)
+      .not('product_id', 'is', null)
+      .limit(5000); // güvenlik — büyük işletmeler için sınır
+
+    if (itemsErr) {
+      return { success: false, error: 'Satış verileri alınamadı: ' + itemsErr.message };
+    }
+
+    if (!itemsRaw || itemsRaw.length === 0) {
+      TOP_PRODUCTS_CACHE.set(cacheKey, { data: [], expiresAt: Date.now() + TOP_PRODUCTS_TTL_MS });
+      return { success: true, products: [] };
+    }
+
+    // product_id bazlı quantity toplamı
+    const soldMap = new Map<string, number>();
+    for (const it of itemsRaw) {
+      if (!it.product_id) continue;
+      soldMap.set(it.product_id, (soldMap.get(it.product_id) || 0) + (it.quantity || 0));
+    }
+
+    // En çok satılan N ürün id'si
+    const topIds = [...soldMap.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, limit)
+      .map(([id]) => id);
+
+    if (topIds.length === 0) {
+      TOP_PRODUCTS_CACHE.set(cacheKey, { data: [], expiresAt: Date.now() + TOP_PRODUCTS_TTL_MS });
+      return { success: true, products: [] };
+    }
+
+    // Ürün detaylarını çek — sadece aktif ürünler
+    const { data: products, error: prodErr } = await admin
+      .from('products')
+      .select('id, name, price, hero_image_url, hero_icon, status')
+      .eq('business_id', businessId)
+      .in('id', topIds)
+      .eq('status', 'active');
+
+    if (prodErr) {
+      return { success: false, error: 'Ürün bilgileri alınamadı: ' + prodErr.message };
+    }
+
+    // Satış sırasına göre sırala + localize et
+    const byId = new Map(products?.map((p) => [p.id, p]) || []);
+    const result: TopProduct[] = [];
+    for (const pid of topIds) {
+      const p = byId.get(pid);
+      if (!p) continue; // iptal edilmiş / silinmiş / pasif → atla
+
+      // name JSONB olabilir (tr/en) — tr öncelikli
+      let name = 'Ürün';
+      if (typeof p.name === 'string') {
+        name = p.name;
+      } else if (p.name && typeof p.name === 'object') {
+        const n = p.name as LocalizedText;
+        name = n.tr || n.en || Object.values(n)[0] || 'Ürün';
+      }
+
+      result.push({
+        id: p.id,
+        name,
+        price: Number(p.price),
+        hero_image_url: p.hero_image_url,
+        hero_icon: p.hero_icon,
+        sold_count: soldMap.get(pid) || 0,
+      });
+    }
+
+    TOP_PRODUCTS_CACHE.set(cacheKey, { data: result, expiresAt: Date.now() + TOP_PRODUCTS_TTL_MS });
+
+    return { success: true, products: result };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Bilinmeyen hata',
+    };
+  }
+}

@@ -1,127 +1,142 @@
-# LANDING DÜZELTMELERİ — FOOTER + SMOOTH SCROLL + INSTAGRAM
+# HAVALE ÖDEME YÖNTEMİNİ KALDIRMA
 
-Üç küçük ama kritik düzeltme:
+Havale/EFT ödeme seçeneği UI'dan kaldırıldı. Sadece **Nakit** ve **Kart** (ve bölünmüş ödemede ayrıca "Diğer") kalıyor.
 
-1. **Ürün kısmındaki linkler çalışmıyordu** — Özellikler/Fiyatlar/Modüller
-   linkleri yanlış id'lere gidiyordu, bu yüzden tıklayınca hiçbir şey oluyordu
-2. **Kayma efekti yoktu** — anchor linklere bastığında sayfa direkt zıplıyordu
-3. **Instagram eksikti** — @alegstudio footer'da görünmüyordu
+**3 dosya, migration yok.**
 
-## ✨ Neler Değişti
+## 🎯 Değişiklikler
 
-### 1. Footer Ürün Linkleri Düzeltildi
+### 1. Ana Ödeme Modal — Havale Butonu Kaldırıldı
 
-**Önceden (çalışmıyordu):**
-- `/#ozellikler` → eşleşen section yok → hiçbir şey olmaz
-- `/#fiyatlar` → eşleşen section yok
-- `/#moduller` → eşleşen section yok
+```
+┌─────────┐ ┌─────────┐ ┌─────────┐
+│  Nakit  │ │   Kart  │ │ Havale  │  ← SİLİNDİ
+└─────────┘ └─────────┘ └─────────┘
 
-**Şimdi (çalışıyor):**
-- `/#features` → `<Features id="features">` section'ına kayarak gider
-- `/#pricing` → `<Pricing id="pricing">` section'ına
-- `/#modules` → `<Modules id="modules">` section'ına
+↓
 
-### 2. Smooth Scroll Efekti
-
-`globals.css`'e eklenen 3 yeni CSS kuralı:
-
-```css
-html {
-  scroll-behavior: smooth;
-}
-
-section[id], [id] {
-  scroll-margin-top: 88px;  /* Sabit nav yüksekliği kadar offset */
-}
-
-@media (prefers-reduced-motion: reduce) {
-  html { scroll-behavior: auto; }
-  /* Erişilebilirlik: hareket azalt tercihi */
-}
+┌─────────────────┐ ┌─────────────────┐
+│      Nakit      │ │       Kart      │
+└─────────────────┘ └─────────────────┘
 ```
 
-**Neden 88px scroll-margin?** Landing nav sabit (fixed), 72px yüksekliğinde.
-Anchor'a kayarken section'ın üst kenarı nav'ın altına kırpılmasın diye 88px
-boşluk bıraktık.
+`payment-modal.tsx`'ten `<MethodButton active={method === 'transfer'} />` bloğu silindi.
 
-**Erişilebilirlik:** Cihaz "reduce motion" ayarı açıksa (iOS/Android
-erişilebilirlik, Windows "show animations" kapalı) smooth scroll devre dışı
-kalır — animasyon hassasiyeti olan kullanıcıları rahatsız etmez.
+### 2. Bölünmüş Ödeme — Havale Butonu Kaldırıldı
 
-### 3. Instagram @alegstudio
+```
+┌───────┐ ┌───────┐ ┌───────┐ ┌───────┐
+│ NAKİT │ │  KART │ │HAVALE │ │ DİĞER │  ← HAVALE kaldırıldı
+└───────┘ └───────┘ └───────┘ └───────┘
 
-- Sağ alt footer'da `● @ALEGSTUDIO` metin linki eklendi (mono font, accent
-  dot)
-- Instagram ikonu aktif hale getirildi — tıklanınca
-  `https://instagram.com/alegstudio` yeni sekmede açılır
-- Hover'da **110% scale** animasyonu
-- Title tooltip: `Instagram · @alegstudio`
-- Twitter ve LinkedIn ikonları **pasif** durumda (`opacity: 0.4`,
-  `cursor: not-allowed`, tooltip: "Yakında") — hazır olunca aktif edilir
+↓ (3 kolon)
 
-### 4. Nav Logo'su Düzeltildi
+┌────────┐ ┌────────┐ ┌────────┐
+│ NAKİT  │ │  KART  │ │ DİĞER  │
+└────────┘ └────────┘ └────────┘
+```
 
-- Önceden `href="#"` → anchor'a gidiyordu, sayfa en üste zıplıyordu
-- Şimdi `href="/"` → ana sayfaya gider
+`split-payment-modal.tsx`'te:
+- `methods` dizisinden transfer çıkarıldı
+- `grid-cols-4` → `grid-cols-3`
+
+### 3. Geriye Dönük Uyumluluk Korundu
+
+**`PaymentMethod` type'ı** aynen kaldı:
+```typescript
+export type PaymentMethod = 'cash' | 'card' | 'transfer' | 'online' | 'split' | 'other';
+```
+
+**Sebep:** Daha önce havale ile ödenmiş siparişler var → DB'deki `orders.payment_method = 'transfer'` değerleri rapora dahil edilmeli. Type silinirse TypeScript hatası çıkar.
+
+**Label'lar** (Havale/EFT) raporlar ve PDF için kalıyor:
+- `lib/utils/z-report-pdf.ts` → `transfer: 'Havale/EFT'`
+- `app/panel/(shell)/pos/z-report-modal.tsx` → `transfer: 'Havale/EFT'`
+- `app/kasa/register-panel.tsx` → `transfer: 'Havale/EFT'`
+- `app/kasa/day-summary-preview.tsx` → `transfer: 'Havale/EFT'`
+
+### 4. Rapor Davranışı
+
+Eski `transfer` ödemeleri:
+- `byMethod.transfer` tablosunda kalır (eski veri)
+- `other_total`'a dahil olur (çünkü `m !== 'cash' && m !== 'card'`)
+- Yeni ödemelerde 0 olur (artık yazılmıyor)
+
+Comment güncellendi: `other_total: number; // online/diğer (eski: havale dahildi)`
 
 ## 📦 Dosyalar (3)
 
 ```
-app/globals.css                          ← Smooth scroll + scroll-margin CSS
-components/landing/footer.tsx            ← Ürün linkleri + Instagram handle
-components/landing/nav.tsx               ← Logo href düzeltmesi
+app/panel/(shell)/pos/payment-modal.tsx        ← Havale butonu kaldırıldı
+app/panel/(shell)/pos/split-payment-modal.tsx  ← Havale kaldırıldı, 3 kolon
+lib/actions/payments.ts                         ← Comment güncellendi
 ```
 
 ## 🚀 Kurulum
 
-1. Zip aç
-2. İçeriği proje köküne kopyala (3 dosya üstüne yazar)
-3. Dev sunucu çalışıyorsa otomatik yeniler
+```powershell
+# 3 dosyayı üstüne yaz → F5
+```
 
-## 🧪 Test
+Hot reload yeterli. Migration yok, DB değişikliği yok.
 
-### A) Smooth Scroll
-1. Ana sayfayı aç (`/`)
-2. Üst nav'dan **"Özellikler"** tıkla → yumuşak kayarak özellikler bölümüne insin
-3. **"Fiyatlar"** → yumuşak kayma
-4. **"Harita"** → yumuşak kayma
-5. Nav üstte hâlâ görünür olmalı, section kırpılmamalı
+## 🧪 Test Senaryoları
 
-### B) Footer Ürün Linkleri
-1. Sayfanın en altına in (footer)
-2. **Ürün** başlığı altında:
-   - **Özellikler** → sayfa başına features bölümüne kaysın
-   - **Fiyatlar** → pricing bölümüne kaysın
-   - **Modüller** → modules bölümüne kaysın
-   - **Yenilikler** → `/yenilikler` sayfası
-   - **Yol Haritası** → `/yol-haritasi` sayfası
+### ✅ 1. Ana Ödeme
+1. Sipariş aç → ÖDEME AL
+2. Ödeme modal'ı açılır
+3. ✅ Sadece **Nakit** ve **Kart** butonları görünür
+4. Havale butonu **YOK**
 
-### C) Instagram
-1. Footer'da sağ altta **"● @ALEGSTUDIO"** yazısı görünmeli (turuncu dot)
-2. Tıkla → yeni sekmede `instagram.com/alegstudio` açılmalı
-3. Yanındaki **Instagram ikonu** aktif — üzerine gelince büyümeli, tıklayınca
-   aynı yere gider
-4. **Twitter ve LinkedIn** ikonları soluk (opacity 0.4), tıklanmamalı
+### ✅ 2. Bölünmüş Ödeme
+1. Sipariş → ÖDEME AL → BÖLÜNMÜŞ ÖDEME
+2. ✅ Split modal'da sadece NAKİT / KART / DİĞER (3 buton)
+3. HAVALE butonu **YOK**
 
-### D) Erişilebilirlik (Opsiyonel)
-1. Sistem ayarlarından "Reduce motion" aç
-2. Ana sayfaya git → anchor'a tıkla → **direkt zıplama** olmalı (smooth yok)
+### ✅ 3. Eski Havale Siparişleri Rapor
+1. Daha önce havale ile ödenmiş bir siparişiniz varsa
+2. Gün Sonu raporu al (o günü içeren aralık)
+3. ✅ Rapor'da **ödeme yöntemi dağılımında** "Havale/EFT" satırı görünür (eski veri için)
+4. ✅ PDF'te aynı şekilde görünür
+5. Yeni siparişlerde havale görünmez
+
+### ✅ 4. TypeScript Tip Kontrolü
+1. IDE'de lint/type check çalıştır
+2. ✅ Hata yok (type'ta transfer hâlâ tanımlı)
+
+## 💡 Tasarım Kararı: Type'ı Silmedik
+
+Alternatif: `PaymentMethod` type'tan `'transfer'`'ı tamamen kaldırmak.
+
+Neden yapmadık:
+- Eski `orders.payment_method = 'transfer'` kayıtları DB'de var
+- TypeScript catch etmez ama runtime'da label eşleşmeyebilir
+- Rapor/PDF tarafında "Havale/EFT" label'ı lazım
+- "Diğer" olarak grupla denebilir ama işletmeci kayıt için adını görmek ister
+
+**Karar:** Sadece UI'dan kaldır, arka planda kalsın. Gerçek temizlik istenirse ileride DB migration ile `transfer` kayıtları `other`'a taşınabilir.
 
 ## 📍 Git Push
 
 ```powershell
-cd C:\Users\aliik\OneDrive\Desktop\aleg-starter
-git add .
-git commit -m "fix: footer urun linkleri, smooth scroll, instagram handle"
-git push origin main
+git add "app/panel/(shell)/pos/payment-modal.tsx" "app/panel/(shell)/pos/split-payment-modal.tsx" lib/actions/payments.ts
+git commit -m "feat(pos): havale ödeme yöntemi UI'dan kaldırıldı (geriye dönük uyumluluk korundu)"
+git push
 ```
 
-## 🔧 Detaylar
+## 🗺️ Durum
 
-- `scroll-behavior: smooth` modern tarayıcıların hepsinde destekli (Chrome 61+,
-  Firefox 36+, Safari 15.4+)
-- Mevcut FAQ section'ı `<section id="faq">` kullanıyor, buna ek kural ekledik
-- Twitter ve LinkedIn'i yakında aktif ederken, bu dosyadaki `active: false`'u
-  `true` yap + `url: 'https://twitter.com/alegstudio'` gibi ekle
-- Sosyal medyalarda başka bir platform eklemek istersen aynı objet yapısında
-  (`name`, `handle`, `url`, `active`, `d`) yenisini footer.tsx'e ekle
+| İş | Durum |
+|---|---|
+| Tüm önceki paketler | ✅ |
+| **Havale kaldırma** | **✅ BU PAKET** |
+| Rapor ödeme breakdown | 🔜 |
+| QR menü | 🔜 |
+| Garson ekranı | 🔜 |
+
+## 🔜 Sırada
+
+Hangisi devam etsin?
+- 📋 **Rapor ödeme breakdown** — Panel raporda ödeme detayları
+- 📱 **QR menü** — Müşteri tarafı `[cafe-slug].alegstudio.com`
+- 🍽 **Garson ekranı** — Mobil sipariş girişi

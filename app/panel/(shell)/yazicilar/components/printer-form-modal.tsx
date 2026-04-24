@@ -7,6 +7,7 @@ import {
 } from '@/lib/printer/bluetooth-client';
 import type { Printer, PrinterInput } from '@/lib/actions/printers';
 import type { StationLite } from '../printers-manager';
+import { toast } from '@/components/ui/toast';
 
 export function PrinterFormModal({
   printer,
@@ -65,19 +66,19 @@ export function PrinterFormModal({
   // Edit modunda kaydet
   function handleSubmit() {
     if (!name.trim()) {
-      alert('Yazıcı adı gerekli');
+      toast.error('Yazıcı adı gerekli');
       return;
     }
     if (role === 'kitchen' && !stationId) {
-      alert('Mutfak yazıcısı için istasyon seçmelisiniz');
+      toast.error('Mutfak yazıcısı için istasyon seçmelisiniz');
       return;
     }
     if (connectionType === 'bluetooth' && !bluetoothDeviceId && !isEdit) {
-      alert('Önce Bluetooth yazıcıyı eşleştirin');
+      toast.error('Önce Bluetooth yazıcıyı eşleştirin');
       return;
     }
     if (connectionType === 'network' && !ipAddress.trim()) {
-      alert('IP adresi gerekli');
+      toast.error('IP adresi gerekli');
       return;
     }
 

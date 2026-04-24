@@ -1,0 +1,1644 @@
+'use server';
+
+import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { revalidatePath } from 'next/cache';
+
+// ============================================================
+// İzin kontrolü
+// ============================================================
+async function requireBusinessAccess() {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Giriş yapmamışsınız');
+
+  const { data: membership } = await supabase
+    .from('business_members')
+    .select('id, business_id')
+    .eq('user_id', user.id)
+    .eq('status', 'active')
+    .maybeSingle();
+
+  if (!membership) throw new Error('İşletme üyeliği bulunamadı');
+  return { user, businessId: membership.business_id, memberId: membership.id };
+}
+
+// ============================================================
+// TYPES
+// ============================================================
+
+export type TableZoneWithTables = {
+  zone: {
+    id: string;
+    name: string;
+    color: string | null;
+    sort_order: number;
+  } | null; // bölgesi olmayanlar için
+  tables: TableWithStatus[];
+};
+
+export type TableWithStatus = {
+  id: string;
+  name: string;
+  capacity: number;
+  zone_id: string | null;
+  shape: 'square' | 'round' | 'rect';
+  db_status: 'available' | 'occupied' | 'reserved' | 'inactive';
+  // Canlı durum (aktif siparişlerden türetilir)
+  live_status: 'empty' | 'active' | 'unpaid' | 'ready' | 'new' | 'reserved';
+  active_order_count: number;
+  total_amount: number;
+  oldest_order_at: string | null;
+  has_unpaid: boolean;
+  has_new_items: boolean;     // mutfağa yollanmamış kalem var mı
+  has_ready_items: boolean;   // teslim edilmemiş hazır kalem var mı
+};
+
+// ============================================================
+// Masa durumuyla birlikte tüm masaları getir (bölgelere göre)
+// ============================================================
+export async function getTablesWithStatus(): Promise<{
+  success: boolean;
+  zones?: TableZoneWithTables[];
+  error?: string;
+}> {
+  try {
+    const { businessId } = await requireBusinessAccess();
+    const admin = createAdminClient();
+
+    // 1) Bölgeler
+    const { data: zones } = await admin
+      .from('table_zones')
+      .select('id, name, color, sort_order')
+      .eq('business_id', businessId)
+      .order('sort_order', { ascending: true });
+
+    // 2) Tüm masalar
+    const { data: tables } = await admin
+      .from('tables')
+      .select('id, name, capacity, zone_id, shape, status')
+      .eq('business_id', businessId)
+      .neq('status', 'inactive')
+      .order('name', { ascending: true });
+
+    if (!tables) return { success: true, zones: [] };
+
+    // 3) Aktif siparişler (son 24 saat)
+    // Aktif = in-process status VEYA delivered ama ödenmemiş
+    // İki ayrı sorgu, sonra birleştir (or() syntax sorunlarını önle)
+    const yesterday = new Date();
+    yesterday.setHours(yesterday.getHours() - 24);
+    const yesterdayIso = yesterday.toISOString();
+
+    const [inProcessResp, deliveredUnpaidResp] = await Promise.all([
+      admin
+        .from('orders')
+        .select('id, table_id, total, payment_status, status, created_at')
+        .eq('business_id', businessId)
+        .not('table_id', 'is', null)
+        .in('status', ['received', 'confirmed', 'preparing', 'ready', 'on_way'])
+        .gte('created_at', yesterdayIso),
+      admin
+        .from('orders')
+        .select('id, table_id, total, payment_status, status, created_at')
+        .eq('business_id', businessId)
+        .not('table_id', 'is', null)
+        .eq('status', 'delivered')
+        .not('payment_status', 'in', '(paid,refunded)')
+        .gte('created_at', yesterdayIso),
+    ]);
+
+    // Birleştir + dedup (aynı id gelmeyecek aslında ama garantiye alalım)
+    const ordersMap = new Map<string, NonNullable<typeof inProcessResp.data>[number]>();
+    (inProcessResp.data || []).forEach((o) => ordersMap.set(o.id, o));
+    (deliveredUnpaidResp.data || []).forEach((o) => ordersMap.set(o.id, o));
+    const orders = Array.from(ordersMap.values());
+
+    // 4) Yeni/hazır kalem kontrolü için item status'ları
+    const orderIds = (orders || []).map((o) => o.id);
+    let itemsMap = new Map<string, { hasNew: boolean; hasReady: boolean }>();
+    if (orderIds.length > 0) {
+      const { data: items } = await admin
+        .from('order_items')
+        .select('order_id, status')
+        .in('order_id', orderIds);
+
+      (items || []).forEach((it) => {
+        const existing = itemsMap.get(it.order_id) || { hasNew: false, hasReady: false };
+        if (it.status === 'ordered') existing.hasNew = true;
+        if (it.status === 'ready') existing.hasReady = true;
+        itemsMap.set(it.order_id, existing);
+      });
+    }
+
+    // 5) Masa başına sipariş özeti
+    const tableStats = new Map<string, {
+      count: number;
+      total: number;
+      oldest: string | null;
+      hasUnpaid: boolean;
+      hasNew: boolean;
+      hasReady: boolean;
+    }>();
+
+    (orders || []).forEach((o) => {
+      if (!o.table_id) return;
+      const existing = tableStats.get(o.table_id) || {
+        count: 0,
+        total: 0,
+        oldest: null,
+        hasUnpaid: false,
+        hasNew: false,
+        hasReady: false,
+      };
+      const itemFlags = itemsMap.get(o.id) || { hasNew: false, hasReady: false };
+      tableStats.set(o.table_id, {
+        count: existing.count + 1,
+        total: existing.total + Number(o.total),
+        oldest:
+          !existing.oldest || o.created_at < existing.oldest
+            ? o.created_at
+            : existing.oldest,
+        hasUnpaid:
+          existing.hasUnpaid ||
+          (o.payment_status !== 'paid' && o.payment_status !== 'refunded'),
+        hasNew: existing.hasNew || itemFlags.hasNew,
+        hasReady: existing.hasReady || itemFlags.hasReady,
+      });
+    });
+
+    // 6) Live status belirleme
+    function liveStatus(tableId: string, dbStatus: string): TableWithStatus['live_status'] {
+      if (dbStatus === 'reserved') return 'reserved';
+      const stats = tableStats.get(tableId);
+      if (!stats || stats.count === 0) return 'empty';
+      if (stats.hasNew) return 'new';
+      if (stats.hasReady) return 'ready';
+      if (stats.hasUnpaid) return 'active';
+      return 'active';
+    }
+
+    const tablesWithStatus: TableWithStatus[] = tables.map((t) => {
+      const stats = tableStats.get(t.id);
+      return {
+        id: t.id,
+        name: t.name,
+        capacity: t.capacity || 2,
+        zone_id: t.zone_id,
+        shape: (t.shape as TableWithStatus['shape']) || 'square',
+        db_status: t.status as TableWithStatus['db_status'],
+        live_status: liveStatus(t.id, t.status),
+        active_order_count: stats?.count || 0,
+        total_amount: stats?.total || 0,
+        oldest_order_at: stats?.oldest || null,
+        has_unpaid: stats?.hasUnpaid || false,
+        has_new_items: stats?.hasNew || false,
+        has_ready_items: stats?.hasReady || false,
+      };
+    });
+
+    // 7) Bölgelere göre grupla
+    const grouped: TableZoneWithTables[] = [];
+
+    (zones || []).forEach((z) => {
+      const zoneTables = tablesWithStatus.filter((t) => t.zone_id === z.id);
+      if (zoneTables.length > 0) {
+        grouped.push({
+          zone: z,
+          tables: zoneTables,
+        });
+      }
+    });
+
+    // Bölgesiz masalar
+    const orphanTables = tablesWithStatus.filter((t) => !t.zone_id);
+    if (orphanTables.length > 0) {
+      grouped.push({ zone: null, tables: orphanTables });
+    }
+
+    return { success: true, zones: grouped };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Bilinmeyen hata',
+    };
+  }
+}
+
+// ============================================================
+// Ürün kataloğunu sipariş için getir (kasiyerin göreceği)
+// ============================================================
+
+export type OptionPresetForPos = {
+  preset_id: string;
+  preset_name: string;
+  type: 'single' | 'multi';
+  required: boolean;
+  sort_order: number;
+  values: Array<{
+    id: string;
+    name: string;
+    price_delta: number;
+    is_default: boolean;
+  }>;
+};
+
+export type ProductForPos = {
+  id: string;
+  name: string;
+  description: string | null;
+  price: number;
+  category_id: string | null;
+  status: string;
+  hero_image_url: string | null;
+  hero_icon: string | null;
+  badge: string | null;
+  print_station: string | null;
+  dietary_tags: string[];
+  variants: Array<{
+    id: string;
+    name: string;
+    price_delta: number;
+  }>;
+  option_presets: OptionPresetForPos[];
+};
+
+export type CategoryForPos = {
+  id: string;
+  name: string;
+  sort_order: number;
+  hero_icon: string | null;
+  badge: string | null;
+};
+
+export async function getPosMenu(): Promise<{
+  success: boolean;
+  categories?: CategoryForPos[];
+  products?: ProductForPos[];
+  error?: string;
+}> {
+  try {
+    const { businessId } = await requireBusinessAccess();
+    const admin = createAdminClient();
+
+    const [catResp, prodResp, variantResp, presetResp, valueResp, prodPresetResp] = await Promise.all([
+      admin
+        .from('categories')
+        .select('id, name, sort_order, hero_icon, badge')
+        .eq('business_id', businessId)
+        .eq('active', true)
+        .order('sort_order', { ascending: true }),
+      admin
+        .from('products')
+        .select('id, name, description, price, category_id, status, hero_image_url, hero_icon, badge, print_station, dietary_tags, sort_order')
+        .eq('business_id', businessId)
+        .in('status', ['active', 'soldout'])
+        .order('sort_order', { ascending: true }),
+      admin
+        .from('product_variants')
+        .select('id, product_id, name, price_delta, sort_order')
+        .order('sort_order', { ascending: true }),
+      // Option presets (işletme geneli)
+      admin
+        .from('option_presets')
+        .select('id, name, type, required, sort_order')
+        .eq('business_id', businessId)
+        .order('sort_order', { ascending: true }),
+      // Preset values
+      admin
+        .from('option_preset_values')
+        .select('id, preset_id, name, price_delta, is_default, sort_order')
+        .order('sort_order', { ascending: true }),
+      // Ürün <-> preset eşleşmesi
+      admin
+        .from('product_option_presets')
+        .select('product_id, preset_id, sort_order')
+        .order('sort_order', { ascending: true }),
+    ]);
+
+    if (catResp.error) return { success: false, error: catResp.error.message };
+    if (prodResp.error) return { success: false, error: prodResp.error.message };
+
+    // Varyantları ürünlere grupla
+    const variantsByProduct = new Map<
+      string,
+      ProductForPos['variants']
+    >();
+    (variantResp.data || []).forEach((v) => {
+      const arr = variantsByProduct.get(v.product_id) || [];
+      arr.push({
+        id: v.id,
+        name:
+          typeof v.name === 'object'
+            ? (v.name as { tr?: string; en?: string }).tr ||
+              (v.name as { tr?: string; en?: string }).en ||
+              ''
+            : String(v.name || ''),
+        price_delta: Number(v.price_delta || 0),
+      });
+      variantsByProduct.set(v.product_id, arr);
+    });
+
+    // Option preset'leri hazırla (id -> OptionPresetForPos)
+    const presetMap = new Map<string, OptionPresetForPos>();
+    (presetResp.data || []).forEach((pr) => {
+      presetMap.set(pr.id, {
+        preset_id: pr.id,
+        preset_name:
+          typeof pr.name === 'object'
+            ? (pr.name as { tr?: string; en?: string }).tr ||
+              (pr.name as { tr?: string; en?: string }).en ||
+              ''
+            : String(pr.name || ''),
+        type: pr.type as 'single' | 'multi',
+        required: !!pr.required,
+        sort_order: pr.sort_order || 0,
+        values: [],
+      });
+    });
+
+    // Preset value'ları ilgili preset'e ekle
+    (valueResp.data || []).forEach((v) => {
+      const preset = presetMap.get(v.preset_id);
+      if (!preset) return;
+      preset.values.push({
+        id: v.id,
+        name:
+          typeof v.name === 'object'
+            ? (v.name as { tr?: string; en?: string }).tr ||
+              (v.name as { tr?: string; en?: string }).en ||
+              ''
+            : String(v.name || ''),
+        price_delta: Number(v.price_delta || 0),
+        is_default: !!v.is_default,
+      });
+    });
+
+    // Ürün bazlı preset listesi (product_id -> OptionPresetForPos[])
+    const presetsByProduct = new Map<string, OptionPresetForPos[]>();
+    (prodPresetResp.data || []).forEach((pp) => {
+      const preset = presetMap.get(pp.preset_id);
+      if (!preset) return;
+      const arr = presetsByProduct.get(pp.product_id) || [];
+      arr.push(preset);
+      presetsByProduct.set(pp.product_id, arr);
+    });
+
+    // Kategori adlarını flat TR string yap
+    const categories: CategoryForPos[] = (catResp.data || []).map((c) => ({
+      id: c.id,
+      name:
+        typeof c.name === 'object'
+          ? (c.name as { tr?: string; en?: string }).tr ||
+            (c.name as { tr?: string; en?: string }).en ||
+            ''
+          : String(c.name || ''),
+      sort_order: c.sort_order || 0,
+      hero_icon: c.hero_icon || null,
+      badge: c.badge || null,
+    }));
+
+    const products: ProductForPos[] = (prodResp.data || []).map((p) => ({
+      id: p.id,
+      name:
+        typeof p.name === 'object'
+          ? (p.name as { tr?: string; en?: string }).tr ||
+            (p.name as { tr?: string; en?: string }).en ||
+            ''
+          : String(p.name || ''),
+      description:
+        typeof p.description === 'object'
+          ? (p.description as { tr?: string; en?: string }).tr || null
+          : p.description || null,
+      price: Number(p.price),
+      category_id: p.category_id,
+      status: p.status,
+      hero_image_url: p.hero_image_url,
+      hero_icon: p.hero_icon,
+      badge: p.badge,
+      print_station: p.print_station,
+      dietary_tags: p.dietary_tags || [],
+      variants: variantsByProduct.get(p.id) || [],
+      option_presets: presetsByProduct.get(p.id) || [],
+    }));
+
+    return { success: true, categories, products };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Bilinmeyen hata',
+    };
+  }
+}
+
+// ============================================================
+// Manuel sipariş oluştur (kasiyerin masaya açtığı)
+// ============================================================
+
+export type CreateManualOrderInput = {
+  tableId: string | null; // null = hızlı satış
+  orderType?: 'dine_in' | 'pickup' | 'delivery';
+  cashierId: string;
+  note?: string;
+  items: Array<{
+    productId: string;
+    productName: string;
+    variantId?: string;
+    variantName?: string;
+    quantity: number;
+    unitPrice: number;
+    options?: Array<{
+      preset_name: string;
+      value_name: string;
+      price_delta: number;
+    }>;
+    note?: string;
+    isComplimentary?: boolean;
+    complimentaryReason?: string;
+    printStation?: string;
+  }>;
+  sendToKitchen?: boolean; // true: siparişi direkt mutfağa yolla (status='confirmed')
+  syncClientId?: string;
+};
+
+export async function createManualOrder(input: CreateManualOrderInput): Promise<{
+  success: boolean;
+  orderId?: string;
+  error?: string;
+  alreadyCreated?: boolean;
+}> {
+  try {
+    const { businessId } = await requireBusinessAccess();
+    const admin = createAdminClient();
+
+    // İdempotency
+    if (input.syncClientId) {
+      const { data: existing } = await admin
+        .from('orders')
+        .select('id')
+        .eq('business_id', businessId)
+        .eq('sync_client_id', input.syncClientId)
+        .maybeSingle();
+
+      if (existing) {
+        return { success: true, alreadyCreated: true, orderId: existing.id };
+      }
+    }
+
+    if (input.items.length === 0) {
+      return { success: false, error: 'En az bir ürün ekle' };
+    }
+
+    // Cashier güvenliği
+    const { data: cashier } = await admin
+      .from('cashier_accounts')
+      .select('id, business_id, is_active')
+      .eq('id', input.cashierId)
+      .maybeSingle();
+
+    if (!cashier || cashier.business_id !== businessId || !cashier.is_active) {
+      return { success: false, error: 'Kasiyer bulunamadı' };
+    }
+
+    // Masa güvenliği (varsa)
+    if (input.tableId) {
+      const { data: table } = await admin
+        .from('tables')
+        .select('id, business_id')
+        .eq('id', input.tableId)
+        .maybeSingle();
+
+      if (!table || table.business_id !== businessId) {
+        return { success: false, error: 'Masa bulunamadı' };
+      }
+    }
+
+    // Totaller
+    let subtotal = 0;
+    let complimentaryTotal = 0;
+    input.items.forEach((it) => {
+      const optDelta = (it.options || []).reduce(
+        (sum, o) => sum + (o.price_delta || 0),
+        0
+      );
+      const lineTotal = (it.unitPrice + optDelta) * it.quantity;
+      if (it.isComplimentary) {
+        complimentaryTotal += lineTotal;
+      } else {
+        subtotal += lineTotal;
+      }
+    });
+
+    const total = subtotal; // indirim yok şimdilik
+
+    // Order oluştur
+    const orderType = input.orderType || (input.tableId ? 'dine_in' : 'pickup');
+    const status = input.sendToKitchen ? 'confirmed' : 'received';
+    const source = input.tableId ? 'manual' : 'quick_sale';
+
+    const { data: order, error: orderErr } = await admin
+      .from('orders')
+      .insert({
+        business_id: businessId,
+        order_type: orderType,
+        status,
+        table_id: input.tableId,
+        note: input.note || null,
+        subtotal,
+        total,
+        complimentary_total: complimentaryTotal,
+        created_by_cashier: input.cashierId,
+        source,
+        sync_client_id: input.syncClientId || null,
+        payment_status: 'pending',
+      })
+      .select('id')
+      .single();
+
+    if (orderErr || !order) {
+      return { success: false, error: orderErr?.message || 'Sipariş oluşturulamadı' };
+    }
+
+    // Kalemler
+    const itemsToInsert = input.items.map((it) => {
+      const optDelta = (it.options || []).reduce(
+        (sum, o) => sum + (o.price_delta || 0),
+        0
+      );
+      return {
+        order_id: order.id,
+        product_id: it.productId,
+        variant_id: it.variantId || null,
+        product_name: it.variantName
+          ? `${it.productName} · ${it.variantName}`
+          : it.productName,
+        quantity: it.quantity,
+        unit_price: it.unitPrice + optDelta,
+        options: it.options || [],
+        note: it.note || null,
+        is_complimentary: it.isComplimentary || false,
+        complimentary_reason: it.complimentaryReason || null,
+        status: input.sendToKitchen ? 'ordered' : 'ordered',
+      };
+    });
+
+    const { error: itemsErr } = await admin.from('order_items').insert(itemsToInsert);
+
+    if (itemsErr) {
+      // Rollback
+      await admin.from('orders').delete().eq('id', order.id);
+      return { success: false, error: itemsErr.message };
+    }
+
+    // Masa durumunu "occupied" yap
+    if (input.tableId) {
+      await admin
+        .from('tables')
+        .update({ status: 'occupied' })
+        .eq('id', input.tableId);
+    }
+
+    // Mutfak fişi — sendToKitchen=true ise otomatik
+    if (input.sendToKitchen) {
+      try {
+        // Dinamik import — printers.ts bu dosyaya import etmezse döngüsel bağımlılık olmaz
+        const { requestKitchenReprint } = await import('@/lib/actions/printers');
+        await requestKitchenReprint(order.id, null);
+      } catch (e) {
+        // Print başarısız olursa siparişi iptal etme — UI toast ile bildir
+        console.warn('[aleg] Kitchen print failed but order created:', e);
+      }
+    }
+
+    revalidatePath('/kasa');
+    revalidatePath('/panel/pos');
+
+    return { success: true, orderId: order.id };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Bilinmeyen hata',
+    };
+  }
+}
+
+// ============================================================
+// Bir masadaki aktif siparişleri + kalemleri getir
+// ============================================================
+
+export type TableOrderDetail = {
+  id: string;
+  order_no: string;
+  status: string;
+  payment_status: string;
+  payment_method: string | null;
+  created_at: string;
+  note: string | null;
+  source: string | null;
+  subtotal: number;
+  total: number;
+  complimentary_total: number;
+  items: Array<{
+    id: string;
+    product_name: string;
+    quantity: number;
+    unit_price: number;
+    status: string;
+    note: string | null;
+    is_complimentary: boolean;
+    complimentary_reason: string | null;
+  }>;
+};
+
+export async function getTableOrders(tableId: string): Promise<{
+  success: boolean;
+  tableName?: string;
+  orders?: TableOrderDetail[];
+  error?: string;
+}> {
+  try {
+    const { businessId } = await requireBusinessAccess();
+    const admin = createAdminClient();
+
+    // Masa güvenliği
+    const { data: table } = await admin
+      .from('tables')
+      .select('id, name, business_id')
+      .eq('id', tableId)
+      .maybeSingle();
+
+    if (!table || table.business_id !== businessId) {
+      return { success: false, error: 'Masa bulunamadı' };
+    }
+
+    // Son 24 saatin aktif siparişleri — 2 ayrı sorgu + birleştir
+    const yesterday = new Date();
+    yesterday.setHours(yesterday.getHours() - 24);
+    const yesterdayIso = yesterday.toISOString();
+
+    const orderSelect = `
+      id, status, payment_status, payment_method,
+      created_at, note, source,
+      subtotal, total, complimentary_total
+    `;
+
+    const [inProcessResp, deliveredUnpaidResp] = await Promise.all([
+      admin
+        .from('orders')
+        .select(orderSelect)
+        .eq('business_id', businessId)
+        .eq('table_id', tableId)
+        .in('status', ['received', 'confirmed', 'preparing', 'ready', 'on_way'])
+        .gte('created_at', yesterdayIso),
+      admin
+        .from('orders')
+        .select(orderSelect)
+        .eq('business_id', businessId)
+        .eq('table_id', tableId)
+        .eq('status', 'delivered')
+        .not('payment_status', 'in', '(paid,refunded)')
+        .gte('created_at', yesterdayIso),
+    ]);
+
+    if (inProcessResp.error || deliveredUnpaidResp.error) {
+      return { success: false, error: (inProcessResp.error || deliveredUnpaidResp.error)!.message };
+    }
+
+    // Birleştir + dedup + ters kronolojik (en yeni önde)
+    const ordersMap = new Map<string, NonNullable<typeof inProcessResp.data>[number]>();
+    (inProcessResp.data || []).forEach((o) => ordersMap.set(o.id, o));
+    (deliveredUnpaidResp.data || []).forEach((o) => ordersMap.set(o.id, o));
+    const orders = Array.from(ordersMap.values()).sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+
+    if (orders.length === 0) {
+      return { success: true, tableName: table.name, orders: [] };
+    }
+
+    const orderIds = orders.map((o) => o.id);
+    const { data: items } = await admin
+      .from('order_items')
+      .select('id, order_id, product_name, quantity, unit_price, status, note, is_complimentary, complimentary_reason')
+      .in('order_id', orderIds);
+
+    const itemsByOrder = new Map<string, TableOrderDetail['items']>();
+    (items || []).forEach((it) => {
+      const arr = itemsByOrder.get(it.order_id) || [];
+      arr.push({
+        id: it.id,
+        product_name: it.product_name,
+        quantity: it.quantity,
+        unit_price: Number(it.unit_price),
+        status: it.status,
+        note: it.note,
+        is_complimentary: it.is_complimentary || false,
+        complimentary_reason: it.complimentary_reason,
+      });
+      itemsByOrder.set(it.order_id, arr);
+    });
+
+    const formatted: TableOrderDetail[] = orders.map((o) => ({
+      id: o.id,
+      order_no: o.id.slice(0, 8).toUpperCase(),
+      status: o.status,
+      payment_status: o.payment_status,
+      payment_method: o.payment_method,
+      created_at: o.created_at,
+      note: o.note,
+      source: o.source,
+      subtotal: Number(o.subtotal),
+      total: Number(o.total),
+      complimentary_total: Number(o.complimentary_total || 0),
+      items: itemsByOrder.get(o.id) || [],
+    }));
+
+    return { success: true, tableName: table.name, orders: formatted };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Bilinmeyen hata',
+    };
+  }
+}
+
+// ============================================================
+// Var olan siparişe yeni kalemler ekle
+// ============================================================
+
+export async function addItemsToOrder(input: {
+  orderId: string;
+  cashierId: string;
+  items: Array<{
+    productId: string;
+    productName: string;
+    variantId?: string;
+    variantName?: string;
+    quantity: number;
+    unitPrice: number;
+    note?: string;
+    isComplimentary?: boolean;
+    complimentaryReason?: string;
+    options?: Array<{
+      preset_name: string;
+      value_name: string;
+      price_delta: number;
+    }>;
+  }>;
+  sendToKitchen?: boolean;
+  syncClientId?: string;
+}): Promise<{
+  success: boolean;
+  error?: string;
+  alreadyAdded?: boolean;
+}> {
+  try {
+    const { businessId } = await requireBusinessAccess();
+    const admin = createAdminClient();
+
+    // Idempotency (basit - items.note'a sync id sakla)
+    if (input.items.length === 0) {
+      return { success: false, error: 'En az bir ürün ekle' };
+    }
+
+    const { data: order } = await admin
+      .from('orders')
+      .select('id, business_id, subtotal, total, complimentary_total, status, payment_status')
+      .eq('id', input.orderId)
+      .maybeSingle();
+
+    if (!order || order.business_id !== businessId) {
+      return { success: false, error: 'Sipariş bulunamadı' };
+    }
+
+    if (order.payment_status === 'paid') {
+      return { success: false, error: 'Ödenmiş siparişe ürün eklenemez' };
+    }
+
+    // Yeni kalem totallarını hesapla
+    let addSubtotal = 0;
+    let addComplimentary = 0;
+    input.items.forEach((it) => {
+      const optDelta = (it.options || []).reduce(
+        (sum, o) => sum + (o.price_delta || 0),
+        0
+      );
+      const lineTotal = (it.unitPrice + optDelta) * it.quantity;
+      if (it.isComplimentary) addComplimentary += lineTotal;
+      else addSubtotal += lineTotal;
+    });
+
+    // Kalemleri ekle
+    const itemsToInsert = input.items.map((it) => {
+      const optDelta = (it.options || []).reduce(
+        (sum, o) => sum + (o.price_delta || 0),
+        0
+      );
+      return {
+        order_id: input.orderId,
+        product_id: it.productId,
+        variant_id: it.variantId || null,
+        product_name: it.variantName
+          ? `${it.productName} · ${it.variantName}`
+          : it.productName,
+        quantity: it.quantity,
+        unit_price: it.unitPrice + optDelta,
+        options: it.options || [],
+        note: it.note || null,
+        is_complimentary: it.isComplimentary || false,
+        complimentary_reason: it.complimentaryReason || null,
+        status: 'ordered',
+      };
+    });
+
+    const { error: itemsErr } = await admin.from('order_items').insert(itemsToInsert);
+
+    if (itemsErr) {
+      return { success: false, error: itemsErr.message };
+    }
+
+    // Order totallarını güncelle
+    const newSubtotal = Number(order.subtotal) + addSubtotal;
+    const newTotal = Number(order.total) + addSubtotal;
+    const newComp = Number(order.complimentary_total || 0) + addComplimentary;
+
+    await admin
+      .from('orders')
+      .update({
+        subtotal: newSubtotal,
+        total: newTotal,
+        complimentary_total: newComp,
+        // Eğer mutfağa yollandıysa ve sipariş hâlâ received'daysa → confirmed'a çek
+        status:
+          input.sendToKitchen && order.status === 'received' ? 'confirmed' : order.status,
+      })
+      .eq('id', input.orderId);
+
+    // Mutfak fişi — sendToKitchen=true ise tüm sipariş için tekrar bas
+    // (yeni eklenen kalemleri de içerir, barista bütün siparişi görür)
+    if (input.sendToKitchen) {
+      try {
+        const { requestKitchenReprint } = await import('@/lib/actions/printers');
+        await requestKitchenReprint(input.orderId, null);
+      } catch (e) {
+        console.warn('[aleg] addItemsToOrder kitchen print failed:', e);
+      }
+    }
+
+    revalidatePath('/kasa');
+    revalidatePath('/panel/pos');
+
+    return { success: true };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Bilinmeyen hata',
+    };
+  }
+}
+
+// ============================================================
+// Var olan siparişte bazı kalemleri ikram olarak işaretle
+// ============================================================
+// Parça parça ikram: "Bu müdavim — cheesecake'i benden"
+// Tek kalem veya birden fazla kalem birden ikram edilebilir
+
+export async function makeItemsComplimentary(input: {
+  orderId: string;
+  itemIds: string[];
+  reason: string;
+}): Promise<{
+  success: boolean;
+  newTotal?: number;
+  newComplimentaryTotal?: number;
+  error?: string;
+}> {
+  try {
+    const { businessId } = await requireBusinessAccess();
+    const admin = createAdminClient();
+
+    if (!input.itemIds || input.itemIds.length === 0) {
+      return { success: false, error: 'En az bir ürün seç' };
+    }
+    if (!input.reason || !input.reason.trim()) {
+      return { success: false, error: 'İkram sebebi gerekli' };
+    }
+
+    // Order güvenliği
+    const { data: order } = await admin
+      .from('orders')
+      .select('id, business_id, payment_status, subtotal, total, complimentary_total')
+      .eq('id', input.orderId)
+      .maybeSingle();
+
+    if (!order || order.business_id !== businessId) {
+      return { success: false, error: 'Sipariş bulunamadı' };
+    }
+    if (order.payment_status === 'paid') {
+      return { success: false, error: 'Ödenmiş siparişe ikram uygulanamaz' };
+    }
+
+    // İkram edilecek kalemlerin bilgisini al (önceden ikramlıysa atla)
+    const { data: items } = await admin
+      .from('order_items')
+      .select('id, order_id, unit_price, quantity, is_complimentary')
+      .in('id', input.itemIds)
+      .eq('order_id', input.orderId);
+
+    if (!items || items.length === 0) {
+      return { success: false, error: 'Kalem bulunamadı' };
+    }
+
+    const toFlip = items.filter((it) => !it.is_complimentary);
+    if (toFlip.length === 0) {
+      return { success: false, error: 'Seçili kalemlerin hepsi zaten ikram' };
+    }
+
+    // İkram edilen tutar toplamı
+    const flippedTotal = toFlip.reduce(
+      (s, it) => s + Number(it.unit_price) * it.quantity,
+      0
+    );
+
+    // Kalemleri ikrama çevir
+    await admin
+      .from('order_items')
+      .update({
+        is_complimentary: true,
+        complimentary_reason: input.reason.trim(),
+      })
+      .in('id', toFlip.map((it) => it.id));
+
+    // Order totallarını güncelle
+    const newSubtotal = Math.max(0, Number(order.subtotal) - flippedTotal);
+    const newTotal = Math.max(0, Number(order.total) - flippedTotal);
+    const newComp = Number(order.complimentary_total || 0) + flippedTotal;
+
+    await admin
+      .from('orders')
+      .update({
+        subtotal: newSubtotal,
+        total: newTotal,
+        complimentary_total: newComp,
+      })
+      .eq('id', input.orderId);
+
+    revalidatePath('/kasa');
+    revalidatePath('/panel/pos');
+
+    return {
+      success: true,
+      newTotal,
+      newComplimentaryTotal: newComp,
+    };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Bilinmeyen hata',
+    };
+  }
+}
+
+// ============================================================
+// Tek sipariş bilgisini getir (ödeme için)
+// ============================================================
+
+export type OrderForPayment = {
+  id: string;
+  order_no: string;
+  total: number;
+  table_label: string | null;
+  items: Array<{
+    id: string;
+    product_name: string;
+    quantity: number;
+    unit_price: number;
+    is_complimentary?: boolean;
+    complimentary_reason?: string | null;
+  }>;
+};
+
+export async function getOrderForPayment(orderId: string): Promise<{
+  success: boolean;
+  order?: OrderForPayment;
+  error?: string;
+}> {
+  try {
+    const { businessId } = await requireBusinessAccess();
+    const admin = createAdminClient();
+
+    const { data: order } = await admin
+      .from('orders')
+      .select('id, business_id, total, table_id, tables(name)')
+      .eq('id', orderId)
+      .maybeSingle();
+
+    if (!order || order.business_id !== businessId) {
+      return { success: false, error: 'Sipariş bulunamadı' };
+    }
+
+    const { data: items } = await admin
+      .from('order_items')
+      .select('id, product_name, quantity, unit_price, is_complimentary, complimentary_reason')
+      .eq('order_id', orderId);
+
+    const tableJoin = order.tables as unknown as { name?: string } | { name?: string }[] | null;
+    const tableName = Array.isArray(tableJoin)
+      ? tableJoin[0]?.name || null
+      : tableJoin?.name || null;
+
+    return {
+      success: true,
+      order: {
+        id: order.id,
+        order_no: order.id.slice(0, 8).toUpperCase(),
+        total: Number(order.total),
+        table_label: tableName,
+        items: (items || []).map((it) => ({
+          id: it.id,
+          product_name: it.product_name,
+          quantity: it.quantity,
+          unit_price: Number(it.unit_price),
+          is_complimentary: it.is_complimentary || false,
+          complimentary_reason: it.complimentary_reason || null,
+        })),
+      },
+    };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Bilinmeyen hata',
+    };
+  }
+}
+
+// ============================================================
+// MASA YÖNETİMİ — DEĞİŞTİR / BİRLEŞTİR / BÖL
+// ============================================================
+
+// 1) Masa Değiştir — bu siparişi başka masaya taşı
+export async function changeOrderTable(input: {
+  orderId: string;
+  newTableId: string;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { businessId } = await requireBusinessAccess();
+    const admin = createAdminClient();
+
+    // Sipariş bilgisi
+    const { data: order } = await admin
+      .from('orders')
+      .select('id, business_id, table_id, payment_status')
+      .eq('id', input.orderId)
+      .maybeSingle();
+
+    if (!order || order.business_id !== businessId) {
+      return { success: false, error: 'Sipariş bulunamadı' };
+    }
+    if (order.payment_status === 'paid') {
+      return { success: false, error: 'Ödenmiş sipariş taşınamaz' };
+    }
+    if (order.table_id === input.newTableId) {
+      return { success: false, error: 'Sipariş zaten bu masada' };
+    }
+
+    // Yeni masa güvenliği
+    const { data: newTable } = await admin
+      .from('tables')
+      .select('id, business_id, status')
+      .eq('id', input.newTableId)
+      .maybeSingle();
+
+    if (!newTable || newTable.business_id !== businessId) {
+      return { success: false, error: 'Yeni masa bulunamadı' };
+    }
+
+    const oldTableId = order.table_id;
+
+    // Siparişi yeni masaya bağla
+    await admin
+      .from('orders')
+      .update({ table_id: input.newTableId })
+      .eq('id', input.orderId);
+
+    // Yeni masa occupied
+    await admin
+      .from('tables')
+      .update({ status: 'occupied' })
+      .eq('id', input.newTableId);
+
+    // Eski masa — başka aktif sipariş yoksa boşalt
+    if (oldTableId) {
+      const [inProc, delivUnpaid] = await Promise.all([
+        admin.from('orders').select('id').eq('business_id', businessId)
+          .eq('table_id', oldTableId)
+          .in('status', ['received', 'confirmed', 'preparing', 'ready', 'on_way']),
+        admin.from('orders').select('id').eq('business_id', businessId)
+          .eq('table_id', oldTableId)
+          .eq('status', 'delivered')
+          .not('payment_status', 'in', '(paid,refunded)'),
+      ]);
+      const otherActive = (inProc.data?.length || 0) + (delivUnpaid.data?.length || 0);
+      if (otherActive === 0) {
+        await admin
+          .from('tables')
+          .update({ status: 'available' })
+          .eq('id', oldTableId);
+      }
+    }
+
+    revalidatePath('/kasa');
+    revalidatePath('/panel/pos');
+
+    return { success: true };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Bilinmeyen hata',
+    };
+  }
+}
+
+// 2) Masa Birleştir — fromTableId'deki tüm aktif siparişleri toTableId'ye taşı
+export async function mergeTables(input: {
+  fromTableId: string;
+  toTableId: string;
+}): Promise<{
+  success: boolean;
+  movedCount?: number;
+  error?: string;
+}> {
+  try {
+    const { businessId } = await requireBusinessAccess();
+    const admin = createAdminClient();
+
+    if (input.fromTableId === input.toTableId) {
+      return { success: false, error: 'Aynı masa seçilemez' };
+    }
+
+    // Masaların güvenliği
+    const { data: tables } = await admin
+      .from('tables')
+      .select('id, business_id, name')
+      .in('id', [input.fromTableId, input.toTableId]);
+
+    if (!tables || tables.length !== 2) {
+      return { success: false, error: 'Masalar bulunamadı' };
+    }
+    if (tables.some((t) => t.business_id !== businessId)) {
+      return { success: false, error: 'Yetkisiz masa' };
+    }
+
+    // From'daki aktif siparişleri bul
+    const [inProc, delivUnpaid] = await Promise.all([
+      admin.from('orders').select('id').eq('business_id', businessId)
+        .eq('table_id', input.fromTableId)
+        .in('status', ['received', 'confirmed', 'preparing', 'ready', 'on_way']),
+      admin.from('orders').select('id').eq('business_id', businessId)
+        .eq('table_id', input.fromTableId)
+        .eq('status', 'delivered')
+        .not('payment_status', 'in', '(paid,refunded)'),
+    ]);
+    const movingIds = [
+      ...(inProc.data || []).map((o) => o.id),
+      ...(delivUnpaid.data || []).map((o) => o.id),
+    ];
+
+    if (movingIds.length === 0) {
+      return { success: false, error: 'Taşınacak aktif sipariş yok' };
+    }
+
+    // Hepsini yeni masaya bağla
+    await admin
+      .from('orders')
+      .update({ table_id: input.toTableId })
+      .in('id', movingIds);
+
+    // Yeni masa occupied, eski masa available
+    await admin.from('tables').update({ status: 'occupied' }).eq('id', input.toTableId);
+    await admin.from('tables').update({ status: 'available' }).eq('id', input.fromTableId);
+
+    revalidatePath('/kasa');
+    revalidatePath('/panel/pos');
+
+    return { success: true, movedCount: movingIds.length };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Bilinmeyen hata',
+    };
+  }
+}
+
+// 3) Masa Böl — bir siparişteki bazı kalemleri YENİ bir siparişe taşı
+// Yeni sipariş başka masada veya aynı masada "ayrı hesap" olarak kalabilir
+export async function splitOrderItems(input: {
+  orderId: string;
+  itemIds: string[];
+  targetTableId: string; // aynı masa da olabilir (ayrı hesap) veya farklı masa
+  cashierId: string;
+}): Promise<{
+  success: boolean;
+  newOrderId?: string;
+  error?: string;
+}> {
+  try {
+    const { businessId } = await requireBusinessAccess();
+    const admin = createAdminClient();
+
+    if (!input.itemIds || input.itemIds.length === 0) {
+      return { success: false, error: 'En az bir ürün seç' };
+    }
+
+    // Mevcut sipariş
+    const { data: order } = await admin
+      .from('orders')
+      .select('id, business_id, table_id, subtotal, total, complimentary_total, payment_status, order_type, source, created_by_cashier')
+      .eq('id', input.orderId)
+      .maybeSingle();
+
+    if (!order || order.business_id !== businessId) {
+      return { success: false, error: 'Sipariş bulunamadı' };
+    }
+    if (order.payment_status === 'paid') {
+      return { success: false, error: 'Ödenmiş sipariş bölünemez' };
+    }
+
+    // Hedef masa güvenlik
+    const { data: targetTable } = await admin
+      .from('tables')
+      .select('id, business_id')
+      .eq('id', input.targetTableId)
+      .maybeSingle();
+    if (!targetTable || targetTable.business_id !== businessId) {
+      return { success: false, error: 'Hedef masa bulunamadı' };
+    }
+
+    // Taşınacak kalemleri al
+    const { data: items, error: itemsErr } = await admin
+      .from('order_items')
+      .select('id, order_id, product_id, variant_id, product_name, quantity, unit_price, options, note, is_complimentary, complimentary_reason, status, paid_by_log_id')
+      .in('id', input.itemIds)
+      .eq('order_id', input.orderId);
+
+    if (itemsErr) {
+      return { success: false, error: 'Ürünler sorgulanamadı: ' + itemsErr.message };
+    }
+    if (!items || items.length === 0) {
+      return { success: false, error: 'Ürün bulunamadı' };
+    }
+
+    // Ödenmiş (partial) kalemleri taşıma
+    const movable = items.filter((it) => !it.paid_by_log_id);
+    if (movable.length === 0) {
+      return { success: false, error: 'Seçili ürünler zaten ödenmiş, taşınamaz' };
+    }
+
+    // Yeni siparişin total hesabı
+    let newSubtotal = 0;
+    let newComp = 0;
+    movable.forEach((it) => {
+      const lineTotal = Number(it.unit_price) * it.quantity;
+      if (it.is_complimentary) newComp += lineTotal;
+      else newSubtotal += lineTotal;
+    });
+    const newOrderTotal = newSubtotal;
+
+    // Yeni sipariş oluştur (mevcut siparişin kopyası ama yeni id + yeni masa)
+    const { data: newOrder, error: newOrderErr } = await admin
+      .from('orders')
+      .insert({
+        business_id: businessId,
+        table_id: input.targetTableId,
+        order_type: order.order_type,
+        status: 'confirmed', // zaten mutfakta, devam
+        payment_status: 'pending',
+        subtotal: newSubtotal,
+        total: newOrderTotal,
+        complimentary_total: newComp,
+        source: 'manual',
+        created_by_cashier: input.cashierId,
+        note: 'Masa Böl (kaynak: ' + input.orderId.slice(0, 8) + ')',
+      })
+      .select('id')
+      .single();
+
+    if (newOrderErr || !newOrder) {
+      return { success: false, error: newOrderErr?.message || 'Yeni sipariş oluşturulamadı' };
+    }
+
+    // Kalemleri yeni siparişe bağla
+    await admin
+      .from('order_items')
+      .update({ order_id: newOrder.id })
+      .in('id', movable.map((it) => it.id));
+
+    // Eski siparişin totali güncelle
+    const oldSubtotal = Math.max(0, Number(order.subtotal) - newSubtotal);
+    const oldTotal = Math.max(0, Number(order.total) - newOrderTotal);
+    const oldComp = Math.max(0, Number(order.complimentary_total || 0) - newComp);
+
+    await admin
+      .from('orders')
+      .update({
+        subtotal: oldSubtotal,
+        total: oldTotal,
+        complimentary_total: oldComp,
+      })
+      .eq('id', input.orderId);
+
+    // Hedef masa occupied
+    await admin.from('tables').update({ status: 'occupied' }).eq('id', input.targetTableId);
+
+    // Eğer eski siparişte hiç kalem kalmadıysa eski siparişi iptal et + eski masayı kontrol et
+    const { data: remainingItems } = await admin
+      .from('order_items')
+      .select('id')
+      .eq('order_id', input.orderId);
+
+    if (!remainingItems || remainingItems.length === 0) {
+      await admin
+        .from('orders')
+        .update({ status: 'cancelled', total: 0, subtotal: 0 })
+        .eq('id', input.orderId);
+    }
+
+    // Eski masanın güncel durumu
+    if (order.table_id && order.table_id !== input.targetTableId) {
+      const [inProc, delivUnpaid] = await Promise.all([
+        admin.from('orders').select('id').eq('business_id', businessId)
+          .eq('table_id', order.table_id)
+          .in('status', ['received', 'confirmed', 'preparing', 'ready', 'on_way']),
+        admin.from('orders').select('id').eq('business_id', businessId)
+          .eq('table_id', order.table_id)
+          .eq('status', 'delivered')
+          .not('payment_status', 'in', '(paid,refunded)'),
+      ]);
+      const otherActive = (inProc.data?.length || 0) + (delivUnpaid.data?.length || 0);
+      if (otherActive === 0) {
+        await admin.from('tables').update({ status: 'available' }).eq('id', order.table_id);
+      }
+    }
+
+    revalidatePath('/kasa');
+    revalidatePath('/panel/pos');
+
+    return { success: true, newOrderId: newOrder.id };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Bilinmeyen hata',
+    };
+  }
+}
+
+// Mevcut tüm boş masaları + aktif tabelaları döner (masa değiştir picker için)
+export async function listTablesForMove(): Promise<{
+  success: boolean;
+  tables?: Array<{
+    id: string;
+    name: string;
+    status: string;
+    zone_name: string | null;
+    is_occupied: boolean;
+  }>;
+  error?: string;
+}> {
+  try {
+    const { businessId } = await requireBusinessAccess();
+    const admin = createAdminClient();
+
+    // Zones ve tables ayrı çekilir (join syntax sorunlarından kaçınmak için)
+    const [zonesResp, tablesResp] = await Promise.all([
+      admin
+        .from('table_zones')
+        .select('id, name')
+        .eq('business_id', businessId),
+      admin
+        .from('tables')
+        .select('id, name, status, zone_id')
+        .eq('business_id', businessId)
+        .neq('status', 'inactive')
+        .order('name', { ascending: true }),
+    ]);
+
+    if (tablesResp.error) {
+      return { success: false, error: tablesResp.error.message };
+    }
+
+    const zoneMap = new Map<string, string>();
+    (zonesResp.data || []).forEach((z) => zoneMap.set(z.id, z.name));
+
+    const tables = (tablesResp.data || []).map((t) => ({
+      id: t.id,
+      name: t.name,
+      status: t.status,
+      zone_name: t.zone_id ? zoneMap.get(t.zone_id) || null : null,
+      is_occupied: t.status === 'occupied',
+    }));
+
+    return { success: true, tables };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Bilinmeyen hata',
+    };
+  }
+}
+
+// ============================================================
+// ÇOKLU SİPARİŞ KALEMLERİNİ AYIR — Masa böl için gelişmiş
+// ============================================================
+// Birden fazla siparişten kalemler seçilir, HEPSİ tek yeni siparişe taşınır
+// (aynı masada ayrı hesap veya başka masa)
+
+export async function splitItemsFromMultipleOrders(input: {
+  itemIds: string[];
+  targetTableId: string;
+  cashierId: string;
+}): Promise<{
+  success: boolean;
+  newOrderId?: string;
+  movedCount?: number;
+  error?: string;
+}> {
+  try {
+    const { businessId } = await requireBusinessAccess();
+    const admin = createAdminClient();
+
+    if (!input.itemIds || input.itemIds.length === 0) {
+      return { success: false, error: 'En az bir ürün seç' };
+    }
+
+    // Hedef masa güvenliği
+    const { data: targetTable } = await admin
+      .from('tables')
+      .select('id, business_id')
+      .eq('id', input.targetTableId)
+      .maybeSingle();
+    if (!targetTable || targetTable.business_id !== businessId) {
+      return { success: false, error: 'Hedef masa bulunamadı' };
+    }
+
+    // Taşınacak kalemleri topla — hangi siparişlerden olduğu önemli
+    const { data: items, error: itemsErr } = await admin
+      .from('order_items')
+      .select('id, order_id, product_id, variant_id, product_name, quantity, unit_price, options, note, is_complimentary, complimentary_reason, status, paid_by_log_id')
+      .in('id', input.itemIds);
+
+    if (itemsErr) {
+      return { success: false, error: 'Ürünler sorgulanamadı: ' + itemsErr.message };
+    }
+    if (!items || items.length === 0) {
+      return { success: false, error: 'Ürün bulunamadı' };
+    }
+
+    // Ödenmiş kalemler taşınamaz
+    const movable = items.filter((it) => !it.paid_by_log_id);
+    if (movable.length === 0) {
+      return { success: false, error: 'Seçili ürünler zaten ödenmiş' };
+    }
+
+    // Kaynak siparişler — her biri için ayrı işlem yapacağız
+    const sourceOrderIds = [...new Set(movable.map((it) => it.order_id))];
+
+    // Kaynak siparişlerin bilgilerini al (güvenlik + total güncelleme)
+    const { data: sourceOrders } = await admin
+      .from('orders')
+      .select('id, business_id, table_id, subtotal, total, complimentary_total, payment_status, order_type, source, created_by_cashier')
+      .in('id', sourceOrderIds);
+
+    if (!sourceOrders || sourceOrders.length !== sourceOrderIds.length) {
+      return { success: false, error: 'Kaynak siparişler bulunamadı' };
+    }
+    if (sourceOrders.some((o) => o.business_id !== businessId)) {
+      return { success: false, error: 'Yetkisiz sipariş' };
+    }
+    if (sourceOrders.some((o) => o.payment_status === 'paid')) {
+      return { success: false, error: 'Ödenmiş sipariş varsa bölünemez' };
+    }
+
+    // Yeni siparişin toplamını hesapla
+    let newSubtotal = 0;
+    let newComp = 0;
+    movable.forEach((it) => {
+      const lineTotal = Number(it.unit_price) * it.quantity;
+      if (it.is_complimentary) newComp += lineTotal;
+      else newSubtotal += lineTotal;
+    });
+
+    const firstOrder = sourceOrders[0];
+    const orderType = firstOrder.order_type;
+
+    // Yeni sipariş kaydı
+    const sourceIdsShort = sourceOrderIds.map((id) => id.slice(0, 8)).join(', ');
+    const { data: newOrder, error: newOrderErr } = await admin
+      .from('orders')
+      .insert({
+        business_id: businessId,
+        table_id: input.targetTableId,
+        order_type: orderType,
+        status: 'confirmed',
+        payment_status: 'pending',
+        subtotal: newSubtotal,
+        total: newSubtotal,
+        complimentary_total: newComp,
+        source: 'manual',
+        created_by_cashier: input.cashierId,
+        note: 'Masa Böl (kaynak: ' + sourceIdsShort + ')',
+      })
+      .select('id')
+      .single();
+
+    if (newOrderErr || !newOrder) {
+      return { success: false, error: newOrderErr?.message || 'Yeni sipariş oluşturulamadı' };
+    }
+
+    // Tüm kalemleri yeni siparişe bağla
+    await admin
+      .from('order_items')
+      .update({ order_id: newOrder.id })
+      .in('id', movable.map((it) => it.id));
+
+    // Her kaynak sipariş için total güncellemesi + boş kaldıysa iptal
+    for (const srcOrder of sourceOrders) {
+      const movedFromThis = movable.filter((it) => it.order_id === srcOrder.id);
+      if (movedFromThis.length === 0) continue;
+
+      let removedSubtotal = 0;
+      let removedComp = 0;
+      movedFromThis.forEach((it) => {
+        const lineTotal = Number(it.unit_price) * it.quantity;
+        if (it.is_complimentary) removedComp += lineTotal;
+        else removedSubtotal += lineTotal;
+      });
+
+      const newSrcSubtotal = Math.max(0, Number(srcOrder.subtotal) - removedSubtotal);
+      const newSrcTotal = Math.max(0, Number(srcOrder.total) - removedSubtotal);
+      const newSrcComp = Math.max(0, Number(srcOrder.complimentary_total || 0) - removedComp);
+
+      await admin
+        .from('orders')
+        .update({
+          subtotal: newSrcSubtotal,
+          total: newSrcTotal,
+          complimentary_total: newSrcComp,
+        })
+        .eq('id', srcOrder.id);
+
+      // Kaynak siparişte kalem kaldı mı?
+      const { data: remaining } = await admin
+        .from('order_items')
+        .select('id')
+        .eq('order_id', srcOrder.id);
+
+      if (!remaining || remaining.length === 0) {
+        // Boş kaldı → cancelled
+        await admin
+          .from('orders')
+          .update({ status: 'cancelled', total: 0, subtotal: 0 })
+          .eq('id', srcOrder.id);
+      }
+    }
+
+    // Hedef masa occupied
+    await admin.from('tables').update({ status: 'occupied' }).eq('id', input.targetTableId);
+
+    // Kaynak masalar — başka aktif sipariş yoksa boşalt
+    const sourceTableIds = [...new Set(
+      sourceOrders
+        .map((o) => o.table_id)
+        .filter((tid): tid is string => !!tid && tid !== input.targetTableId)
+    )];
+
+    for (const srcTableId of sourceTableIds) {
+      const [inProc, delivUnpaid] = await Promise.all([
+        admin.from('orders').select('id').eq('business_id', businessId)
+          .eq('table_id', srcTableId)
+          .in('status', ['received', 'confirmed', 'preparing', 'ready', 'on_way']),
+        admin.from('orders').select('id').eq('business_id', businessId)
+          .eq('table_id', srcTableId)
+          .eq('status', 'delivered')
+          .not('payment_status', 'in', '(paid,refunded)'),
+      ]);
+      const otherActive = (inProc.data?.length || 0) + (delivUnpaid.data?.length || 0);
+      if (otherActive === 0) {
+        await admin.from('tables').update({ status: 'available' }).eq('id', srcTableId);
+      }
+    }
+
+    revalidatePath('/kasa');
+    revalidatePath('/panel/pos');
+
+    return {
+      success: true,
+      newOrderId: newOrder.id,
+      movedCount: movable.length,
+    };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Bilinmeyen hata',
+    };
+  }
+}

@@ -10,6 +10,8 @@ import {
 } from '@/lib/actions/stations';
 import { StationFormModal } from './station-form-modal';
 import { AssignProductsModal } from './assign-products-modal';
+import { toast } from '@/components/ui/toast';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 type ProductLite = {
   id: string;
@@ -63,7 +65,7 @@ export function StationsManager({
     const result = await createStation(input);
     setSaving(false);
     if (!result.success || !result.station) {
-      alert(result.error || 'Oluşturulamadı');
+      toast.error(result.error || 'Oluşturulamadı');
       return;
     }
     // Optimistic: state'e ekle, sayfa yenilenmesin
@@ -82,7 +84,7 @@ export function StationsManager({
     const result = await updateStation(stationId, input);
     setSaving(false);
     if (!result.success) {
-      alert(result.error || 'Güncellenemedi');
+      toast.error(result.error || 'Güncellenemedi');
       return;
     }
     // Optimistic: state'i güncelle
@@ -93,18 +95,18 @@ export function StationsManager({
   }
 
   async function handleDelete(stationId: string, name: string) {
-    if (
-      !confirm(
-        `"${name}" istasyonunu silmek istediğinden emin misin?\n\nBu istasyondaki ürünler istasyonsuz kalır.`
-      )
-    ) {
-      return;
-    }
+    const ok = await confirmDialog({
+      title: `"${name}" istasyonunu sil?`,
+      body: 'Bu istasyondaki ürünler istasyonsuz kalır.',
+      tone: 'danger',
+      confirmLabel: 'Sil',
+    });
+    if (!ok) return;
     setSaving(true);
     const result = await deleteStation(stationId);
     setSaving(false);
     if (!result.success) {
-      alert(result.error || 'Silinemedi');
+      toast.error(result.error || 'Silinemedi');
       return;
     }
     // Optimistic: state'ten çıkar, o istasyondaki ürünleri istasyonsuz yap
@@ -166,7 +168,7 @@ export function StationsManager({
 
     // Mini toast-ish alert yerine silent - sadece önemli değişiklikte göster
     if (toAdd.length > 0 || toRemove.length > 0) {
-      alert(msg);
+      toast.error(msg);
     }
     setAssignModal({ open: false, station: null });
   }

@@ -1,14 +1,17 @@
 'use client';
 
 /**
- * Print Queue Listener
+ * Print Queue Listener v2
  *
- * Bu component panelde her zaman aktif olur (layout'a eklenir).
- * Supabase Realtime ile print_jobs tablosunu dinler.
- * Pending job gelince detayını çeker, ESC/POS byte üretir, Bluetooth'a gönderir.
+ * Değişiklikler:
+ * - Otomatik retry (3sn sonra 1 kez daha denenir, başarısız olursa failed)
+ * - Global toast sistemine bağlandı
+ * - Kendi özel toast UI'sı kaldırıldı (artık sağ üstteki ortak sistem kullanılıyor)
+ * - Retry sırasında kullanıcıya "Tekrar deniyor..." bilgisi verilir
+ * - UPDATE listener: retryPrintJob çağrılınca otomatik yakalar
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import {
   getPrintJobDetails,
@@ -25,18 +28,9 @@ import {
   sendToBluetoothPrinter,
   isWebBluetoothSupported,
 } from '@/lib/printer/bluetooth-client';
-
-type JobStatus = {
-  jobId: string;
-  type: 'kitchen' | 'cashier' | 'reprint_kitchen' | 'reprint_cashier' | 'test';
-  printerName: string;
-  status: 'printing' | 'success' | 'failed';
-  errorMessage?: string;
-  timestamp: number;
-};
+import { toast } from '@/components/ui/toast';
 
 export function PrintQueueListener({ businessId }: { businessId: string }) {
-  const [toasts, setToasts] = useState<JobStatus[]>([]);
   const processedJobs = useRef<Set<string>>(new Set());
   const isProcessing = useRef(false);
 
@@ -48,21 +42,14 @@ export function PrintQueueListener({ businessId }: { businessId: string }) {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
 
-    async function processJob(jobId: string) {
-      if (processedJobs.current.has(jobId)) return;
+    async function processJob(jobId: string, isRetry = false) {
+      if (processedJobs.current.has(jobId) && !isRetry) return;
       processedJobs.current.add(jobId);
 
       const result = await getPrintJobDetails(jobId);
       if (!result.success || !result.data) {
         await completePrintJob(jobId, false, result.error || 'Detay alınamadı');
-        pushToast({
-          jobId,
-          type: 'test',
-          printerName: 'Yazıcı',
-          status: 'failed',
-          errorMessage: result.error,
-          timestamp: Date.now(),
-        });
+        toast.error(`Yazdırma detayı alınamadı: ${result.error || 'Bilinmeyen hata'}`);
         return;
       }
 
@@ -71,38 +58,27 @@ export function PrintQueueListener({ businessId }: { businessId: string }) {
 
       // Network yazıcıları Agent işler - tarayıcı karışmasın
       if (printer.connection_type === 'network') {
-        // Agent bu işi yakalayacak - sessizce çıkıyoruz
         return;
       }
 
       // Bluetooth bağlantı yoksa hata
       if (printer.connection_type !== 'bluetooth' || !printer.bluetooth_device_id) {
         await completePrintJob(jobId, false, 'Bluetooth eşleşmesi yok');
-        pushToast({
-          jobId,
-          type: job.job_type,
-          printerName: printer.name,
-          status: 'failed',
-          errorMessage: 'Bluetooth eşleşmesi yok',
-          timestamp: Date.now(),
-        });
+        toast.error(`${printer.name}: Bluetooth eşleşmesi yok`);
         return;
       }
 
-      pushToast({
-        jobId,
-        type: job.job_type,
-        printerName: printer.name,
-        status: 'printing',
-        timestamp: Date.now(),
-      });
+      const jobLabel =
+        job.job_type === 'test'
+          ? 'Test fişi'
+          : job.job_type === 'cashier' || job.job_type === 'reprint_cashier'
+            ? 'Hesap fişi'
+            : 'Mutfak fişi';
 
       // ESC/POS byte üret
       let bytes: Uint8Array;
       try {
         const settings = business.receipt_settings;
-
-        // Değerlendirme QR URL'i — sadece kasa fişinde + sipariş bağlıysa
         const isCashier =
           job.job_type === 'cashier' || job.job_type === 'reprint_cashier';
         const reviewUrl =
@@ -118,17 +94,14 @@ export function PrintQueueListener({ businessId }: { businessId: string }) {
           businessAddress: business.address || undefined,
           customHeader: settings.header_text,
           customFooter: settings.footer_text,
-          // Kasa fişi toggle'ları
           showLogo: settings.show_logo,
           logoUrl: business.logo_url,
           showTagline: settings.show_tagline,
           showPhone: settings.show_phone,
           showAddress: settings.show_address,
-          // Mutfak ayarları
           kitchenBigFont: settings.kitchen_big_font,
           kitchenShowPrices: settings.kitchen_show_prices,
           kitchenShowNoteHighlight: settings.kitchen_show_note_highlight,
-          // Değerlendirme QR
           reviewQrEnabled: settings.review_qr_enabled,
           reviewQrUrl: reviewUrl,
           reviewQrText: settings.review_qr_text,
@@ -157,12 +130,13 @@ export function PrintQueueListener({ businessId }: { businessId: string }) {
           }
         } else {
           await completePrintJob(jobId, false, 'Sipariş verisi yok');
+          toast.error(`${jobLabel}: Sipariş verisi yok`);
           return;
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Fiş oluşturulamadı';
         await completePrintJob(jobId, false, msg);
-        updateToast(jobId, 'failed', msg);
+        toast.error(`${jobLabel}: ${msg}`);
         return;
       }
 
@@ -176,7 +150,6 @@ export function PrintQueueListener({ businessId }: { businessId: string }) {
           bytes
         );
         if (!sendResult.success) break;
-        // Kopyalar arasında küçük bekleme
         if (i < copies - 1) {
           await new Promise((resolve) => setTimeout(resolve, 500));
         }
@@ -184,11 +157,28 @@ export function PrintQueueListener({ businessId }: { businessId: string }) {
 
       if (sendResult.success) {
         await completePrintJob(jobId, true);
-        updateToast(jobId, 'success');
-      } else {
-        await completePrintJob(jobId, false, sendResult.error);
-        updateToast(jobId, 'failed', sendResult.error);
+        if (isRetry) {
+          toast.success(`${jobLabel} · ${printer.name} (2. denemede)`);
+        }
+        // İlk seferde başarıda sessizlik — kullanıcı zaten yazıcıdan görür
+        return;
       }
+
+      // Başarısızlık — retry mantığı
+      const errMsg = sendResult.error || 'Bilinmeyen hata';
+
+      if (!isRetry) {
+        // İlk deneme başarısız → 3 saniye sonra sessizce 1 kez daha dene
+        toast.warn(`${jobLabel} · ${printer.name} · tekrar deniyor…`);
+        setTimeout(() => {
+          processJob(jobId, true);
+        }, 3000);
+        return;
+      }
+
+      // 2. deneme de başarısız — bırak
+      await completePrintJob(jobId, false, errMsg);
+      toast.error(`${jobLabel} · ${printer.name}: ${errMsg}`);
     }
 
     // Pending jobları çek (sayfa açıldığında)
@@ -214,7 +204,7 @@ export function PrintQueueListener({ businessId }: { businessId: string }) {
 
     checkPendingJobs();
 
-    // Realtime: yeni pending job gelince işle
+    // Realtime: INSERT (yeni job) + UPDATE (retry için)
     const channel = supabase
       .channel('print-queue')
       .on(
@@ -232,73 +222,30 @@ export function PrintQueueListener({ businessId }: { businessId: string }) {
           }
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'print_jobs',
+          filter: `business_id=eq.${businessId}`,
+        },
+        (payload) => {
+          const newJob = payload.new as { id: string; status: string };
+          const oldJob = payload.old as { id: string; status: string };
+          // pending'e geri döndüyse (retry action) → işle
+          if (newJob.status === 'pending' && oldJob.status !== 'pending') {
+            processedJobs.current.delete(newJob.id);
+            processJob(newJob.id);
+          }
+        }
+      )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-
-    function pushToast(toast: JobStatus) {
-      setToasts((prev) => [...prev.slice(-4), toast]);
-    }
-
-    function updateToast(jobId: string, status: 'success' | 'failed', errorMessage?: string) {
-      setToasts((prev) =>
-        prev.map((t) => (t.jobId === jobId ? { ...t, status, errorMessage } : t))
-      );
-      // 4 saniye sonra kaldır
-      setTimeout(() => {
-        setToasts((prev) => prev.filter((t) => t.jobId !== jobId));
-      }, 4000);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [businessId]);
 
-  if (toasts.length === 0) return null;
-
-  return (
-    <div
-      className="fixed bottom-4 right-4 z-50 flex flex-col gap-2"
-      style={{ maxWidth: 340 }}
-    >
-      {toasts.map((t) => (
-        <div
-          key={t.jobId}
-          className="rounded-[12px] px-4 py-3 shadow-lg flex items-start gap-3"
-          style={{
-            background:
-              t.status === 'success'
-                ? 'var(--ok, #6B8E4E)'
-                : t.status === 'failed'
-                  ? 'var(--danger, #C4553A)'
-                  : 'var(--ink, #2A1F18)',
-            color: 'var(--paper, #F4EEE2)',
-            animation: 'slideIn 0.25s ease-out',
-          }}
-        >
-          <div style={{ fontSize: 18, lineHeight: 1 }}>
-            {t.status === 'success' ? '✓' : t.status === 'failed' ? '✕' : '🖨'}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-[12px] font-semibold">
-              {t.type === 'test'
-                ? 'Test'
-                : t.type === 'cashier' || t.type === 'reprint_cashier'
-                  ? 'Hesap fişi'
-                  : 'Mutfak fişi'}
-              {' → '}
-              {t.printerName}
-            </div>
-            <div className="text-[11px] opacity-80 mt-0.5">
-              {t.status === 'printing'
-                ? 'Yazdırılıyor…'
-                : t.status === 'success'
-                  ? 'Başarılı'
-                  : t.errorMessage || 'Hata'}
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
+  return null;
 }

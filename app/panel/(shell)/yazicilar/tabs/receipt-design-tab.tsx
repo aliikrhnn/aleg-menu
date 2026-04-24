@@ -9,6 +9,7 @@ import type { ReceiptSettings } from '@/types/database';
 import type { BusinessInfo } from '../printers-manager';
 import type { Printer } from '@/lib/actions/printers';
 import { ReceiptPreview } from '../components/receipt-preview';
+import { toast } from '@/components/ui/toast';
 
 export function ReceiptDesignTab({
   settings,
@@ -53,7 +54,7 @@ export function ReceiptDesignTab({
     const printer =
       previewType === 'cashier' ? cashierPrinters[0] : kitchenPrinters[0];
     if (!printer) {
-      alert(
+      toast.error(
         previewType === 'cashier'
           ? 'Aktif kasa yazıcısı yok'
           : 'Aktif mutfak yazıcısı yok'
@@ -61,7 +62,7 @@ export function ReceiptDesignTab({
       return;
     }
     const r = await requestTestPrint(printer.id, previewType);
-    if (!r.success) alert(r.error || 'Test isteği oluşturulamadı');
+    if (!r.success) toast.error(r.error || 'Test isteği oluşturulamadı');
   }
 
   return (

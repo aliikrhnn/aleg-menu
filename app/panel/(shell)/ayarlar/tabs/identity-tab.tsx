@@ -6,6 +6,7 @@ import type { BusinessSettings } from '@/lib/actions/settings';
 import { Field, Input, Textarea, Card } from '../shared';
 import { AiSloganModal } from '@/components/panel/ai-slogan-modal';
 import { AiMonogramModal } from '@/components/panel/ai-monogram-modal';
+import { toast } from '@/components/ui/toast';
 
 interface Props {
   settings: BusinessSettings;
@@ -37,7 +38,7 @@ export function IdentityTab({
       const file = new File([blob], 'ai-monogram.svg', { type: 'image/svg+xml' });
       onLogoUpload(file);
     } catch (err) {
-      alert('Logo kaydedilemedi: ' + (err instanceof Error ? err.message : 'hata'));
+      toast.error('Logo kaydedilemedi: ' + (err instanceof Error ? err.message : 'hata'));
     }
   }
 

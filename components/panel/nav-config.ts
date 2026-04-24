@@ -11,6 +11,7 @@ export type PanelNavItem = {
   color?: string;
   badge?: string | number;
   comingSoon?: boolean;
+  external?: boolean; // yeni sekmede aç
 };
 
 export type PanelNavGroup = {
@@ -23,7 +24,14 @@ export const PANEL_NAV: PanelNavGroup[] = [
     group: 'GÜNLÜK',
     items: [
       { id: 'dashboard', label: 'Ana Sayfa', href: '/', icon: '◇' },
-      { id: 'pos', label: 'Sipariş & Masa', href: '/pos', icon: '◉' },
+      { id: 'pos', label: 'Sipariş Akışı', href: '/pos', icon: '◉' },
+      {
+        id: 'kasa',
+        label: 'Kasa Uygulaması',
+        href: '/kasa',
+        icon: '₺',
+        external: true,
+      },
     ],
   },
   {
@@ -38,6 +46,7 @@ export const PANEL_NAV: PanelNavGroup[] = [
     items: [
       { id: 'tables', label: 'Masalar', href: '/masalar', icon: '◍' },
       { id: 'stations', label: 'İstasyonlar', href: '/istasyonlar', icon: '⊙' },
+      { id: 'cashiers', label: 'Kasiyerler', href: '/kasiyerler', icon: '👤' },
       { id: 'team', label: 'Ekip', href: '/ekip', icon: '◐', comingSoon: true },
     ],
   },

@@ -9,6 +9,7 @@ import ReactCrop, {
   makeAspectCrop,
 } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
+import { toast } from '@/components/ui/toast';
 
 interface Props {
   imageFile: File;
@@ -56,7 +57,7 @@ export function ProductImageCropModal({ imageFile, onCropped, onClose }: Props) 
 
   async function handleCrop() {
     if (!completedCrop || !imgRef.current) {
-      alert('Lütfen bir alan seç');
+      toast.error('Lütfen bir alan seç');
       return;
     }
 
@@ -99,7 +100,7 @@ export function ProductImageCropModal({ imageFile, onCropped, onClose }: Props) 
       const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
       onCropped(dataUrl, 'image/jpeg');
     } catch (err) {
-      alert('Kırpma hatası: ' + (err instanceof Error ? err.message : 'bilinmeyen'));
+      toast.error('Kırpma hatası: ' + (err instanceof Error ? err.message : 'bilinmeyen'));
     } finally {
       setLoading(false);
     }

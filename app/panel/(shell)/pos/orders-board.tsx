@@ -4,6 +4,15 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import { updateOrderStatus, cancelOrder, getActiveOrders, type ActiveOrder } from '@/lib/actions/pos';
 import { PrintButton } from '@/components/panel/print-button';
+import { PaymentModal } from './payment-modal';
+import { PosTopbar } from './pos-topbar';
+import { playDing as playDingTone, playSuccess } from '@/lib/sounds';
+import { startSyncWorker, stopSyncWorker } from '@/lib/offline/sync-worker';
+import { usePendingCount } from '@/lib/offline/use-pending-count';
+import { cacheOrders, getCachedOrders } from '@/lib/offline/db';
+import { useOnlineStatus } from '@/lib/hooks/use-online-status';
+import { toast } from '@/components/ui/toast';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 interface OrdersBoardProps {
   initialOrders: ActiveOrder[];
@@ -43,24 +52,64 @@ export function OrdersBoard({ initialOrders, businessId }: OrdersBoardProps) {
   const [orders, setOrders] = useState<ActiveOrder[]>(initialOrders);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [busyOrderId, setBusyOrderId] = useState<string | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [paymentOrder, setPaymentOrder] = useState<ActiveOrder | null>(null);
+  const pendingSyncCount = usePendingCount();
+  const { isOnline } = useOnlineStatus();
   const prevOrderIds = useRef<Set<string>>(new Set(initialOrders.map((o) => o.id)));
 
-  // Ses çal (yeni sipariş geldiğinde)
+  // Initial orders'ı cache'le + sync worker başlat
+  useEffect(() => {
+    // Sync worker başlat
+    startSyncWorker(() => {
+      // Bir outbox item işlendiğinde - listeyi yenile
+      getActiveOrders().then((r) => {
+        if (r.success && r.orders) {
+          setOrders(r.orders);
+          cacheOrders(businessId, r.orders as unknown as Array<{ id: string } & Record<string, unknown>>);
+        }
+      });
+    });
+
+    // İlk açılış - initial orders'ı cache'le
+    cacheOrders(businessId, initialOrders as unknown as Array<{ id: string } & Record<string, unknown>>);
+
+    return () => {
+      stopSyncWorker();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [businessId]);
+
+  // Offline'a geçince - cache'den yükle
+  useEffect(() => {
+    if (isOnline) return;
+    let cancelled = false;
+
+    getCachedOrders(businessId).then((cached) => {
+      if (cancelled || cached.length === 0) return;
+      // Cache'den gelen data'yı ActiveOrder'a dönüştür
+      const offlineOrders = cached.map((c) => {
+        const base = c.data as ActiveOrder;
+        // Local değişiklikleri uygula
+        return {
+          ...base,
+          payment_status:
+            c.local_payment_status === 'paid'
+              ? 'paid' as const
+              : base.payment_status,
+        };
+      });
+      setOrders(offlineOrders);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOnline, businessId]);
+
+  // Ses çal (yeni sipariş geldiğinde) - WebAudio API üzerinden
   const playDing = useCallback(() => {
     if (!soundEnabled) return;
-    if (!audioRef.current) {
-      // Base64 inline "ding" sesi (çok kısa, web standardı sine wave)
-      // Daha gerçekçi için sonra /public/sounds/ding.mp3 eklenebilir
-      const audio = new Audio(
-        'data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT..');
-      audioRef.current = audio;
-    }
-    audioRef.current.currentTime = 0;
-    audioRef.current.volume = 0.5;
-    audioRef.current.play().catch(() => {
-      // İlk kullanıcı etkileşimine kadar bazı tarayıcılar ses çalmayı engeller
-    });
+    playDingTone(0.35);
   }, [soundEnabled]);
 
   // Realtime subscription
@@ -90,7 +139,7 @@ export function OrdersBoard({ initialOrders, businessId }: OrdersBoardProps) {
     // Ayrıca periyodik tazele (realtime kopukluklarına karşı)
     const interval = setInterval(() => {
       refreshOrders();
-    }, 20000);
+    }, 8000);
 
     return () => {
       supabase.removeChannel(channel);
@@ -122,7 +171,7 @@ export function OrdersBoard({ initialOrders, businessId }: OrdersBoardProps) {
     setBusyOrderId(null);
 
     if (!result.success) {
-      alert(`Hata: ${result.error}`);
+      toast.error(`Hata: ${result.error}`);
       return;
     }
     // Optimistic update — realtime'ı beklemeden UI güncelle
@@ -134,86 +183,153 @@ export function OrdersBoard({ initialOrders, businessId }: OrdersBoardProps) {
   }
 
   async function handleCancel(orderId: string) {
-    const confirmed = confirm('Bu siparişi iptal etmek istiyor musun? Bu işlem geri alınamaz.');
+    const confirmed = await confirmDialog({
+      title: 'Siparişi iptal et?',
+      body: 'Bu işlem geri alınamaz.',
+      tone: 'danger',
+      confirmLabel: 'İptal Et',
+      cancelLabel: 'Vazgeç',
+    });
     if (!confirmed) return;
     setBusyOrderId(orderId);
     const result = await cancelOrder(orderId);
     setBusyOrderId(null);
     if (!result.success) {
-      alert(`Hata: ${result.error}`);
+      toast.error(`Hata: ${result.error}`);
       return;
     }
     setOrders((prev) => prev.filter((o) => o.id !== orderId));
   }
 
-  // Kolonlarda siparişleri grupla
+  // Yeni siparişleri en üste alarak kolonlara dağıt
   const ordersByColumn = COLUMNS.map((col) => ({
     ...col,
     orders: orders.filter((o) => {
       if (col.key === 'ready') {
         return o.status === 'ready' || o.status === 'on_way';
       }
+      if (col.key === 'preparing') {
+        return o.status === 'preparing' || o.status === 'confirmed';
+      }
       return o.status === col.key;
     }),
   }));
 
+  // Ödenmeyen teslim edilmiş siparişler - "ödeme bekliyor" kolonu gibi
+  const unpaidDelivered = orders.filter(
+    (o) => o.status === 'delivered' && o.payment_status !== 'paid'
+  );
+
+  // Ödenmiş son siparişler — sadece TAMAMLANMIŞ olanlar (delivered+paid)
+  // Hızlı satışta ödeme alındı ama mutfak hazırlıyorsa sipariş hâlâ
+  // "Yeni/Hazırlanıyor/Hazır" kolonunda ödendi rozetiyle kalır.
+  // Mutfak "Teslim Edildi" dediğinde bu bölüme düşer.
+  const paidRecent = orders
+    .filter((o) => o.payment_status === 'paid' && o.status === 'delivered')
+    .sort((a, b) => {
+      if (!a.paid_at || !b.paid_at) return 0;
+      return new Date(b.paid_at).getTime() - new Date(a.paid_at).getTime();
+    });
+
+  const handlePaymentSuccess = (info: { queued?: boolean; online?: boolean }) => {
+    setPaymentOrder(null);
+    playSuccess();
+
+    if (info.queued) {
+      // Offline kaydı - optimistic UI: payment_status'u local'de paid yap
+      setOrders((prev) =>
+        prev.map((o) =>
+          paymentOrder && o.id === paymentOrder.id
+            ? { ...o, payment_status: 'paid' as const }
+            : o
+        )
+      );
+    } else {
+      // Online başarılı - sunucudan güncel listeyi çek
+      getActiveOrders().then((r) => {
+        if (r.success && r.orders) {
+          setOrders(r.orders);
+          cacheOrders(businessId, r.orders as unknown as Array<{ id: string } & Record<string, unknown>>);
+        }
+      });
+    }
+  };
+
   return (
     <div className="flex flex-col h-full">
-      {/* Head */}
-      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-        <div>
-          <div
-            className="text-accent uppercase mb-2"
+      {/* Üst bar - bağlantı, kasa, Z-rapor */}
+      <PosTopbar
+        onRefresh={() => {
+          getActiveOrders().then((r) => {
+            if (r.success && r.orders) {
+              setOrders(r.orders);
+              cacheOrders(businessId, r.orders as unknown as Array<{ id: string } & Record<string, unknown>>);
+            }
+          });
+        }}
+        pendingSyncCount={pendingSyncCount}
+      />
+
+      {/* Alt rozet satırı - aktif sipariş sayısı + ses toggle */}
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+        <div
+          className="text-accent uppercase flex items-center gap-3"
+          style={{
+            fontFamily: 'var(--f-mono)',
+            fontSize: 10,
+            fontWeight: 700,
+            letterSpacing: '0.14em',
+          }}
+        >
+          <span
             style={{
-              fontFamily: 'var(--f-mono)',
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: '0.14em',
+              width: 24,
+              height: 1,
+              background: 'var(--accent)',
+              display: 'inline-block',
             }}
-          >
-            CANLI SİPARİŞLER · {orders.length} AKTİF
-          </div>
-          <h1
-            style={{
-              fontFamily: 'var(--f-serif)',
-              fontStyle: 'italic',
-              fontSize: 38,
-              fontWeight: 400,
-              letterSpacing: '-0.02em',
-              lineHeight: 1.05,
-              color: 'var(--ink)',
-            }}
-          >
-            Sipariş akışı
-          </h1>
+          />
+          SİPARİŞ AKIŞI · {orders.length} AKTİF
+          {unpaidDelivered.length > 0 && (
+            <span
+              className="ml-2 px-2 py-0.5 rounded-full"
+              style={{
+                background: 'color-mix(in srgb, var(--warn) 14%, transparent)',
+                color: 'var(--warn)',
+                letterSpacing: '0.12em',
+              }}
+            >
+              {unpaidDelivered.length} ÖDEME BEKLİYOR
+            </span>
+          )}
         </div>
 
-        {/* Ses switch */}
-        <label className="flex items-center gap-3 cursor-pointer select-none">
+        {/* Ses switch - kompakt */}
+        <label className="flex items-center gap-2 cursor-pointer select-none">
           <span
-            className="text-ink-2 uppercase"
+            className="text-ink-3 uppercase"
             style={{
               fontFamily: 'var(--f-mono)',
-              fontSize: 10,
+              fontSize: 9,
               fontWeight: 700,
               letterSpacing: '0.12em',
             }}
           >
-            SES BİLDİRİMİ
+            {soundEnabled ? '🔔 SES AÇIK' : '🔕 SES KAPALI'}
           </span>
           <button
             type="button"
             onClick={() => setSoundEnabled((s) => !s)}
-            className="relative w-11 h-6 rounded-full transition-colors"
+            className="relative w-9 h-5 rounded-full transition-colors"
             style={{
               background: soundEnabled ? 'var(--olive)' : 'var(--paper-3)',
             }}
             aria-pressed={soundEnabled}
           >
             <span
-              className="absolute top-0.5 left-0 w-5 h-5 rounded-full bg-white shadow-sm transition-transform"
+              className="absolute top-0.5 left-0 w-4 h-4 rounded-full bg-white shadow-sm transition-transform"
               style={{
-                transform: soundEnabled ? 'translateX(22px)' : 'translateX(2px)',
+                transform: soundEnabled ? 'translateX(18px)' : 'translateX(2px)',
               }}
             />
           </button>
@@ -281,6 +397,7 @@ export function OrdersBoard({ initialOrders, businessId }: OrdersBoardProps) {
                     nextAction={col.nextAction}
                     onStatusChange={handleStatusChange}
                     onCancel={handleCancel}
+                    onPayment={setPaymentOrder}
                     busy={busyOrderId === order.id}
                   />
                 ))
@@ -289,6 +406,148 @@ export function OrdersBoard({ initialOrders, businessId }: OrdersBoardProps) {
           </div>
         ))}
       </div>
+
+      {/* Ödeme Bekleyen Siparişler */}
+      {unpaidDelivered.length > 0 && (
+        <div
+          className="mt-4 rounded-[var(--r)] overflow-hidden flex-shrink-0"
+          style={{
+            background: 'var(--card)',
+            border: '1px solid color-mix(in srgb, var(--warn) 30%, var(--line))',
+            borderLeftWidth: 3,
+            borderLeftColor: 'var(--warn)',
+          }}
+        >
+          <div
+            className="px-5 py-3 flex items-center justify-between"
+            style={{
+              background: 'color-mix(in srgb, var(--warn) 8%, var(--card))',
+              borderBottom: '1px solid var(--line)',
+            }}
+          >
+            <div className="flex items-center gap-2">
+              <span
+                className="uppercase"
+                style={{
+                  fontFamily: 'var(--f-mono)',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: '0.14em',
+                  color: 'var(--warn)',
+                }}
+              >
+                ⧗ ÖDEME BEKLİYOR · {unpaidDelivered.length}
+              </span>
+            </div>
+            <div
+              className="text-xs"
+              style={{ color: 'var(--ink-3)', fontStyle: 'italic' }}
+            >
+              Teslim edildi, ödeme alınmadı
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-3">
+            {unpaidDelivered.map((order) => (
+              <OrderCard
+                key={order.id}
+                order={order}
+                accentColor="var(--warn)"
+                onStatusChange={handleStatusChange}
+                onCancel={handleCancel}
+                onPayment={setPaymentOrder}
+                busy={busyOrderId === order.id}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Ödenmiş Son Siparişler (son 2 saat) */}
+      {paidRecent.length > 0 && (
+        <div
+          className="mt-4 rounded-[var(--r)] overflow-hidden flex-shrink-0"
+          style={{
+            background: 'var(--card)',
+            border: '1px solid color-mix(in srgb, var(--ok) 30%, var(--line))',
+            borderLeftWidth: 3,
+            borderLeftColor: 'var(--ok)',
+          }}
+        >
+          <div
+            className="px-5 py-3 flex items-center justify-between"
+            style={{
+              background: 'color-mix(in srgb, var(--ok) 6%, var(--card))',
+              borderBottom: '1px solid var(--line)',
+            }}
+          >
+            <div className="flex items-center gap-2">
+              <span
+                className="uppercase"
+                style={{
+                  fontFamily: 'var(--f-mono)',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: '0.14em',
+                  color: 'var(--ok)',
+                }}
+              >
+                ✓ ÖDEME ALINDI · {paidRecent.length}
+              </span>
+            </div>
+            <div
+              className="text-xs"
+              style={{ color: 'var(--ink-3)', fontStyle: 'italic' }}
+            >
+              Son 2 saat · fiş tekrar basılabilir
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-3">
+            {paidRecent.map((order) => (
+              <OrderCard
+                key={order.id}
+                order={order}
+                accentColor="var(--ok)"
+                onStatusChange={handleStatusChange}
+                onCancel={handleCancel}
+                onPayment={setPaymentOrder}
+                busy={busyOrderId === order.id}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Ödeme Modal */}
+      {paymentOrder && (
+        <PaymentModal
+          open={true}
+          onClose={() => setPaymentOrder(null)}
+          onSuccess={handlePaymentSuccess}
+          onItemsChanged={async () => {
+            // Kalem ikramı sonrası refresh — paymentOrder'u güncel veriyle değiştir
+            const r = await getActiveOrders();
+            if (r.success && r.orders) {
+              setOrders(r.orders);
+              const refreshed = r.orders.find((o) => o.id === paymentOrder.id);
+              if (refreshed) setPaymentOrder(refreshed);
+            }
+          }}
+          order={{
+            id: paymentOrder.id,
+            order_no: paymentOrder.order_no,
+            total: paymentOrder.total,
+            table_label: paymentOrder.table_label,
+            items: paymentOrder.items.map((it) => ({
+              id: it.id,
+              product_name: it.product_name,
+              quantity: it.quantity,
+              unit_price: it.unit_price,
+              is_complimentary: it.is_complimentary,
+              complimentary_reason: it.complimentary_reason,
+            })),
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -303,6 +562,7 @@ function OrderCard({
   nextAction,
   onStatusChange,
   onCancel,
+  onPayment,
   busy,
 }: {
   order: ActiveOrder;
@@ -310,6 +570,7 @@ function OrderCard({
   nextAction?: { status: OrderStatus; label: string };
   onStatusChange: (id: string, status: OrderStatus) => void;
   onCancel: (id: string) => void;
+  onPayment: (order: ActiveOrder) => void;
   busy: boolean;
 }) {
   // Hydration mismatch'i önlemek için: ilk render'da boş, useEffect ile set
@@ -328,10 +589,21 @@ function OrderCard({
       ? 'GEL-AL'
       : 'PAKET';
 
+  const isPaid = order.payment_status === 'paid';
+  // Tamamen bitmiş: ödendi + teslim edildi. Sadece fiş tekrar bas.
+  const isCompleted = isPaid && order.status === 'delivered';
+
   return (
     <article
       className="bg-paper border border-line rounded-[14px] overflow-hidden transition-opacity"
-      style={{ opacity: busy ? 0.5 : 1 }}
+      style={{
+        opacity: busy ? 0.5 : isCompleted ? 0.75 : 1,
+        background: isCompleted
+          ? 'color-mix(in srgb, var(--ok) 3%, var(--paper))'
+          : isPaid
+          ? 'color-mix(in srgb, var(--ok) 2%, var(--paper))'
+          : 'var(--paper)',
+      }}
     >
       {/* Card head */}
       <div
@@ -366,15 +638,38 @@ function OrderCard({
           </span>
         </div>
 
-        <span
-          className="text-ink-3"
-          style={{
-            fontFamily: 'var(--f-mono)',
-            fontSize: 10,
-          }}
-        >
-          {elapsed}
-        </span>
+        <div className="flex items-center gap-1.5">
+          {order.payment_status === 'paid' && (
+            <span
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded uppercase"
+              style={{
+                fontFamily: 'var(--f-mono)',
+                fontSize: 8,
+                fontWeight: 700,
+                letterSpacing: '0.14em',
+                background: 'color-mix(in srgb, var(--ok) 14%, transparent)',
+                color: 'var(--ok)',
+              }}
+              title={
+                order.payment_method
+                  ? `${order.payment_method} ile ödendi`
+                  : 'Ödendi'
+              }
+            >
+              <span style={{ fontSize: 9 }}>✓</span>
+              ÖDENDİ
+            </span>
+          )}
+          <span
+            className="text-ink-3"
+            style={{
+              fontFamily: 'var(--f-mono)',
+              fontSize: 10,
+            }}
+          >
+            {elapsed}
+          </span>
+        </div>
       </div>
 
       {/* Customer info (varsa) */}
@@ -451,26 +746,52 @@ function OrderCard({
           <PrintButton
             orderId={order.id}
             mode="reprint_kitchen"
-            variant="icon"
-            label="Mutfağa tekrar yazdır"
+            variant="secondary"
+            label="Mutfağa Tekrar"
+            className="!h-8 !px-3 !text-[11px]"
           />
           <PrintButton
             orderId={order.id}
             mode="cashier"
             variant="secondary"
-            label="Hesap"
+            label={isPaid ? 'Fiş Tekrar Bas' : 'Hesap Bas'}
             className="!h-8 !px-3 !text-[11px]"
           />
-          <button
-            onClick={() => onCancel(order.id)}
-            disabled={busy}
-            className="text-ink-3 hover:text-accent text-xs disabled:opacity-30 transition-colors px-2"
-            style={{ fontFamily: 'var(--f-mono)', letterSpacing: '0.06em' }}
-            title="Siparişi iptal et"
-          >
-            İPTAL
-          </button>
-          {nextAction && (
+          {/* İPTAL butonu — sadece ödenmemişse */}
+          {!isPaid && (
+            <button
+              onClick={() => onCancel(order.id)}
+              disabled={busy}
+              className="text-ink-3 hover:text-accent text-xs disabled:opacity-30 transition-colors px-2"
+              style={{ fontFamily: 'var(--f-mono)', letterSpacing: '0.06em' }}
+              title="Siparişi iptal et"
+            >
+              İPTAL
+            </button>
+          )}
+
+          {/* Hesap Al butonu - ödeme modali açar - ödenmemişse */}
+          {!isPaid &&
+            order.payment_status !== 'refunded' && (
+              <button
+                onClick={() => onPayment(order)}
+                disabled={busy}
+                className="px-3 py-1.5 rounded-[10px] text-xs font-semibold transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-50 flex items-center gap-1"
+                style={{
+                  background: 'var(--accent)',
+                  color: '#FAF5EA',
+                  letterSpacing: '0.02em',
+                }}
+                title="Hesap al (ödeme)"
+              >
+                <span>₺</span>
+                <span>Hesap Al</span>
+              </button>
+            )}
+
+          {/* Next action — tamamen bitmiş olmayanlar için görünür */}
+          {/* Ödenmiş ama hazırlanıyor olanlarda da kasiyer 'Hazır' / 'Teslim Edildi' diyebilmeli */}
+          {nextAction && !isCompleted && (
             <button
               onClick={() => onStatusChange(order.id, nextAction.status)}
               disabled={busy}

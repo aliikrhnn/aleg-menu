@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { getRecentPrintJobs, type PrintJob } from '@/lib/actions/printers';
 import { getAgents, deleteAgent, type AgentInfo } from '@/lib/actions/agents';
 import type { Printer } from '@/lib/actions/printers';
+import { toast } from '@/components/ui/toast';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 export function AdvancedTab({ printers }: { printers: Printer[] }) {
   const [jobs, setJobs] = useState<PrintJob[]>([]);
@@ -33,10 +35,16 @@ export function AdvancedTab({ printers }: { printers: Printer[] }) {
   }
 
   async function handleDeleteAgent(id: string) {
-    if (!confirm("Bu agent kaydı silinecek. Bilgisayardaki agent artık çalışmaz. Emin misin?")) return;
+    const ok = await confirmDialog({
+      title: 'Agent kaydını sil?',
+      body: 'Bilgisayardaki agent artık çalışmaz.',
+      tone: 'danger',
+      confirmLabel: 'Sil',
+    });
+    if (!ok) return;
     const r = await deleteAgent(id);
     if (!r.success) {
-      alert(r.error || 'Silinemedi');
+      toast.error(r.error || 'Silinemedi');
       return;
     }
     setAgents((prev) => prev.filter((a) => a.id !== id));
@@ -87,7 +95,7 @@ export function AdvancedTab({ printers }: { printers: Printer[] }) {
               href="#agent-kurulum"
               onClick={(e) => {
                 e.preventDefault();
-                alert(
+                toast.error(
                   'Agent kurulumu için:\n\n' +
                     '1. aleg-printer-agent.zip dosyasını kafedeki Windows PC\'ye kopyala\n' +
                     '2. Klasörü aç, kur.bat dosyasına çift tıkla\n' +

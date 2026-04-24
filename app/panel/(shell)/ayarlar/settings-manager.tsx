@@ -15,14 +15,18 @@ import { ContactTab } from './tabs/contact-tab';
 import { HoursTab } from './tabs/hours-tab';
 import { OrdersTab } from './tabs/orders-tab';
 import { PreviewTab } from './tabs/preview-tab';
+import { AdminPinTab } from './tabs/admin-pin-tab';
+import { toast } from '@/components/ui/toast';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
-type TabId = 'identity' | 'contact' | 'hours' | 'orders' | 'preview';
+type TabId = 'identity' | 'contact' | 'hours' | 'orders' | 'admin-pin' | 'preview';
 
 const TABS: Array<{ id: TabId; label: string; icon: string }> = [
   { id: 'identity', label: 'Kimlik', icon: 'sparkle' },
   { id: 'contact', label: 'İletişim', icon: 'phone' },
   { id: 'hours', label: 'Çalışma Saatleri', icon: 'clock' },
   { id: 'orders', label: 'Sipariş', icon: 'cart' },
+  { id: 'admin-pin', label: 'Kasa PIN', icon: 'lock' },
   { id: 'preview', label: 'Önizleme', icon: 'eye' },
 ];
 
@@ -70,11 +74,11 @@ export function SettingsManager({ initialSettings, rootDomain }: Props) {
   // Logo yükle
   async function handleLogoUpload(file: File) {
     if (file.size > 5 * 1024 * 1024) {
-      alert('Logo en fazla 5MB olabilir');
+      toast.error('Logo en fazla 5MB olabilir');
       return;
     }
     if (!file.type.match(/^image\/(png|jpeg|webp|svg\+xml)$/)) {
-      alert('Sadece PNG, JPG, WebP ve SVG desteklenir');
+      toast.error('Sadece PNG, JPG, WebP ve SVG desteklenir');
       return;
     }
 
@@ -87,7 +91,7 @@ export function SettingsManager({ initialSettings, rootDomain }: Props) {
       setSaving(false);
 
       if (!result.success) {
-        alert(result.error || 'Logo yüklenemedi');
+        toast.error(result.error || 'Logo yüklenemedi');
         return;
       }
 
@@ -105,13 +109,18 @@ export function SettingsManager({ initialSettings, rootDomain }: Props) {
   }
 
   async function handleLogoRemove() {
-    if (!confirm('Logoyu kaldırmak istediğinden emin misin?')) return;
+    const ok = await confirmDialog({
+      title: 'Logoyu kaldır?',
+      tone: 'warn',
+      confirmLabel: 'Kaldır',
+    });
+    if (!ok) return;
     setSaving(true);
     const result = await removeBusinessLogo();
     setSaving(false);
 
     if (!result.success) {
-      alert(result.error || 'Logo kaldırılamadı');
+      toast.error(result.error || 'Logo kaldırılamadı');
       return;
     }
 
@@ -145,7 +154,7 @@ export function SettingsManager({ initialSettings, rootDomain }: Props) {
     setSaving(false);
 
     if (!result.success) {
-      alert(result.error || 'Kaydedilemedi');
+      toast.error(result.error || 'Kaydedilemedi');
       return;
     }
 
@@ -383,6 +392,8 @@ export function SettingsManager({ initialSettings, rootDomain }: Props) {
             onChangeCurrency={(c: string) => patch('currency', c)}
           />
         )}
+
+        {tab === 'admin-pin' && <AdminPinTab />}
 
         {tab === 'preview' && (
           <PreviewTab settings={settings} />

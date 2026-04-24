@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import { PrintButton } from '@/components/panel/print-button';
+import { toast } from '@/components/ui/toast';
 import {
   advanceKitchenOrder,
   getKitchenOrders,
@@ -125,7 +126,7 @@ export function KitchenBoard({
     setBusyOrderId(null);
 
     if (!result.success) {
-      alert(`Hata: ${result.error}`);
+      toast.error(`Hata: ${result.error}`);
       return;
     }
 

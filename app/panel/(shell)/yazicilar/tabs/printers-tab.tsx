@@ -11,6 +11,8 @@ import {
 } from '@/lib/actions/printers';
 import { PrinterFormModal } from '../components/printer-form-modal';
 import type { StationLite } from '../printers-manager';
+import { toast } from '@/components/ui/toast';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 export function PrintersTab({
   printers,
@@ -32,7 +34,7 @@ export function PrintersTab({
     const r = await createPrinter(input);
     setSaving(false);
     if (!r.success || !r.printer) {
-      alert(r.error || 'Oluşturulamadı');
+      toast.error(r.error || 'Oluşturulamadı');
       return;
     }
     setPrinters((prev) => [...prev, r.printer!]);
@@ -45,7 +47,7 @@ export function PrintersTab({
     const r = await updatePrinter(modal.printer.id, input);
     setSaving(false);
     if (!r.success) {
-      alert(r.error || 'Güncellenemedi');
+      toast.error(r.error || 'Güncellenemedi');
       return;
     }
     const stationData = input.station_id
@@ -69,12 +71,17 @@ export function PrintersTab({
   }
 
   async function handleDelete(p: Printer) {
-    if (!confirm(`"${p.name}" yazıcısını silmek istediğinden emin misin?`)) return;
+    const ok = await confirmDialog({
+      title: `"${p.name}" yazıcısını sil?`,
+      tone: 'danger',
+      confirmLabel: 'Sil',
+    });
+    if (!ok) return;
     setSaving(true);
     const r = await deletePrinter(p.id);
     setSaving(false);
     if (!r.success) {
-      alert(r.error || 'Silinemedi');
+      toast.error(r.error || 'Silinemedi');
       return;
     }
     setPrinters((prev) => prev.filter((x) => x.id !== p.id));
@@ -83,7 +90,7 @@ export function PrintersTab({
   async function handleTestPrint(p: Printer) {
     const r = await requestTestPrint(p.id);
     if (!r.success) {
-      alert(r.error || 'Test isteği oluşturulamadı');
+      toast.error(r.error || 'Test isteği oluşturulamadı');
       return;
     }
     // Print queue listener arka planda yakalar, toast gösterir

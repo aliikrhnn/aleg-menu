@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { toast } from '@/components/ui/toast';
 
 export function LoginForm() {
   const router = useRouter();
@@ -151,8 +152,9 @@ export function LoginForm() {
             }}
             onClick={(e) => {
               e.preventDefault();
-              alert(
-                'Şifre sıfırlama için destek ekibiyle iletişime geç: destek@alegstudio.com'
+              toast.info(
+                'Şifre sıfırlama için destek ekibiyle iletişime geç: destek@alegstudio.com',
+                8000
               );
             }}
           >

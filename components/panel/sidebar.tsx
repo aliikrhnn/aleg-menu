@@ -215,16 +215,24 @@ export function PanelSidebar({
               const isOnPanelSubdomain =
                 typeof window !== 'undefined' &&
                 window.location.hostname.startsWith('panel.');
-              const resolvedHref = isOnPanelSubdomain
+
+              // external: yeni sekmede açılacak (/kasa gibi ayrı app)
+              const external = 'external' in item && item.external;
+              // External linkler her zaman absolute '/kasa' gibi, panel prefix EKLEME
+              const resolvedHref = external
                 ? item.href
-                : item.href === '/'
-                  ? '/panel'
-                  : `/panel${item.href}`;
+                : isOnPanelSubdomain
+                  ? item.href
+                  : item.href === '/'
+                    ? '/panel'
+                    : `/panel${item.href}`;
 
               return (
                 <Link
                   key={item.id}
                   href={disabled ? '#' : resolvedHref}
+                  target={external ? '_blank' : undefined}
+                  rel={external ? 'noopener' : undefined}
                   onClick={(e) => {
                     if (disabled) e.preventDefault();
                   }}
@@ -272,6 +280,14 @@ export function PanelSidebar({
                   {!collapsed && (
                     <>
                       <span className="flex-1 truncate">{item.label}</span>
+                      {external && !disabled && (
+                        <span
+                          className="text-[10px] text-ink-3 opacity-70"
+                          aria-hidden
+                        >
+                          ↗
+                        </span>
+                      )}
                       {disabled && (
                         <span
                           className="text-[9px] text-ink-3 uppercase bg-paper-3 px-1.5 py-0.5 rounded"

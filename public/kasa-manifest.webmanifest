@@ -1,0 +1,19 @@
+{
+  "name": "Aleg Kasa",
+  "short_name": "Aleg Kasa",
+  "description": "Aleg kasa uygulaması - ödeme, sipariş, kasa yönetimi",
+  "start_url": "/kasa",
+  "scope": "/kasa",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#2A1F18",
+  "background_color": "#F4EEE2",
+  "lang": "tr",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "any",
+      "type": "image/x-icon"
+    }
+  ]
+}

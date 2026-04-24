@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { createCategory, updateCategory, deleteCategory, type CategoryInput } from '@/lib/actions/menu';
 import { aiGenerateCategoryDescription, aiTranslateText } from '@/lib/actions/ai';
 import type { LocalizedText } from '@/types/database';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 type CategoryWithCount = {
   id: string;
@@ -81,7 +82,13 @@ export function CategoryList({ categories }: Props) {
   };
 
   const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`"${name}" kategorisini silmek istediğine emin misin?`)) return;
+    const ok = await confirmDialog({
+      title: `"${name}" kategorisini sil?`,
+      body: 'Bu kategori altındaki ürünler de etkilenebilir.',
+      tone: 'danger',
+      confirmLabel: 'Sil',
+    });
+    if (!ok) return;
     setError(null);
     startTransition(async () => {
       const res = await deleteCategory(id);

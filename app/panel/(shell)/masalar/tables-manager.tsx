@@ -16,6 +16,8 @@ import {
 } from '@/lib/actions/tables';
 import { QrPickerModal } from '@/components/panel/qr-picker-modal';
 import type { QrPdfItem } from '@/lib/utils/qr-pdf';
+import { toast } from '@/components/ui/toast';
+import { confirmDialog } from '@/components/ui/confirm-dialog';
 
 interface TablesManagerProps {
   initialTables: TableItem[];
@@ -364,7 +366,7 @@ export function TablesManager({
                   updateTableOptimistic(tableId, { status: next });
                   const result = await setTableStatus(tableId, next);
                   if (!result.success) {
-                    alert(result.error);
+                    toast.error(result.error);
                     updateTableOptimistic(tableId, { status: currentStatus });
                   }
                 }}
@@ -409,7 +411,7 @@ export function TablesManager({
                   updateTableOptimistic(tableId, { status: next });
                   const result = await setTableStatus(tableId, next);
                   if (!result.success) {
-                    alert(result.error);
+                    toast.error(result.error);
                     updateTableOptimistic(tableId, { status: currentStatus });
                   }
                 }}
@@ -431,7 +433,7 @@ export function TablesManager({
                 updateTableOptimistic(tableId, { status: next });
                 const result = await setTableStatus(tableId, next);
                 if (!result.success) {
-                  alert(result.error);
+                  toast.error(result.error);
                   updateTableOptimistic(tableId, { status: currentStatus });
                 }
               }}
@@ -495,14 +497,20 @@ export function TablesManager({
                 refreshData();
               }}
               onDelete={async (tableId) => {
-                if (!confirm('Bu masa silinecek. Devam edilsin mi?')) return;
+                const ok = await confirmDialog({
+                  title: 'Masayı sil?',
+                  body: 'Bu masa kalıcı olarak silinecek.',
+                  tone: 'danger',
+                  confirmLabel: 'Sil',
+                });
+                if (!ok) return;
                 // Optimistic sil
                 const backup = tables.find((t) => t.id === tableId);
                 removeTableOptimistic(tableId);
                 setModal({ kind: 'closed' });
                 const result = await deleteTable(tableId);
                 if (!result.success) {
-                  alert(result.error);
+                  toast.error(result.error);
                   if (backup) addTableOptimistic(backup); // geri koy
                 } else {
                   refreshData();
@@ -542,13 +550,19 @@ export function TablesManager({
                 refreshData();
               }}
               onDelete={async (zoneId) => {
-                if (!confirm('Bu bölge silinecek. Masalar bölgesiz kalacak.')) return;
+                const ok = await confirmDialog({
+                  title: 'Bölgeyi sil?',
+                  body: 'Bu bölgedeki masalar bölgesiz kalacak.',
+                  tone: 'danger',
+                  confirmLabel: 'Sil',
+                });
+                if (!ok) return;
                 const backup = zones.find((z) => z.id === zoneId);
                 removeZoneOptimistic(zoneId);
                 setModal({ kind: 'closed' });
                 const result = await deleteZone(zoneId);
                 if (!result.success) {
-                  alert(result.error);
+                  toast.error(result.error);
                   if (backup) addZoneOptimistic(backup);
                 } else {
                   refreshData();
