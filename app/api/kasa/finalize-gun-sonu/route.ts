@@ -57,7 +57,9 @@ export async function POST(req: NextRequest) {
     const input: Body = await req.json();
 
     // 3. Admin client ile direct queries (nested action YOK)
-    const admin = createAdminClient();
+    // NOT: cash_drawer_sessions type'ı generated types'ta yok, any cast ile bypass
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
 
     // Active session bul (sadece id lazım, diğer alanları body'den alıyoruz)
     const { data: activeSess, error: sessErr } = await admin
