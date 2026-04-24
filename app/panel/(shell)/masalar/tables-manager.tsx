@@ -366,7 +366,7 @@ export function TablesManager({
                   updateTableOptimistic(tableId, { status: next });
                   const result = await setTableStatus(tableId, next);
                   if (!result.success) {
-                    toast.error(result.error);
+                    toast.error(result.error || "İşlem başarısız");
                     updateTableOptimistic(tableId, { status: currentStatus });
                   }
                 }}
@@ -411,7 +411,7 @@ export function TablesManager({
                   updateTableOptimistic(tableId, { status: next });
                   const result = await setTableStatus(tableId, next);
                   if (!result.success) {
-                    toast.error(result.error);
+                    toast.error(result.error || "İşlem başarısız");
                     updateTableOptimistic(tableId, { status: currentStatus });
                   }
                 }}
@@ -433,7 +433,7 @@ export function TablesManager({
                 updateTableOptimistic(tableId, { status: next });
                 const result = await setTableStatus(tableId, next);
                 if (!result.success) {
-                  toast.error(result.error);
+                  toast.error(result.error || "İşlem başarısız");
                   updateTableOptimistic(tableId, { status: currentStatus });
                 }
               }}
@@ -510,7 +510,7 @@ export function TablesManager({
                 setModal({ kind: 'closed' });
                 const result = await deleteTable(tableId);
                 if (!result.success) {
-                  toast.error(result.error);
+                  toast.error(result.error || "İşlem başarısız");
                   if (backup) addTableOptimistic(backup); // geri koy
                 } else {
                   refreshData();
@@ -562,7 +562,7 @@ export function TablesManager({
                 setModal({ kind: 'closed' });
                 const result = await deleteZone(zoneId);
                 if (!result.success) {
-                  toast.error(result.error);
+                  toast.error(result.error || "İşlem başarısız");
                   if (backup) addZoneOptimistic(backup);
                 } else {
                   refreshData();

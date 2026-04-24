@@ -1,4 +1,4 @@
-# TYPE FİX v2 — CATEGORY REFS
+# TYPE FİX v3 — TABLES MANAGER TOAST
 
 TypeScript build hatası.
 
@@ -7,35 +7,34 @@ TypeScript build hatası.
 ## 🐛 Sorun
 
 ```
-Type error: Argument of type 'HTMLElement | null' is not assignable to parameter of type 'HTMLDivElement | null'.
-Property 'align' is missing in type 'HTMLElement' but required in type 'HTMLDivElement'.
+Type error: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
 ```
 
-`categoryRefs` Map'i `HTMLDivElement` bekliyor ama ref callback `<section>` element'ine bağlanıyor → `<section>` `HTMLElement` döner, `HTMLDivElement` değil.
+`toast.error(result.error)` çağrılırken `result.error` `string | undefined` ama `toast.error` `string` bekliyor.
 
 ## ✅ Fix
 
-Map type'ı `HTMLElement` olarak genişlet:
+Fallback metin ekle (5 yerde aynı pattern):
 
 ```diff
-- const categoryRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
-+ const categoryRefs = useRef<Map<string, HTMLElement | null>>(new Map());
+- toast.error(result.error);
++ toast.error(result.error || "İşlem başarısız");
 ```
 
-`HTMLElement` tüm HTML element'lerinin base type'ı, hem `<div>` hem `<section>` uyar. Scroll-spy için gereken tüm metodlar (`getBoundingClientRect`, `offsetTop` vs) `HTMLElement`'te zaten var.
+Satır 369, 414, 436, 513, 565 — hepsi aynı pattern, sed ile toplu düzeltildi.
 
 ## 📦 Dosya
 
 ```
-app/menu/[slug]/menu-view.tsx
+app/panel/(shell)/masalar/tables-manager.tsx
 ```
 
 ## 🚀 Push
 
 ```powershell
 git add .
-git commit -m "fix(types): categoryRefs accept HTMLElement for section"
+git commit -m "fix(types): tables-manager toast error fallback"
 git push
 ```
 
-Build geçmeli.
+Bu kesin geçmeli. 🤞
