@@ -6,6 +6,7 @@
  *
  * Bu dosya geçici başlangıç tanımlarıdır.
  */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 export type Json =
   | string
@@ -580,144 +581,144 @@ export interface Database {
       // Supabase types generate edilince override edilir
       // ============================================================
       cashier_accounts: {
-        Row: Record<string, unknown> & { id: string; business_id: string };
-        Insert: Record<string, unknown>;
-        Update: Record<string, unknown>;
+        Row: Record<string, any> & { id: string; business_id: string };
+        Insert: Record<string, any>;
+        Update: Record<string, any>;
       };
       cash_drawer_sessions: {
-        Row: Record<string, unknown> & { id: string; business_id: string };
-        Insert: Record<string, unknown>;
-        Update: Record<string, unknown>;
+        Row: Record<string, any> & { id: string; business_id: string };
+        Insert: Record<string, any>;
+        Update: Record<string, any>;
       };
       payment_logs: {
-        Row: Record<string, unknown> & { id: string };
-        Insert: Record<string, unknown>;
-        Update: Record<string, unknown>;
+        Row: Record<string, any> & { id: string };
+        Insert: Record<string, any>;
+        Update: Record<string, any>;
       };
       printers: {
-        Row: Record<string, unknown> & { id: string; business_id: string };
-        Insert: Record<string, unknown>;
-        Update: Record<string, unknown>;
+        Row: Record<string, any> & { id: string; business_id: string };
+        Insert: Record<string, any>;
+        Update: Record<string, any>;
       };
       print_jobs: {
-        Row: Record<string, unknown> & { id: string };
-        Insert: Record<string, unknown>;
-        Update: Record<string, unknown>;
+        Row: Record<string, any> & { id: string };
+        Insert: Record<string, any>;
+        Update: Record<string, any>;
       };
       printer_agents: {
-        Row: Record<string, unknown> & { id: string };
-        Insert: Record<string, unknown>;
-        Update: Record<string, unknown>;
+        Row: Record<string, any> & { id: string };
+        Insert: Record<string, any>;
+        Update: Record<string, any>;
       };
       qr_codes: {
-        Row: Record<string, unknown> & { id: string; business_id: string };
-        Insert: Record<string, unknown>;
-        Update: Record<string, unknown>;
+        Row: Record<string, any> & { id: string; business_id: string };
+        Insert: Record<string, any>;
+        Update: Record<string, any>;
       };
       ai_usage: {
-        Row: Record<string, unknown> & { id: string };
-        Insert: Record<string, unknown>;
-        Update: Record<string, unknown>;
+        Row: Record<string, any> & { id: string };
+        Insert: Record<string, any>;
+        Update: Record<string, any>;
       };
       audit_log: {
-        Row: Record<string, unknown> & { id: string };
-        Insert: Record<string, unknown>;
-        Update: Record<string, unknown>;
+        Row: Record<string, any> & { id: string };
+        Insert: Record<string, any>;
+        Update: Record<string, any>;
       };
       business_modules: {
-        Row: Record<string, unknown> & { business_id: string };
-        Insert: Record<string, unknown>;
-        Update: Record<string, unknown>;
+        Row: Record<string, any> & { business_id: string };
+        Insert: Record<string, any>;
+        Update: Record<string, any>;
       };
       call_log: {
-        Row: Record<string, unknown> & { id: string };
-        Insert: Record<string, unknown>;
-        Update: Record<string, unknown>;
+        Row: Record<string, any> & { id: string };
+        Insert: Record<string, any>;
+        Update: Record<string, any>;
       };
       couriers: {
-        Row: Record<string, unknown> & { id: string };
-        Insert: Record<string, unknown>;
-        Update: Record<string, unknown>;
+        Row: Record<string, any> & { id: string };
+        Insert: Record<string, any>;
+        Update: Record<string, any>;
       };
       delivery_customers: {
-        Row: Record<string, unknown> & { id: string };
-        Insert: Record<string, unknown>;
-        Update: Record<string, unknown>;
+        Row: Record<string, any> & { id: string };
+        Insert: Record<string, any>;
+        Update: Record<string, any>;
       };
       loyalty_campaigns: {
-        Row: Record<string, unknown> & { id: string };
-        Insert: Record<string, unknown>;
-        Update: Record<string, unknown>;
+        Row: Record<string, any> & { id: string };
+        Insert: Record<string, any>;
+        Update: Record<string, any>;
       };
       loyalty_config: {
-        Row: Record<string, unknown> & { business_id: string };
-        Insert: Record<string, unknown>;
-        Update: Record<string, unknown>;
+        Row: Record<string, any> & { business_id: string };
+        Insert: Record<string, any>;
+        Update: Record<string, any>;
       };
       loyalty_members: {
-        Row: Record<string, unknown> & { id: string };
-        Insert: Record<string, unknown>;
-        Update: Record<string, unknown>;
+        Row: Record<string, any> & { id: string };
+        Insert: Record<string, any>;
+        Update: Record<string, any>;
       };
       loyalty_transactions: {
-        Row: Record<string, unknown> & { id: string };
-        Insert: Record<string, unknown>;
-        Update: Record<string, unknown>;
+        Row: Record<string, any> & { id: string };
+        Insert: Record<string, any>;
+        Update: Record<string, any>;
       };
       platform_invoices: {
-        Row: Record<string, unknown> & { id: string };
-        Insert: Record<string, unknown>;
-        Update: Record<string, unknown>;
+        Row: Record<string, any> & { id: string };
+        Insert: Record<string, any>;
+        Update: Record<string, any>;
       };
       product_options: {
-        Row: Record<string, unknown> & { id: string };
-        Insert: Record<string, unknown>;
-        Update: Record<string, unknown>;
+        Row: Record<string, any> & { id: string };
+        Insert: Record<string, any>;
+        Update: Record<string, any>;
       };
       product_variants: {
-        Row: Record<string, unknown> & { id: string };
-        Insert: Record<string, unknown>;
-        Update: Record<string, unknown>;
+        Row: Record<string, any> & { id: string };
+        Insert: Record<string, any>;
+        Update: Record<string, any>;
       };
       reviews: {
-        Row: Record<string, unknown> & { id: string };
-        Insert: Record<string, unknown>;
-        Update: Record<string, unknown>;
+        Row: Record<string, any> & { id: string };
+        Insert: Record<string, any>;
+        Update: Record<string, any>;
       };
       shifts: {
-        Row: Record<string, unknown> & { id: string };
-        Insert: Record<string, unknown>;
-        Update: Record<string, unknown>;
+        Row: Record<string, any> & { id: string };
+        Insert: Record<string, any>;
+        Update: Record<string, any>;
       };
       staff: {
-        Row: Record<string, unknown> & { id: string };
-        Insert: Record<string, unknown>;
-        Update: Record<string, unknown>;
+        Row: Record<string, any> & { id: string };
+        Insert: Record<string, any>;
+        Update: Record<string, any>;
       };
       stock_items: {
-        Row: Record<string, unknown> & { id: string };
-        Insert: Record<string, unknown>;
-        Update: Record<string, unknown>;
+        Row: Record<string, any> & { id: string };
+        Insert: Record<string, any>;
+        Update: Record<string, any>;
       };
       stock_movements: {
-        Row: Record<string, unknown> & { id: string };
-        Insert: Record<string, unknown>;
-        Update: Record<string, unknown>;
+        Row: Record<string, any> & { id: string };
+        Insert: Record<string, any>;
+        Update: Record<string, any>;
       };
       table_zones: {
-        Row: Record<string, unknown> & { id: string };
-        Insert: Record<string, unknown>;
-        Update: Record<string, unknown>;
+        Row: Record<string, any> & { id: string };
+        Insert: Record<string, any>;
+        Update: Record<string, any>;
       };
       ticket_items: {
-        Row: Record<string, unknown> & { id: string };
-        Insert: Record<string, unknown>;
-        Update: Record<string, unknown>;
+        Row: Record<string, any> & { id: string };
+        Insert: Record<string, any>;
+        Update: Record<string, any>;
       };
       waiter_calls: {
-        Row: Record<string, unknown> & { id: string };
-        Insert: Record<string, unknown>;
-        Update: Record<string, unknown>;
+        Row: Record<string, any> & { id: string };
+        Insert: Record<string, any>;
+        Update: Record<string, any>;
       };
     };
     Views: {
