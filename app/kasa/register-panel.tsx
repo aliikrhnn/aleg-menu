@@ -2439,7 +2439,7 @@ function RegisterContent({
                                 lineHeight: 1.4,
                               }}
                             >
-                              "{call.note}"
+                              &ldquo;{call.note}&rdquo;
                             </div>
                           )}
                         </div>
