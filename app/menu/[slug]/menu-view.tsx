@@ -122,6 +122,22 @@ export function MenuView({ business, categories, products, qrTable }: Props) {
   const [cartDrawerOpen, setCartDrawerOpen] = useState(false);
   const [toast, setToast] = useState<{ name: string; ts: number } | null>(null);
 
+  // Sepet butonu pozisyonu - arc animasyonu için
+  const cartButtonRef = useRef<HTMLButtonElement | null>(null);
+  // Sepete uçan item'lar (arc animasyon)
+  const [flyingItems, setFlyingItems] = useState<
+    Array<{
+      id: string;
+      startX: number;
+      startY: number;
+      endX: number;
+      endY: number;
+      emoji: string;
+    }>
+  >([]);
+  // Sepet badge "pop" animasyonu trigger
+  const [badgeBump, setBadgeBump] = useState(0);
+
   // Scroll-spy: hangi kategori görünürde
   const [scrollY, setScrollY] = useState(0);
   // Kategori scroll navigation için ref'ler
@@ -260,7 +276,42 @@ export function MenuView({ business, categories, products, qrTable }: Props) {
     });
     // Sepeti otomatik açma - sadece toast göster
     showToast(p);
+    // Badge pop animasyonu
+    setBadgeBump((n) => n + 1);
+    // Haptic feedback (mobile)
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      try {
+        navigator.vibrate(8);
+      } catch {
+        // yoksay
+      }
+    }
   };
+
+  // Sepete uçan emoji animasyonu - butonun pozisyonundan sepete arc çizer
+  const flyToCart = useCallback((startEl: HTMLElement, p: Product) => {
+    const cartBtn = cartButtonRef.current;
+    if (!cartBtn) return;
+    const startRect = startEl.getBoundingClientRect();
+    const cartRect = cartBtn.getBoundingClientRect();
+    const id = `fly-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const emoji = isValidEmojiIcon(p.hero_icon)
+      ? (p.hero_icon as string)
+      : '+';
+    const newItem = {
+      id,
+      startX: startRect.left + startRect.width / 2,
+      startY: startRect.top + startRect.height / 2,
+      endX: cartRect.left + cartRect.width / 2,
+      endY: cartRect.top + cartRect.height / 2,
+      emoji,
+    };
+    setFlyingItems((items) => [...items, newItem]);
+    // 800ms sonra sil (animasyon süresi)
+    setTimeout(() => {
+      setFlyingItems((items) => items.filter((x) => x.id !== id));
+    }, 800);
+  }, []);
 
   // Modal'dan onaylı ürün ekle
   const addConfiguredProduct = (
@@ -668,7 +719,10 @@ export function MenuView({ business, categories, products, qrTable }: Props) {
         <FeaturedHeroCarousel
           products={featured}
           lang={lang}
-          onAdd={(p) => addToCart(p)}
+          onAdd={(p, el) => {
+            flyToCart(el, p);
+            addToCart(p);
+          }}
         />
       )}
 
@@ -746,7 +800,10 @@ export function MenuView({ business, categories, products, qrTable }: Props) {
                       key={p.id}
                       product={p}
                       lang={lang}
-                      onAdd={() => addToCart(p)}
+                      onAdd={(el) => {
+                        flyToCart(el, p);
+                        addToCart(p);
+                      }}
                       animationDelay={i * 25}
                     />
                   ))}
@@ -845,7 +902,10 @@ export function MenuView({ business, categories, products, qrTable }: Props) {
                 key={p.id}
                 product={p}
                 lang={lang}
-                onAdd={() => addToCart(p)}
+                onAdd={(el) => {
+                  flyToCart(el, p);
+                  addToCart(p);
+                }}
                 animationDelay={i * 25}
               />
             ))}
@@ -883,19 +943,36 @@ export function MenuView({ business, categories, products, qrTable }: Props) {
       {cartCount > 0 && (
         <div className="fixed left-0 right-0 bottom-0 z-50 px-4 pb-4 pt-2 bg-gradient-to-t from-paper to-transparent">
           <button
-            onClick={() => setCartDrawerOpen(true)}
+            ref={cartButtonRef}
+            onClick={() => {
+              setCartDrawerOpen(true);
+              // Haptic
+              if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+                try {
+                  navigator.vibrate(8);
+                } catch {
+                  // yoksay
+                }
+              }
+            }}
             className="w-full h-14 rounded-[14px] bg-accent text-card flex items-center justify-between px-4 shadow-lg active:scale-[0.99] transition-transform"
             style={{
               boxShadow: '0 12px 32px rgba(196,85,58,0.4), 0 4px 12px rgba(196,85,58,0.2)',
               color: '#FAF5EA',
+              animation: 'menu-cart-bar-in 380ms cubic-bezier(0.34, 1.56, 0.64, 1)',
             }}
           >
             <span className="flex items-center gap-2.5">
               <span
+                key={badgeBump}
                 className="w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold"
                 style={{
                   background: 'rgba(255,248,236,0.2)',
                   fontFamily: 'var(--f-mono)',
+                  animation:
+                    badgeBump > 0
+                      ? 'menu-badge-pop 360ms cubic-bezier(0.34, 1.56, 0.64, 1)'
+                      : undefined,
                 }}
               >
                 {cartCount}
@@ -906,7 +983,12 @@ export function MenuView({ business, categories, products, qrTable }: Props) {
             </span>
             <span
               className="font-bold"
-              style={{ fontFamily: 'var(--f-mono)', fontSize: 14 }}
+              style={{
+                fontFamily: 'var(--f-serif)',
+                fontStyle: 'italic',
+                fontSize: 18,
+                letterSpacing: '-0.02em',
+              }}
             >
               {money(cartTotal, lang)}
             </span>
@@ -1009,6 +1091,53 @@ export function MenuView({ business, categories, products, qrTable }: Props) {
           }
         }
       `}</style>
+
+      {/* ============ FLYING CART ITEMS (arc animasyon) ============ */}
+      {flyingItems.map((item) => {
+        const dx = item.endX - item.startX;
+        const dy = item.endY - item.startY;
+        return (
+          <div
+            key={item.id}
+            className="fixed pointer-events-none z-[100] flex items-center justify-center"
+            style={{
+              left: item.startX,
+              top: item.startY,
+              width: 44,
+              height: 44,
+              marginLeft: -22,
+              marginTop: -22,
+              borderRadius: 22,
+              background: 'var(--accent)',
+              color: '#FAF5EA',
+              fontSize: item.emoji.length === 1 ? 20 : 22,
+              fontWeight: 700,
+              boxShadow:
+                '0 6px 16px -4px color-mix(in srgb, var(--accent) 60%, transparent)',
+              animation: `fly-${item.id} 700ms cubic-bezier(0.55, -0.1, 0.55, 1) forwards`,
+            }}
+          >
+            {item.emoji}
+            <style jsx>{`
+              @keyframes fly-${item.id} {
+                0% {
+                  transform: translate(0, 0) scale(1);
+                  opacity: 1;
+                }
+                30% {
+                  transform: translate(${dx * 0.3}px, ${dy * 0.15}px)
+                    scale(1.1);
+                  opacity: 1;
+                }
+                100% {
+                  transform: translate(${dx}px, ${dy}px) scale(0.2);
+                  opacity: 0;
+                }
+              }
+            `}</style>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -1024,7 +1153,7 @@ function ProductRow({
 }: {
   product: Product;
   lang: Lang;
-  onAdd: () => void;
+  onAdd: (el: HTMLElement) => void;
   animationDelay?: number;
 }) {
   const isOut = product.status === 'soldout';
@@ -1212,7 +1341,7 @@ function ProductRow({
         </span>
 
         <button
-          onClick={onAdd}
+          onClick={(e) => onAdd(e.currentTarget)}
           disabled={isOut}
           className="rounded-full flex items-center justify-center font-bold transition-all active:scale-90 disabled:opacity-30 disabled:cursor-not-allowed"
           style={{
@@ -1660,7 +1789,7 @@ function FeaturedHeroCarousel({
 }: {
   products: Product[];
   lang: Lang;
-  onAdd: (p: Product) => void;
+  onAdd: (p: Product, el: HTMLElement) => void;
 }) {
   const [active, setActive] = useState(0);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -1777,7 +1906,7 @@ function FeaturedHeroCarousel({
             key={p.id}
             product={p}
             lang={lang}
-            onAdd={() => onAdd(p)}
+            onAdd={(el) => onAdd(p, el)}
             active={idx === active}
           />
         ))}
@@ -1820,7 +1949,7 @@ function FeaturedHeroCard({
 }: {
   product: Product;
   lang: Lang;
-  onAdd: () => void;
+  onAdd: (el: HTMLElement) => void;
   active: boolean;
 }) {
   const isOut = product.status === 'soldout';
@@ -1994,7 +2123,7 @@ function FeaturedHeroCard({
         </div>
 
         <button
-          onClick={onAdd}
+          onClick={(e) => onAdd(e.currentTarget)}
           disabled={isOut}
           className="rounded-full flex items-center justify-center transition-all active:scale-90 disabled:opacity-40 flex-shrink-0"
           style={{

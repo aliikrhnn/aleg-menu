@@ -160,7 +160,7 @@ export function CartDrawer({
         className="bg-paper w-full sm:max-w-[480px] sm:rounded-[22px] rounded-t-[22px] border border-line relative max-h-[92vh] flex flex-col"
         style={{
           boxShadow: '0 4px 10px rgba(42,31,24,0.1), 0 30px 60px -20px rgba(42,31,24,0.25)',
-          animation: 'cdSlideUp 0.3s ease',
+          animation: 'cdSlideUp 0.45s cubic-bezier(0.34, 1.56, 0.64, 1)',
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -548,7 +548,7 @@ export function CartDrawer({
           @keyframes cdSlideUp {
             from {
               opacity: 0;
-              transform: translateY(20px);
+              transform: translateY(60%);
             }
             to {
               opacity: 1;
