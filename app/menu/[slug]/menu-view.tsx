@@ -1100,41 +1100,32 @@ export function MenuView({ business, categories, products, qrTable }: Props) {
           <div
             key={item.id}
             className="fixed pointer-events-none z-[100] flex items-center justify-center"
-            style={{
-              left: item.startX,
-              top: item.startY,
-              width: 44,
-              height: 44,
-              marginLeft: -22,
-              marginTop: -22,
-              borderRadius: 22,
-              background: 'var(--accent)',
-              color: '#FAF5EA',
-              fontSize: item.emoji.length === 1 ? 20 : 22,
-              fontWeight: 700,
-              boxShadow:
-                '0 6px 16px -4px color-mix(in srgb, var(--accent) 60%, transparent)',
-              animation: `fly-${item.id} 700ms cubic-bezier(0.55, -0.1, 0.55, 1) forwards`,
-            }}
+            style={
+              {
+                left: item.startX,
+                top: item.startY,
+                width: 44,
+                height: 44,
+                marginLeft: -22,
+                marginTop: -22,
+                borderRadius: 22,
+                background: 'var(--accent)',
+                color: '#FAF5EA',
+                fontSize: item.emoji.length === 1 ? 20 : 22,
+                fontWeight: 700,
+                boxShadow:
+                  '0 6px 16px -4px color-mix(in srgb, var(--accent) 60%, transparent)',
+                // CSS variable ile animasyon — keyframes globals.css'te tanımlı
+                ['--fly-dx' as string]: `${dx}px`,
+                ['--fly-dy' as string]: `${dy}px`,
+                ['--fly-mid-x' as string]: `${dx * 0.3}px`,
+                ['--fly-mid-y' as string]: `${dy * 0.15}px`,
+                animation:
+                  'menu-fly-to-cart 700ms cubic-bezier(0.55, -0.1, 0.55, 1) forwards',
+              } as React.CSSProperties
+            }
           >
             {item.emoji}
-            <style jsx>{`
-              @keyframes fly-${item.id} {
-                0% {
-                  transform: translate(0, 0) scale(1);
-                  opacity: 1;
-                }
-                30% {
-                  transform: translate(${dx * 0.3}px, ${dy * 0.15}px)
-                    scale(1.1);
-                  opacity: 1;
-                }
-                100% {
-                  transform: translate(${dx}px, ${dy}px) scale(0.2);
-                  opacity: 0;
-                }
-              }
-            `}</style>
           </div>
         );
       })}
