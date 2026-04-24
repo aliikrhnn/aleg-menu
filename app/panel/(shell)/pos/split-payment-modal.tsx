@@ -40,14 +40,14 @@ type PaidRecord = {
 export function SplitPaymentModal({
   order,
   discountAmount,
-  discountReason,
+  discountReason: _discountReason,
   tipAmount,
   onClose,
   onAllPaid,
 }: Props) {
   const [mode, setMode] = useState<SplitMode>('equal');
   const [payments, setPayments] = useState<PaidRecord[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 

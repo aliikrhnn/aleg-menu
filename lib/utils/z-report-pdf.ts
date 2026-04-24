@@ -803,6 +803,14 @@ export async function generateZReportPdf(
     const rowH = 8;
     const neededH = 10 + report.by_station.length * rowH + 4;
 
+    // Sayfa taşma kontrolü
+    if (y + neededH > 270) {
+      pdf.addPage();
+      setFill(pdf, COLORS.paper);
+      pdf.rect(0, 0, PAGE_W, 297, 'F');
+      y = MARGIN;
+    }
+
     drawSectionLabel(pdf, MARGIN, y, 'ISTASYONA GORE SATIS');
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(8);

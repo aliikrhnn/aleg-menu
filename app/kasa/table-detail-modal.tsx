@@ -1361,7 +1361,7 @@ function SplitItemsPicker({
         subtitle={`${selectedIds.size} kalem nereye taşınsın?`}
         currentTableId=""
         filter="all"
-        onPick={(tableId, tableName, _isOccupied) => {
+        onPick={(tableId, tableName) => {
           onConfirm(Array.from(selectedIds), tableId, tableName);
         }}
         onClose={() => setPickingTable(false)}

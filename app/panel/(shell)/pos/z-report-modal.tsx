@@ -28,7 +28,13 @@ const METHOD_COLORS: Record<string, string> = {
   other: 'var(--ink-3)',
 };
 
-export function ZReportModal({ open, onClose, businessName, businessAddress, businessLogoUrl }: Props) {
+export function ZReportModal({
+  open,
+  onClose,
+  businessName: _businessName,
+  businessAddress: _businessAddress,
+  businessLogoUrl: _businessLogoUrl,
+}: Props) {
   const [report, setReport] = useState<ZReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

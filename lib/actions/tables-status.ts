@@ -116,7 +116,7 @@ export async function getTablesWithStatus(): Promise<{
 
     // 4) Yeni/hazır kalem kontrolü için item status'ları
     const orderIds = (orders || []).map((o) => o.id);
-    let itemsMap = new Map<string, { hasNew: boolean; hasReady: boolean }>();
+    const itemsMap = new Map<string, { hasNew: boolean; hasReady: boolean }>();
     if (orderIds.length > 0) {
       const { data: items } = await admin
         .from('order_items')

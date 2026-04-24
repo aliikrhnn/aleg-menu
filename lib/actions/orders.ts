@@ -193,6 +193,7 @@ export async function submitOrder(input: SubmitOrderInput): Promise<SubmitOrderR
         subtotal,
         total: subtotal,
         note: input.customer_note?.slice(0, 500) || null,
+        source: 'qr', // QR menü kaynak — kasiyer/rapor breakdown için
       })
       .select('id')
       .single();

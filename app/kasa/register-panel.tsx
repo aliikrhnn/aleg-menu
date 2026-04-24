@@ -21,7 +21,7 @@
  * 12. Büyük CTA: PDF İndir
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useOnlineStatus } from '@/lib/hooks/use-online-status';
 import { useCashierSession } from '@/lib/cashier-session';
 import {
@@ -190,7 +190,7 @@ function RegisterContent({ onLockRequest }: { onLockRequest: () => void }) {
   const [reportError, setReportError] = useState<string | null>(null);
   const [showDevMenu, setShowDevMenu] = useState(false);
   // Dashboard için sabit "bugün" aralığı. Wizard kendi range'ini seçer.
-  const range: DaySummaryRange = { preset: 'today' };
+  const range: DaySummaryRange = useMemo(() => ({ preset: 'today' }), []);
   // Wizard → Preview sıralaması
   const [wizardOpen, setWizardOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);

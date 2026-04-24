@@ -1,7 +1,13 @@
 'use client';
 /* eslint-disable @next/next/no-img-element */
 
-import { useState, useMemo, useEffect } from 'react';
+import {
+  useState,
+  useMemo,
+  useEffect,
+  useRef,
+  useCallback,
+} from 'react';
 import type { LocalizedText } from '@/types/database';
 import { CartDrawer } from './cart-drawer';
 
@@ -116,6 +122,52 @@ export function MenuView({ business, categories, products, qrTable }: Props) {
   const [cartDrawerOpen, setCartDrawerOpen] = useState(false);
   const [toast, setToast] = useState<{ name: string; ts: number } | null>(null);
 
+  // Scroll-spy: hangi kategori görünürde
+  const [scrollY, setScrollY] = useState(0);
+  // Kategori scroll navigation için ref'ler
+  const categoryRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
+  // Scroll handler - sticky header + scroll-spy
+  useEffect(() => {
+    const onScroll = () => {
+      setScrollY(window.scrollY);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  // Scroll-spy: viewport'a en yakın kategori
+  useEffect(() => {
+    if (search) return; // aramadayken scroll-spy kapalı
+    // 180px offset (sticky header altı)
+    const offsetY = 180;
+    let closest: { id: string; dist: number } | null = null;
+    categoryRefs.current.forEach((el, id) => {
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const dist = Math.abs(rect.top - offsetY);
+      if (rect.top - offsetY <= 0 && (!closest || dist < closest.dist)) {
+        closest = { id, dist };
+      }
+    });
+    if (closest && (closest as { id: string }).id !== activeCat) {
+      setActiveCat((closest as { id: string }).id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scrollY, search]);
+
+  // Kategori chip'ine tıklama → smooth scroll
+  const scrollToCategory = useCallback((id: string) => {
+    const el = categoryRefs.current.get(id);
+    if (!el) {
+      setActiveCat(id);
+      return;
+    }
+    const offset = 170; // sticky header
+    const top = el.getBoundingClientRect().top + window.scrollY - offset;
+    window.scrollTo({ top, behavior: 'smooth' });
+    setActiveCat(id);
+  }, []);
+
   function showToast(product: Product) {
     const name =
       typeof product.name === 'object' && product.name !== null
@@ -147,6 +199,18 @@ export function MenuView({ business, categories, products, qrTable }: Props) {
     }
     return products.filter((p) => p.category_id === activeCat);
   }, [search, products, activeCat, lang]);
+
+  // Tüm kategoriler için ürün grupları (scroll-spy için sıralı)
+  const productsByCategory = useMemo(() => {
+    const map = new Map<string, Product[]>();
+    categories.forEach((c) => {
+      map.set(
+        c.id,
+        products.filter((p) => p.category_id === c.id)
+      );
+    });
+    return map;
+  }, [categories, products]);
 
   // Featured ürünler (sadece arama olmadığında)
   const featured = useMemo(() => {
@@ -260,7 +324,7 @@ export function MenuView({ business, categories, products, qrTable }: Props) {
     [cart, products, lang]
   );
 
-  const activeCategory = categories.find((c) => c.id === activeCat);
+  // activeCategory artık kullanılmıyor (scroll-spy sections ile değişti)
 
   if (categories.length === 0) {
     return (
@@ -288,80 +352,184 @@ export function MenuView({ business, categories, products, qrTable }: Props) {
   }
 
   return (
-    <div data-theme="warm" className="min-h-screen bg-paper text-ink pb-24">
-      {/* ============ HERO + HEADER ============ */}
-      <div className="px-5 pt-5 pb-3">
-        <div className="flex items-start justify-between gap-3 mb-4">
-          <div className="min-w-0 flex-1">
-            {/* AÇIK pill + MASA rozeti */}
-            <div className="flex items-center gap-2 mb-2 flex-wrap">
-              <div className="flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-ok animate-pulse" />
-                <span
-                  className="text-ink-3 uppercase"
-                  style={{
-                    fontFamily: 'var(--f-mono)',
-                    fontSize: 9,
-                    fontWeight: 700,
-                    letterSpacing: '0.14em',
-                  }}
-                >
-                  {business.city ? `${business.city} · ` : ''}
-                  {lang === 'tr' ? 'AÇIK' : 'OPEN'}
-                </span>
-              </div>
+    <div data-theme="warm" className="min-h-screen bg-paper text-ink pb-24 relative overflow-x-hidden">
+      {/* ============ HERO ARKA PLAN GRADIENT ============ */}
+      <div
+        className="absolute inset-x-0 top-0 pointer-events-none"
+        style={{
+          height: 420,
+          background:
+            'radial-gradient(ellipse 80% 60% at 20% 0%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 70%)',
+          zIndex: 0,
+        }}
+      />
 
-              {qrTable && (
+      {/* ============ HERO — Sinematik Giriş ============ */}
+      <div
+        className="relative px-5 pt-6 pb-4"
+        style={{
+          // Hero scroll ile saydamlaşır
+          opacity: Math.max(0, 1 - scrollY / 300),
+          transform: `translateY(${Math.min(scrollY * 0.15, 30)}px)`,
+        }}
+      >
+        {/* AÇIK pill + MASA rozeti (üst satır) */}
+        <div
+          className="flex items-center gap-2 mb-3 flex-wrap"
+          style={{
+            animation: 'menu-fade-in 400ms ease-out',
+          }}
+        >
+          <div className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-ok animate-pulse" />
+            <span
+              className="text-ink-3 uppercase"
+              style={{
+                fontFamily: 'var(--f-mono)',
+                fontSize: 9,
+                fontWeight: 700,
+                letterSpacing: '0.14em',
+              }}
+            >
+              {business.city ? `${business.city} · ` : ''}
+              {lang === 'tr' ? 'AÇIK' : 'OPEN'}
+            </span>
+          </div>
+
+          {qrTable && (
+            <div
+              className="inline-flex items-center gap-1.5 h-6 pl-2.5 pr-3 rounded-full relative overflow-hidden"
+              style={{
+                background:
+                  'color-mix(in srgb, var(--accent) 14%, transparent)',
+                border:
+                  '1px solid color-mix(in srgb, var(--accent) 35%, transparent)',
+                animation: 'menu-table-glow 2.8s ease-in-out infinite',
+              }}
+            >
+              <svg
+                width="10"
+                height="10"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="var(--accent)"
+                strokeWidth="2.5"
+              >
+                <polyline
+                  points="20 6 9 17 4 12"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              <span
+                className="uppercase"
+                style={{
+                  fontFamily: 'var(--f-mono)',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: '0.12em',
+                  color: 'var(--accent)',
+                }}
+              >
+                {qrTable.name.toUpperCase()}
+              </span>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-start justify-between gap-3">
+          {/* Sol: Logo + İsim + Selamlama */}
+          <div className="min-w-0 flex-1">
+            {/* Logo veya inisyal */}
+            <div
+              className="flex items-center gap-3 mb-2"
+              style={{
+                animation: 'menu-slide-up 450ms ease-out 60ms both',
+              }}
+            >
+              {business.logo_url ? (
                 <div
-                  className="inline-flex items-center gap-1.5 h-5 pl-2 pr-2.5 rounded-full"
+                  className="w-14 h-14 rounded-[14px] overflow-hidden flex-shrink-0"
                   style={{
-                    background: 'color-mix(in srgb, var(--accent) 12%, transparent)',
-                    border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)',
+                    border: '1px solid var(--line)',
+                    background: 'var(--card)',
                   }}
                 >
-                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2.5">
-                    <polyline points="20 6 9 17 4 12" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
+                  <img
+                    src={business.logo_url}
+                    alt={business.name}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              ) : (
+                <div
+                  className="w-14 h-14 rounded-[14px] flex items-center justify-center flex-shrink-0"
+                  style={{
+                    background:
+                      'color-mix(in srgb, var(--accent) 12%, var(--paper-2))',
+                    border:
+                      '1px solid color-mix(in srgb, var(--accent) 25%, var(--line))',
+                  }}
+                >
                   <span
-                    className="uppercase"
                     style={{
-                      fontFamily: 'var(--f-mono)',
-                      fontSize: 9,
-                      fontWeight: 700,
-                      letterSpacing: '0.12em',
+                      fontFamily: 'var(--f-serif)',
+                      fontStyle: 'italic',
+                      fontSize: 32,
+                      fontWeight: 400,
                       color: 'var(--accent)',
+                      lineHeight: 1,
                     }}
                   >
-                    {qrTable.name.toUpperCase()}
+                    {business.name.charAt(0)}
                   </span>
                 </div>
               )}
+
+              {/* İşletme ismi */}
+              <div className="min-w-0">
+                <h1
+                  style={{
+                    fontFamily: 'var(--f-serif)',
+                    fontStyle: 'italic',
+                    fontSize: 26,
+                    fontWeight: 400,
+                    letterSpacing: '-0.025em',
+                    lineHeight: 1.05,
+                    color: 'var(--ink)',
+                  }}
+                  className="truncate"
+                >
+                  {business.name}
+                </h1>
+                <div
+                  className="text-ink-3 text-[13px] mt-0.5 truncate"
+                  style={{ fontFamily: 'var(--f-sans)' }}
+                >
+                  {greeting(lang)}
+                </div>
+              </div>
             </div>
-
-            {/* Selamlama */}
-            <div className="text-ink-3 text-sm mb-1">{greeting(lang)}</div>
-
-            {/* Hero başlık */}
-            <h1
-              style={{
-                fontFamily: 'var(--f-serif)',
-                fontStyle: 'italic',
-                fontSize: 32,
-                fontWeight: 400,
-                letterSpacing: '-0.025em',
-                lineHeight: 1.05,
-              }}
-              className="text-ink"
-            >
-              {lang === 'tr' ? 'Ne içersin?' : "What'll it be?"}
-            </h1>
           </div>
 
-          {/* Sağ: Hesap + Dil */}
-          <div className="flex flex-col items-end gap-2 flex-shrink-0">
+          {/* Sağ: Dil + Hesap */}
+          <div
+            className="flex flex-col items-end gap-2 flex-shrink-0"
+            style={{
+              animation: 'menu-fade-in 500ms ease-out 120ms both',
+            }}
+          >
             <div className="flex items-center gap-1 bg-paper-2 rounded-full p-0.5">
-              <LangButton current={lang} value="tr" onClick={() => setLang('tr')} />
-              <LangButton current={lang} value="en" onClick={() => setLang('en')} />
+              <LangButton
+                current={lang}
+                value="tr"
+                onClick={() => setLang('tr')}
+              />
+              <LangButton
+                current={lang}
+                value="en"
+                onClick={() => setLang('en')}
+              />
             </div>
             <button
               className="w-9 h-9 rounded-full bg-paper-2 border border-line flex items-center justify-center text-ink-2 hover:bg-paper-3 transition-colors"
@@ -372,8 +540,56 @@ export function MenuView({ business, categories, products, qrTable }: Props) {
           </div>
         </div>
 
+        {/* Büyük başlık - mesaj */}
+        <div
+          className="mt-5"
+          style={{
+            animation: 'menu-slide-up 500ms ease-out 180ms both',
+          }}
+        >
+          <h2
+            style={{
+              fontFamily: 'var(--f-serif)',
+              fontStyle: 'italic',
+              fontSize: 'clamp(28px, 8vw, 40px)',
+              fontWeight: 400,
+              letterSpacing: '-0.028em',
+              lineHeight: 1.02,
+              color: 'var(--ink)',
+            }}
+          >
+            {lang === 'tr' ? 'Ne içersin,' : "What'll"}
+            <br />
+            <span style={{ color: 'var(--accent)' }}>
+              {lang === 'tr' ? 'bugün?' : 'it be today?'}
+            </span>
+          </h2>
+        </div>
+      </div>
+
+      {/* ============ STICKY SEARCH + MODE TABS ============ */}
+      <div
+        className="sticky top-0 z-30 px-5 pt-3 pb-3"
+        style={{
+          background:
+            scrollY > 80
+              ? 'color-mix(in srgb, var(--paper) 85%, transparent)'
+              : 'transparent',
+          backdropFilter: scrollY > 80 ? 'blur(14px) saturate(1.3)' : 'none',
+          WebkitBackdropFilter:
+            scrollY > 80 ? 'blur(14px) saturate(1.3)' : 'none',
+          borderBottom:
+            scrollY > 80
+              ? '1px solid color-mix(in srgb, var(--line) 50%, transparent)'
+              : '1px solid transparent',
+          transition: 'background 200ms, border-color 200ms',
+        }}
+      >
         {/* Arama kutusu */}
-        <div className="flex items-center gap-2 px-3 py-2.5 bg-card border border-line rounded-[12px] mb-3">
+        <div
+          className="flex items-center gap-2 px-3 bg-card border border-line rounded-[12px] mb-2.5"
+          style={{ height: 44 }}
+        >
           <SearchIcon />
           <input
             value={search}
@@ -383,23 +599,29 @@ export function MenuView({ business, categories, products, qrTable }: Props) {
             style={{ fontFamily: 'var(--f-sans)' }}
           />
           {search && (
-            <button onClick={() => setSearch('')} className="text-ink-3 text-sm">
+            <button
+              onClick={() => setSearch('')}
+              className="text-ink-3 text-sm w-6 h-6 flex items-center justify-center rounded-full hover:bg-paper-2"
+              aria-label={lang === 'tr' ? 'Temizle' : 'Clear'}
+            >
               ✕
             </button>
           )}
         </div>
 
         {/* Mode toggle */}
-        <div className="flex gap-2">
-          {([
-            { id: 'dinein', tr: 'Masada', en: 'Dine-in' },
-            { id: 'pickup', tr: 'Al götür', en: 'Pickup' },
-            { id: 'delivery', tr: 'Paket', en: 'Delivery' },
-          ] as const).map((m) => (
+        <div className="flex gap-1.5 mb-2.5">
+          {(
+            [
+              { id: 'dinein', tr: 'Masada', en: 'Dine-in' },
+              { id: 'pickup', tr: 'Al götür', en: 'Pickup' },
+              { id: 'delivery', tr: 'Paket', en: 'Delivery' },
+            ] as const
+          ).map((m) => (
             <button
               key={m.id}
               onClick={() => setMode(m.id)}
-              className={`flex-1 h-10 rounded-[10px] text-xs font-semibold transition-all ${
+              className={`flex-1 h-9 rounded-[10px] text-xs font-semibold transition-all active:scale-[0.97] ${
                 mode === m.id
                   ? 'bg-ink text-paper'
                   : 'bg-card border border-line text-ink-2 hover:bg-paper-2'
@@ -410,124 +632,229 @@ export function MenuView({ business, categories, products, qrTable }: Props) {
             </button>
           ))}
         </div>
+
+        {/* Kategori chip'leri - scroll-spy (arama yokken) */}
+        {!search && categories.length > 0 && (
+          <div
+            className="flex gap-1.5 overflow-x-auto scrollbar-hide -mx-5 px-5"
+            style={{ scrollbarWidth: 'none' }}
+          >
+            {categories.map((c) => {
+              const active = c.id === activeCat;
+              return (
+                <button
+                  key={c.id}
+                  onClick={() => scrollToCategory(c.id)}
+                  className={`flex-shrink-0 px-3 h-8 rounded-full text-xs font-semibold transition-all whitespace-nowrap inline-flex items-center gap-1.5 active:scale-95 ${
+                    active
+                      ? 'bg-ink text-paper'
+                      : 'bg-card border border-line text-ink-2 hover:bg-paper-2'
+                  }`}
+                  style={{ fontFamily: 'var(--f-sans)' }}
+                >
+                  {isValidEmojiIcon(c.hero_icon) && (
+                    <span className="text-sm">{c.hero_icon}</span>
+                  )}
+                  {tt(c.name, lang)}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
-      {/* ============ FEATURED RAIL ============ */}
+      {/* ============ FEATURED HERO CAROUSEL ============ */}
       {!search && featured.length > 0 && (
-        <div className="mb-4">
-          <div className="px-5 mb-2 flex items-baseline justify-between">
+        <FeaturedHeroCarousel
+          products={featured}
+          lang={lang}
+          onAdd={(p) => addToCart(p)}
+        />
+      )}
+
+      {/* ============ KATEGORİ BÖLÜMLERİ (scroll-spy) ============ */}
+      {!search ? (
+        <div className="relative z-10">
+          {categories.map((c, idx) => {
+            const catProds = productsByCategory.get(c.id) || [];
+            if (catProds.length === 0) return null;
+            return (
+              <section
+                key={c.id}
+                ref={(el) => {
+                  categoryRefs.current.set(c.id, el);
+                }}
+                className="px-4 mb-8"
+                style={{
+                  scrollMarginTop: 170,
+                }}
+              >
+                {/* Kategori başlık */}
+                <div className="px-1 mb-3">
+                  <div className="flex items-baseline gap-2 mb-0.5">
+                    {isValidEmojiIcon(c.hero_icon) && (
+                      <span className="text-xl">{c.hero_icon}</span>
+                    )}
+                    <h3
+                      style={{
+                        fontFamily: 'var(--f-serif)',
+                        fontStyle: 'italic',
+                        fontSize: 26,
+                        fontWeight: 400,
+                        letterSpacing: '-0.025em',
+                        lineHeight: 1.05,
+                        color: 'var(--ink)',
+                      }}
+                    >
+                      {tt(c.name, lang)}
+                    </h3>
+                    <span
+                      className="text-ink-3 ml-auto"
+                      style={{
+                        fontFamily: 'var(--f-mono)',
+                        fontSize: 10,
+                        letterSpacing: '0.06em',
+                      }}
+                    >
+                      {catProds.length}{' '}
+                      {lang === 'tr' ? 'ürün' : 'items'}
+                    </span>
+                  </div>
+                  {c.description && tt(c.description, lang) && (
+                    <p
+                      className="text-ink-3 text-[12px] italic mt-0.5"
+                      style={{ fontFamily: 'var(--f-serif)' }}
+                    >
+                      {tt(c.description, lang)}
+                    </p>
+                  )}
+                  {/* Altçizgi */}
+                  <div
+                    className="mt-2"
+                    style={{
+                      height: 1,
+                      background:
+                        'linear-gradient(to right, var(--line) 0%, transparent 60%)',
+                    }}
+                  />
+                </div>
+
+                {/* Ürünler */}
+                <div className="space-y-2">
+                  {catProds.map((p, i) => (
+                    <ProductRow
+                      key={p.id}
+                      product={p}
+                      lang={lang}
+                      onAdd={() => addToCart(p)}
+                      animationDelay={i * 25}
+                    />
+                  ))}
+                </div>
+
+                {/* Kategori sonu ornament (son kategori hariç) */}
+                {idx < categories.length - 1 && (
+                  <div className="flex items-center justify-center mt-6 gap-3">
+                    <div
+                      style={{
+                        width: 24,
+                        height: 1,
+                        background: 'var(--line)',
+                      }}
+                    />
+                    <span
+                      className="text-ink-3"
+                      style={{ fontSize: 10, opacity: 0.5 }}
+                    >
+                      ✦
+                    </span>
+                    <div
+                      style={{
+                        width: 24,
+                        height: 1,
+                        background: 'var(--line)',
+                      }}
+                    />
+                  </div>
+                )}
+              </section>
+            );
+          })}
+        </div>
+      ) : (
+        /* ============ ARAMA SONUÇLARI ============ */
+        <div className="relative z-10">
+          <div className="px-5 mb-3 flex items-baseline justify-between gap-3 mt-2">
+            <h2
+              style={{
+                fontFamily: 'var(--f-serif)',
+                fontStyle: 'italic',
+                fontSize: 22,
+                fontWeight: 400,
+                letterSpacing: '-0.02em',
+              }}
+              className="truncate"
+            >
+              {lang === 'tr' ? `"${search}" sonuçları` : `Results for "${search}"`}
+            </h2>
             <span
-              className="text-ink-3 uppercase"
+              className="text-ink-3 flex-shrink-0"
               style={{
                 fontFamily: 'var(--f-mono)',
                 fontSize: 10,
-                fontWeight: 700,
-                letterSpacing: '0.14em',
-              }}
-            >
-              {lang === 'tr' ? 'Öne Çıkanlar' : 'Featured'}
-            </span>
-            <span
-              className="text-ink-3"
-              style={{
-                fontFamily: 'var(--f-mono)',
-                fontSize: 9,
                 letterSpacing: '0.06em',
               }}
             >
-              {featured.length} {lang === 'tr' ? 'ürün' : 'items'}
+              {catProducts.length} {lang === 'tr' ? 'ürün' : 'items'}
             </span>
           </div>
-          <div
-            className="flex gap-3 px-5 overflow-x-auto scrollbar-hide pb-1"
-            style={{ scrollbarWidth: 'none' }}
-          >
-            {featured.map((p) => (
-              <FeaturedCard key={p.id} product={p} lang={lang} onAdd={() => addToCart(p)} />
+
+          <div className="px-4 space-y-2">
+            {catProducts.length === 0 && (
+              <div className="text-center py-16 text-ink-3 text-sm">
+                <div className="flex items-center justify-center gap-3 mb-3 opacity-40">
+                  <div
+                    style={{
+                      width: 30,
+                      height: 1,
+                      background: 'var(--ink-3)',
+                    }}
+                  />
+                  <span style={{ fontSize: 14 }}>○</span>
+                  <div
+                    style={{
+                      width: 30,
+                      height: 1,
+                      background: 'var(--ink-3)',
+                    }}
+                  />
+                </div>
+                <div
+                  style={{
+                    fontFamily: 'var(--f-serif)',
+                    fontStyle: 'italic',
+                    fontSize: 16,
+                  }}
+                >
+                  {lang === 'tr' ? 'Ürün bulunamadı' : 'Nothing matched.'}
+                </div>
+              </div>
+            )}
+            {catProducts.map((p, i) => (
+              <ProductRow
+                key={p.id}
+                product={p}
+                lang={lang}
+                onAdd={() => addToCart(p)}
+                animationDelay={i * 25}
+              />
             ))}
           </div>
         </div>
       )}
 
-      {/* ============ KATEGORİ CHIPS ============ */}
-      {!search && (
-        <div
-          className="flex gap-1.5 px-5 mb-3 overflow-x-auto scrollbar-hide"
-          style={{ scrollbarWidth: 'none' }}
-        >
-          {categories.map((c) => {
-            const active = c.id === activeCat;
-            return (
-              <button
-                key={c.id}
-                onClick={() => setActiveCat(c.id)}
-                className={`flex-shrink-0 px-3 h-9 rounded-full text-xs font-semibold transition-all whitespace-nowrap inline-flex items-center gap-1.5 ${
-                  active
-                    ? 'bg-ink text-paper'
-                    : 'bg-card border border-line text-ink-2 hover:bg-paper-2'
-                }`}
-                style={{ fontFamily: 'var(--f-sans)' }}
-              >
-                {isValidEmojiIcon(c.hero_icon) && <span className="text-sm">{c.hero_icon}</span>}
-                {tt(c.name, lang)}
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {/* ============ KATEGORİ BAŞLIK ============ */}
-      <div className="px-5 mb-3 flex items-baseline justify-between gap-3">
-        <h2
-          style={{
-            fontFamily: 'var(--f-serif)',
-            fontStyle: 'italic',
-            fontSize: 22,
-            fontWeight: 400,
-            letterSpacing: '-0.02em',
-          }}
-          className="truncate"
-        >
-          {search
-            ? lang === 'tr'
-              ? `"${search}" sonuçları`
-              : `Results for "${search}"`
-            : tt(activeCategory?.name, lang)}
-        </h2>
-        <span
-          className="text-ink-3 flex-shrink-0"
-          style={{
-            fontFamily: 'var(--f-mono)',
-            fontSize: 10,
-            letterSpacing: '0.06em',
-          }}
-        >
-          {catProducts.length} {lang === 'tr' ? 'ürün' : 'items'}
-        </span>
-      </div>
-
-      {/* Kategori açıklaması */}
-      {!search && activeCategory?.description && tt(activeCategory.description, lang) && (
-        <p className="text-ink-3 text-sm px-5 mb-3 italic" style={{ fontFamily: 'var(--f-serif)' }}>
-          {tt(activeCategory.description, lang)}
-        </p>
-      )}
-
-      {/* ============ ÜRÜN LİSTESİ ============ */}
-      <div className="px-4 space-y-2">
-        {catProducts.length === 0 && (
-          <div className="text-center py-12 text-ink-3 text-sm">
-            <div className="text-3xl mb-2 opacity-40">○</div>
-            {lang === 'tr' ? 'Ürün bulunamadı' : 'Nothing matched.'}
-          </div>
-        )}
-        {catProducts.map((p) => (
-          <ProductRow key={p.id} product={p} lang={lang} onAdd={() => addToCart(p)} />
-        ))}
-      </div>
-
       {/* ============ FOOTER ============ */}
-      <div className="text-center pt-12 pb-4">
+      <div className="text-center pt-12 pb-4 relative z-10">
         <div
           style={{
             fontFamily: 'var(--f-serif)',
@@ -687,187 +1014,97 @@ export function MenuView({ business, categories, products, qrTable }: Props) {
 }
 
 // ============================================================
-// FEATURED CARD
-// ============================================================
-function FeaturedCard({
-  product,
-  lang,
-  onAdd,
-}: {
-  product: Product;
-  lang: Lang;
-  onAdd: () => void;
-}) {
-  const isOut = product.status === 'soldout';
-  return (
-    <div
-      className="flex-shrink-0 w-44 bg-card border border-line rounded-[14px] overflow-hidden transition-all"
-      style={{
-        boxShadow: '0 1px 2px rgba(42,31,24,0.05)',
-        opacity: isOut ? 0.75 : 1,
-      }}
-    >
-      {/* Hero alanı */}
-      <div
-        className="h-24 bg-gradient-to-br from-accent-soft to-paper-2 relative flex items-center justify-center overflow-hidden"
-        style={{ filter: isOut ? 'grayscale(0.85)' : 'none' }}
-      >
-        {product.hero_image_url ? (
-          <img
-            src={product.hero_image_url}
-            alt={tt(product.name, lang)}
-            className="w-full h-full object-cover"
-          />
-        ) : isValidEmojiIcon(product.hero_icon) ? (
-          <span className="text-4xl">{product.hero_icon}</span>
-        ) : (
-          <span
-            className="text-ink/30"
-            style={{
-              fontFamily: 'var(--f-serif)',
-              fontStyle: 'italic',
-              fontSize: 36,
-              fontWeight: 400,
-            }}
-          >
-            {tt(product.name, lang).charAt(0)}
-          </span>
-        )}
-        {/* ÖZEL rozeti (sadece stokta) */}
-        {!isOut && product.is_featured && (
-          <span
-            className="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase"
-            style={{
-              background: 'var(--gold)',
-              color: '#FFF8EC',
-              fontFamily: 'var(--f-mono)',
-              letterSpacing: '0.1em',
-            }}
-          >
-            {lang === 'tr' ? 'ÖZEL' : 'FEATURED'}
-          </span>
-        )}
-        {/* TÜKENDİ overlay bandı */}
-        {isOut && (
-          <div
-            className="absolute inset-x-0 top-1/2 -translate-y-1/2 py-1 text-center pointer-events-none"
-            style={{
-              background: 'rgba(42, 31, 24, 0.82)',
-              backdropFilter: 'blur(2px)',
-            }}
-          >
-            <span
-              className="text-[10px] font-bold uppercase"
-              style={{
-                color: '#FAF5EA',
-                fontFamily: 'var(--f-mono)',
-                letterSpacing: '0.18em',
-              }}
-            >
-              {lang === 'tr' ? 'TÜKENDİ' : 'SOLD OUT'}
-            </span>
-          </div>
-        )}
-      </div>
-      {/* İçerik */}
-      <div className="p-2.5">
-        <div className="text-[12px] font-semibold text-ink leading-tight truncate">
-          {tt(product.name, lang)}
-        </div>
-        <div className="text-[10px] text-ink-3 mt-0.5 truncate">
-          {tt(product.description, lang)}
-        </div>
-        <div className="mt-2 flex items-center justify-between">
-          <span
-            className="text-ink"
-            style={{
-              fontFamily: 'var(--f-serif)',
-              fontStyle: 'italic',
-              fontSize: 18,
-              fontWeight: 400,
-              letterSpacing: '-0.02em',
-              textDecoration: isOut ? 'line-through' : 'none',
-              color: isOut ? 'var(--ink-3)' : 'var(--ink)',
-            }}
-          >
-            {money(product.price, lang)}
-          </span>
-          <button
-            onClick={onAdd}
-            disabled={isOut}
-            className="w-6 h-6 rounded-full bg-accent text-card flex items-center justify-center text-base font-bold disabled:opacity-40 disabled:cursor-not-allowed transition-transform hover:scale-105"
-            style={{ color: '#FAF5EA', lineHeight: 1 }}
-          >
-            +
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ============================================================
 // PRODUCT ROW (kompakt - resim solda)
 // ============================================================
 function ProductRow({
   product,
   lang,
   onAdd,
+  animationDelay = 0,
 }: {
   product: Product;
   lang: Lang;
   onAdd: () => void;
+  animationDelay?: number;
 }) {
   const isOut = product.status === 'soldout';
   const name = tt(product.name, lang);
   const description = tt(product.description, lang);
+  const hasImage = !!product.hero_image_url;
 
   return (
     <div
-      className={`flex items-center gap-3 p-3 bg-card border rounded-[14px] transition-all ${
-        isOut
-          ? 'opacity-70 border-line'
-          : 'border-line hover:border-line-2'
-      }`}
+      className="flex items-center gap-3 p-2.5 bg-card border rounded-[16px] transition-all active:scale-[0.985]"
+      style={{
+        borderColor: 'var(--line)',
+        animation: `menu-slide-up 380ms ease-out ${animationDelay}ms both`,
+        boxShadow: '0 1px 2px rgba(42,31,24,0.04)',
+      }}
     >
       {/* Sol: hero (resim, ikon veya inisyal) */}
       <div
-        className="w-14 h-14 rounded-[10px] bg-paper-2 flex items-center justify-center flex-shrink-0 overflow-hidden relative"
-        style={{ filter: isOut ? 'grayscale(0.85)' : 'none' }}
+        className="w-[72px] h-[72px] rounded-[12px] flex items-center justify-center flex-shrink-0 overflow-hidden relative"
+        style={{
+          background: hasImage
+            ? 'var(--paper-2)'
+            : 'color-mix(in srgb, var(--accent) 8%, var(--paper-2))',
+          filter: isOut ? 'grayscale(0.85)' : 'none',
+        }}
       >
-        {product.hero_image_url ? (
+        {hasImage ? (
           <img
-            src={product.hero_image_url}
+            src={product.hero_image_url!}
             alt={name}
             className="w-full h-full object-cover"
+            loading="lazy"
           />
         ) : isValidEmojiIcon(product.hero_icon) ? (
-          <span className="text-2xl">{product.hero_icon}</span>
+          <span className="text-3xl">{product.hero_icon}</span>
         ) : (
           <span
-            className="text-ink/30"
             style={{
               fontFamily: 'var(--f-serif)',
               fontStyle: 'italic',
-              fontSize: 22,
+              fontSize: 32,
               fontWeight: 400,
+              color: 'color-mix(in srgb, var(--accent) 45%, transparent)',
+              lineHeight: 1,
             }}
           >
             {name.charAt(0)}
           </span>
         )}
+
+        {/* ÖZEL rozet (sol üst) */}
+        {product.is_featured && !isOut && (
+          <div
+            className="absolute top-1 left-1 flex items-center gap-0.5 px-1 py-0.5 rounded"
+            style={{
+              background: 'var(--gold)',
+              color: '#FFF8EC',
+              fontFamily: 'var(--f-mono)',
+              fontSize: 7,
+              fontWeight: 700,
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+            }}
+          >
+            ★
+          </div>
+        )}
+
+        {/* TÜKENDİ overlay */}
         {isOut && (
           <div
             className="absolute inset-0 flex items-center justify-center pointer-events-none"
-            style={{ background: 'rgba(42,31,24,0.25)' }}
+            style={{ background: 'rgba(42,31,24,0.35)' }}
           >
             <span
               style={{
                 fontFamily: 'var(--f-serif)',
                 fontStyle: 'italic',
-                fontSize: 22,
-                fontWeight: 400,
-                color: 'rgba(250, 245, 234, 0.85)',
+                fontSize: 26,
+                color: 'rgba(250, 245, 234, 0.9)',
               }}
             >
               ✕
@@ -878,24 +1115,29 @@ function ProductRow({
 
       {/* Orta: bilgi */}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+        <div className="flex items-start gap-1.5 mb-0.5">
           <span
-            className="text-[13px] font-semibold truncate"
+            className="font-semibold truncate"
             style={{
               fontFamily: 'var(--f-sans)',
+              fontSize: 14,
               color: isOut ? 'var(--ink-2)' : 'var(--ink)',
+              lineHeight: 1.2,
             }}
           >
             {name}
           </span>
           {product.is_featured && !isOut && (
             <span
-              className="text-[8px] px-1 py-0.5 rounded font-bold uppercase flex-shrink-0"
+              className="flex-shrink-0 px-1 py-0.5 rounded"
               style={{
-                background: 'var(--gold)',
-                color: '#FFF8EC',
+                background: 'color-mix(in srgb, var(--gold) 12%, transparent)',
+                color: 'var(--gold)',
                 fontFamily: 'var(--f-mono)',
-                letterSpacing: '0.08em',
+                fontSize: 8,
+                fontWeight: 700,
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase',
               }}
             >
               {lang === 'tr' ? 'ÖZEL' : 'NEW'}
@@ -903,57 +1145,93 @@ function ProductRow({
           )}
           {isOut && (
             <span
-              className="text-[8px] px-1.5 py-0.5 rounded font-bold uppercase flex-shrink-0"
+              className="flex-shrink-0 px-1.5 py-0.5 rounded"
               style={{
-                background: 'color-mix(in srgb, var(--warn) 18%, transparent)',
+                background: 'color-mix(in srgb, var(--warn) 15%, transparent)',
                 color: 'var(--warn)',
                 fontFamily: 'var(--f-mono)',
+                fontSize: 8,
+                fontWeight: 700,
                 letterSpacing: '0.12em',
-                border: '1px solid color-mix(in srgb, var(--warn) 30%, transparent)',
+                textTransform: 'uppercase',
+                border:
+                  '1px solid color-mix(in srgb, var(--warn) 28%, transparent)',
               }}
             >
-              {lang === 'tr' ? 'TÜKENDİ' : 'SOLD OUT'}
+              {lang === 'tr' ? 'TÜKENDİ' : 'OUT'}
             </span>
           )}
         </div>
+
         {description && (
-          <div className="text-[11px] text-ink-3 leading-snug line-clamp-2">{description}</div>
-        )}
-        <div className="mt-1.5 flex items-center gap-2">
-          <span
+          <div
+            className="text-ink-3 line-clamp-2"
             style={{
-              fontFamily: 'var(--f-serif)',
-              fontStyle: 'italic',
-              fontSize: 18,
-              fontWeight: 400,
-              letterSpacing: '-0.02em',
-              color: isOut ? 'var(--ink-3)' : 'var(--ink)',
-              textDecoration: isOut ? 'line-through' : 'none',
+              fontSize: 11.5,
+              lineHeight: 1.4,
+              marginBottom: 4,
             }}
           >
-            {money(product.price, lang)}
-          </span>
-          {isOut && (
-            <span
-              className="text-[10px] text-ink-3"
-              style={{ fontStyle: 'italic' }}
-            >
-              {lang === 'tr' ? 'şu an hazırlanamıyor' : 'not available now'}
-            </span>
-          )}
-        </div>
+            {description}
+          </div>
+        )}
+
+        {/* Varyasyon ipucu */}
+        {product.presets.length > 0 && !isOut && (
+          <div
+            className="inline-block mr-2"
+            style={{
+              fontFamily: 'var(--f-mono)',
+              fontSize: 8,
+              letterSpacing: '0.1em',
+              color: 'var(--ink-3)',
+              textTransform: 'uppercase',
+            }}
+          >
+            + {product.presets.length}{' '}
+            {lang === 'tr' ? 'seçenek' : 'option'}
+          </div>
+        )}
       </div>
 
-      {/* Sağ: + butonu */}
-      <button
-        onClick={onAdd}
-        disabled={isOut}
-        className="w-8 h-8 rounded-full bg-ink text-paper flex items-center justify-center text-lg font-bold flex-shrink-0 disabled:opacity-30 disabled:cursor-not-allowed hover:scale-105 transition-transform"
-        style={{ lineHeight: 1 }}
-        title={lang === 'tr' ? 'Sepete ekle' : 'Add to cart'}
-      >
-        +
-      </button>
+      {/* Sağ: Fiyat + buton grubu */}
+      <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+        <span
+          style={{
+            fontFamily: 'var(--f-serif)',
+            fontStyle: 'italic',
+            fontSize: 20,
+            fontWeight: 400,
+            letterSpacing: '-0.02em',
+            color: isOut ? 'var(--ink-3)' : 'var(--ink)',
+            textDecoration: isOut ? 'line-through' : 'none',
+            lineHeight: 1,
+          }}
+        >
+          {money(product.price, lang)}
+        </span>
+
+        <button
+          onClick={onAdd}
+          disabled={isOut}
+          className="rounded-full flex items-center justify-center font-bold transition-all active:scale-90 disabled:opacity-30 disabled:cursor-not-allowed"
+          style={{
+            width: 32,
+            height: 32,
+            background: isOut ? 'var(--ink-3)' : 'var(--accent)',
+            color: '#FAF5EA',
+            fontSize: 18,
+            lineHeight: 1,
+            boxShadow: isOut
+              ? 'none'
+              : '0 2px 8px -2px color-mix(in srgb, var(--accent) 40%, transparent)',
+          }}
+          title={lang === 'tr' ? 'Sepete ekle' : 'Add to cart'}
+          aria-label={lang === 'tr' ? 'Sepete ekle' : 'Add to cart'}
+        >
+          +
+        </button>
+      </div>
     </div>
   );
 }
@@ -1371,3 +1649,370 @@ function OptionPickerModal({
   );
 }
 
+
+// ============================================================
+// FEATURED HERO CAROUSEL — Büyük tek kart, swipe, auto-advance
+// ============================================================
+function FeaturedHeroCarousel({
+  products,
+  lang,
+  onAdd,
+}: {
+  products: Product[];
+  lang: Lang;
+  onAdd: (p: Product) => void;
+}) {
+  const [active, setActive] = useState(0);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [paused, setPaused] = useState(false);
+
+  // Auto-advance her 4.5 saniyede
+  useEffect(() => {
+    if (paused || products.length <= 1) return;
+    const t = setInterval(() => {
+      setActive((a) => (a + 1) % products.length);
+    }, 4500);
+    return () => clearInterval(t);
+  }, [paused, products.length]);
+
+  // Active değişince scroll
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const child = el.children[active] as HTMLElement | undefined;
+    if (!child) return;
+    el.scrollTo({ left: child.offsetLeft - 20, behavior: 'smooth' });
+  }, [active]);
+
+  // Manual scroll → active güncelle (debounced)
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    let tid: ReturnType<typeof setTimeout> | null = null;
+    const onScroll = () => {
+      if (tid) clearTimeout(tid);
+      tid = setTimeout(() => {
+        const cards = Array.from(el.children) as HTMLElement[];
+        const scrollLeft = el.scrollLeft;
+        let closest = 0;
+        let minDist = Infinity;
+        cards.forEach((c, i) => {
+          const dist = Math.abs(c.offsetLeft - 20 - scrollLeft);
+          if (dist < minDist) {
+            minDist = dist;
+            closest = i;
+          }
+        });
+        if (closest !== active) {
+          setActive(closest);
+          setPaused(true);
+          setTimeout(() => setPaused(false), 6000); // 6sn sonra auto tekrar aç
+        }
+      }, 150);
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+      if (tid) clearTimeout(tid);
+    };
+  }, [active]);
+
+  return (
+    <div
+      className="mb-6 relative z-10"
+      style={{
+        animation: 'menu-fade-in 500ms ease-out 220ms both',
+      }}
+    >
+      {/* Label */}
+      <div className="px-5 mb-2.5 flex items-baseline justify-between">
+        <div className="flex items-baseline gap-2">
+          <span
+            className="text-ink-3 uppercase"
+            style={{
+              fontFamily: 'var(--f-mono)',
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: '0.16em',
+            }}
+          >
+            {lang === 'tr' ? 'ÖNE ÇIKANLAR' : 'FEATURED'}
+          </span>
+          <span
+            style={{
+              fontFamily: 'var(--f-serif)',
+              fontStyle: 'italic',
+              fontSize: 14,
+              color: 'var(--accent)',
+            }}
+          >
+            ✦
+          </span>
+        </div>
+        {products.length > 1 && (
+          <span
+            className="text-ink-3"
+            style={{
+              fontFamily: 'var(--f-mono)',
+              fontSize: 10,
+              letterSpacing: '0.08em',
+            }}
+          >
+            {String(active + 1).padStart(2, '0')} / {String(products.length).padStart(2, '0')}
+          </span>
+        )}
+      </div>
+
+      {/* Scroll container - snap carousel */}
+      <div
+        ref={scrollRef}
+        className="flex gap-3 overflow-x-auto scrollbar-hide px-5 pb-1"
+        style={{
+          scrollbarWidth: 'none',
+          scrollSnapType: 'x mandatory',
+        }}
+      >
+        {products.map((p, idx) => (
+          <FeaturedHeroCard
+            key={p.id}
+            product={p}
+            lang={lang}
+            onAdd={() => onAdd(p)}
+            active={idx === active}
+          />
+        ))}
+      </div>
+
+      {/* Dot indicators */}
+      {products.length > 1 && (
+        <div className="flex items-center justify-center gap-1.5 mt-3">
+          {products.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => {
+                setActive(i);
+                setPaused(true);
+                setTimeout(() => setPaused(false), 6000);
+              }}
+              aria-label={`${lang === 'tr' ? 'Ürün' : 'Item'} ${i + 1}`}
+              className="transition-all"
+              style={{
+                width: i === active ? 20 : 6,
+                height: 6,
+                borderRadius: 3,
+                background: i === active ? 'var(--accent)' : 'var(--line)',
+                cursor: 'pointer',
+              }}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Featured Hero Card — büyük tek kart
+function FeaturedHeroCard({
+  product,
+  lang,
+  onAdd,
+  active,
+}: {
+  product: Product;
+  lang: Lang;
+  onAdd: () => void;
+  active: boolean;
+}) {
+  const isOut = product.status === 'soldout';
+  const name = tt(product.name, lang);
+  const description = tt(product.description, lang);
+  const hasImage = !!product.hero_image_url;
+
+  return (
+    <div
+      className="flex-shrink-0 relative overflow-hidden rounded-[20px] transition-all"
+      style={{
+        width: 'calc(100vw - 56px)',
+        maxWidth: 340,
+        height: 200,
+        scrollSnapAlign: 'start',
+        scrollSnapStop: 'always',
+        background: hasImage
+          ? 'var(--ink)'
+          : 'linear-gradient(135deg, color-mix(in srgb, var(--accent) 20%, var(--paper-2)), var(--paper-2))',
+        border: '1px solid var(--line)',
+        boxShadow: active
+          ? '0 8px 24px -12px rgba(42,31,24,0.25)'
+          : '0 2px 8px -4px rgba(42,31,24,0.1)',
+        transform: active ? 'scale(1)' : 'scale(0.97)',
+        opacity: isOut ? 0.8 : 1,
+      }}
+    >
+      {/* Arka plan resim veya dev initial */}
+      {hasImage ? (
+        <img
+          src={product.hero_image_url!}
+          alt={name}
+          className="absolute inset-0 w-full h-full object-cover"
+          style={{
+            filter: isOut ? 'grayscale(1)' : 'none',
+          }}
+        />
+      ) : (
+        <div className="absolute inset-0 flex items-center justify-center">
+          {isValidEmojiIcon(product.hero_icon) ? (
+            <span
+              style={{
+                fontSize: 100,
+                opacity: 0.35,
+                filter: 'saturate(0.6)',
+              }}
+            >
+              {product.hero_icon}
+            </span>
+          ) : (
+            <span
+              style={{
+                fontFamily: 'var(--f-serif)',
+                fontStyle: 'italic',
+                fontSize: 120,
+                fontWeight: 400,
+                color: 'color-mix(in srgb, var(--accent) 25%, transparent)',
+                letterSpacing: '-0.04em',
+                lineHeight: 1,
+              }}
+            >
+              {name.charAt(0)}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Karartma overlay (fotoğraf varsa) */}
+      {hasImage && (
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background:
+              'linear-gradient(to top, rgba(42,31,24,0.85) 0%, rgba(42,31,24,0.4) 40%, rgba(42,31,24,0.05) 100%)',
+          }}
+        />
+      )}
+
+      {/* ÖZEL rozet */}
+      <div
+        className="absolute top-3 left-3 inline-flex items-center gap-1 px-2 py-1 rounded-full"
+        style={{
+          background: 'rgba(250, 245, 234, 0.92)',
+          backdropFilter: 'blur(6px)',
+        }}
+      >
+        <span style={{ color: 'var(--gold)', fontSize: 10 }}>★</span>
+        <span
+          style={{
+            fontFamily: 'var(--f-mono)',
+            fontSize: 9,
+            fontWeight: 700,
+            letterSpacing: '0.14em',
+            color: 'var(--ink)',
+            textTransform: 'uppercase',
+          }}
+        >
+          {lang === 'tr' ? 'ÖZEL' : 'FEATURED'}
+        </span>
+      </div>
+
+      {/* TÜKENDİ overlay */}
+      {isOut && (
+        <div
+          className="absolute inset-x-0 top-1/2 -translate-y-1/2 py-2 text-center"
+          style={{
+            background: 'rgba(42,31,24,0.85)',
+            backdropFilter: 'blur(4px)',
+          }}
+        >
+          <span
+            style={{
+              color: '#FAF5EA',
+              fontFamily: 'var(--f-mono)',
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: '0.2em',
+            }}
+          >
+            {lang === 'tr' ? 'TÜKENDİ' : 'SOLD OUT'}
+          </span>
+        </div>
+      )}
+
+      {/* Alt bilgi */}
+      <div className="absolute inset-x-0 bottom-0 p-4 flex items-end justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <h4
+            className="truncate"
+            style={{
+              fontFamily: 'var(--f-serif)',
+              fontStyle: 'italic',
+              fontSize: 24,
+              fontWeight: 400,
+              letterSpacing: '-0.025em',
+              color: hasImage ? '#FAF5EA' : 'var(--ink)',
+              lineHeight: 1.1,
+              marginBottom: 2,
+            }}
+          >
+            {name}
+          </h4>
+          {description && (
+            <div
+              className="line-clamp-1"
+              style={{
+                fontSize: 11.5,
+                color: hasImage
+                  ? 'rgba(250, 245, 234, 0.75)'
+                  : 'var(--ink-3)',
+                marginBottom: 6,
+              }}
+            >
+              {description}
+            </div>
+          )}
+          <div
+            style={{
+              fontFamily: 'var(--f-serif)',
+              fontStyle: 'italic',
+              fontSize: 22,
+              fontWeight: 400,
+              letterSpacing: '-0.02em',
+              color: hasImage ? '#FAF5EA' : 'var(--ink)',
+              textDecoration: isOut ? 'line-through' : 'none',
+              lineHeight: 1,
+            }}
+          >
+            {money(product.price, lang)}
+          </div>
+        </div>
+
+        <button
+          onClick={onAdd}
+          disabled={isOut}
+          className="rounded-full flex items-center justify-center transition-all active:scale-90 disabled:opacity-40 flex-shrink-0"
+          style={{
+            width: 48,
+            height: 48,
+            background: 'var(--accent)',
+            color: '#FAF5EA',
+            fontSize: 26,
+            fontWeight: 400,
+            lineHeight: 1,
+            boxShadow:
+              '0 4px 14px -4px color-mix(in srgb, var(--accent) 55%, transparent)',
+          }}
+          aria-label={lang === 'tr' ? 'Sepete ekle' : 'Add to cart'}
+        >
+          +
+        </button>
+      </div>
+    </div>
+  );
+}

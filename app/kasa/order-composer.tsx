@@ -6,7 +6,6 @@ import {
   addItemsToOrder,
   type CategoryForPos,
   type ProductForPos,
-  type OptionPresetForPos,
 } from '@/lib/actions/tables-status';
 import { getTopProducts } from '@/lib/actions/menu';
 import { useOfflineActions } from '@/lib/offline/use-offline-actions';

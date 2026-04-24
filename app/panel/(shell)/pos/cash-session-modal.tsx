@@ -17,7 +17,7 @@ export function CashSessionModal({
   onClose,
   onSuccess,
 }: Props) {
-  const { openCash, closeCash, isOnline } = useOfflineActions();
+  const { openCash, closeCash } = useOfflineActions();
   const [amount, setAmount] = useState<string>('');
   const [cardAmount, setCardAmount] = useState<string>(''); // Kapanışta beyan edilen kart tutarı
   const [note, setNote] = useState('');

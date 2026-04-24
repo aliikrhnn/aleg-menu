@@ -353,7 +353,7 @@ function getStatusConfig(kind: 'ok' | 'warn' | 'danger') {
       return {
         dotColor: 'var(--ok)',
         borderColor: 'color-mix(in srgb, var(--ok) 28%, var(--line))',
-        headline: (_s: PrinterStatus) => 'Her şey yolunda',
+        headline: () => 'Her şey yolunda',
         title: (s: PrinterStatus) =>
           `${s.total_printers} yazıcı aktif · son 10dk sorunsuz`,
       };
