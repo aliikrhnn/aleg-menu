@@ -303,3 +303,64 @@ section[id],
     transform: scale(1) translateY(0);
   }
 }
+
+/* Hizmet (çağrı) butonu giriş animasyonu */
+@keyframes menu-service-btn-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.6) translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Hizmet butonu sürekli yumuşak nabız - dikkat çekici ama rahatsız etmez */
+@keyframes menu-service-pulse {
+  0%, 100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.25;
+    transform: scale(1.18);
+  }
+}
+
+/* Çağrı sonuç toast - üstten spring ile düşer */
+@keyframes menu-call-toast-in {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-20px) scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
+
+/* Çağrı rozeti yeni gelende pop */
+@keyframes callsBumpPulse {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+
+/* Çağrı rozeti sürekli ping efekti */
+@keyframes callsPing {
+  0% { opacity: 0.45; transform: scale(1); }
+  80%, 100% { opacity: 0; transform: scale(1.4); }
+}
+
+/* Çağrı paneli sağdan kayma */
+@keyframes callsPanelSlide {
+  0% { opacity: 0; transform: translateX(40px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+
+/* Çağrı item giriş */
+@keyframes callItemIn {
+  0% { opacity: 0; transform: translateY(8px) scale(0.97); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}

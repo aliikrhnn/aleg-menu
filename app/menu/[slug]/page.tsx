@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { resolveQrSlug } from '@/lib/actions/qr';
+import { getPublicCallButtons } from '@/lib/actions/call-buttons';
 import { MenuView } from './menu-view';
 import type { LocalizedText } from '@/types/database';
 
@@ -170,6 +171,12 @@ export default async function CustomerMenuPage({ params, searchParams }: Props) 
       .filter((p): p is NonNullable<typeof p> => p !== undefined),
   }));
 
+  // Çağrı butonlarını çek (panel'den eklenmiş aktif olanlar)
+  const callButtonsResult = await getPublicCallButtons(business.id);
+  const callButtons = callButtonsResult.success
+    ? callButtonsResult.buttons || []
+    : [];
+
   return (
     <MenuView
       business={{
@@ -187,6 +194,7 @@ export default async function CustomerMenuPage({ params, searchParams }: Props) 
           modes: { dinein: true, pickup: true, delivery: false },
         }
       }
+      callButtons={callButtons}
     />
   );
 }

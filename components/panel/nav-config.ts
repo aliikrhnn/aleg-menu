@@ -47,6 +47,7 @@ export const PANEL_NAV: PanelNavGroup[] = [
       { id: 'tables', label: 'Masalar', href: '/masalar', icon: '◍' },
       { id: 'stations', label: 'İstasyonlar', href: '/istasyonlar', icon: '⊙' },
       { id: 'cashiers', label: 'Kasiyerler', href: '/kasiyerler', icon: '👤' },
+      { id: 'call_buttons', label: 'Çağrı Butonları', href: '/cagrilar', icon: '✆' },
       { id: 'team', label: 'Ekip', href: '/ekip', icon: '◐', comingSoon: true },
     ],
   },
@@ -55,7 +56,7 @@ export const PANEL_NAV: PanelNavGroup[] = [
     items: [
       { id: 'reports', label: 'Raporlar', href: '/raporlar', icon: '◌' },
       { id: 'reviews', label: 'Değerlendirmeler', href: '/degerlendirmeler', icon: '⭐' },
-      { id: 'loyalty', label: 'Sadakat', href: '/sadakat', icon: '✆', comingSoon: true },
+      { id: 'loyalty', label: 'Sadakat', href: '/sadakat', icon: '✩', comingSoon: true },
     ],
   },
   {

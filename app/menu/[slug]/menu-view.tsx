@@ -10,6 +10,10 @@ import {
 } from 'react';
 import type { LocalizedText } from '@/types/database';
 import { CartDrawer } from './cart-drawer';
+import {
+  submitWaiterCall,
+  type CallButton,
+} from '@/lib/actions/call-buttons';
 
 type Lang = 'tr' | 'en';
 
@@ -91,6 +95,7 @@ interface Props {
       delivery: boolean;
     };
   };
+  callButtons?: CallButton[];
 }
 
 // Yardımcı: dil-aware metin
@@ -126,6 +131,7 @@ export function MenuView({
   products,
   qrTable,
   orderConfig,
+  callButtons = [],
 }: Props) {
   // Hangi modlar aktif? (default: sadece dinein)
   const activeModes = useMemo(() => {
@@ -136,6 +142,11 @@ export function MenuView({
       delivery: !!m.delivery,
     };
   }, [orderConfig]);
+
+  // Hizmet (çağrı) sheet
+  const [serviceSheetOpen, setServiceSheetOpen] = useState(false);
+  const [callingButtonId, setCallingButtonId] = useState<string | null>(null);
+  const [callSuccess, setCallSuccess] = useState<{ name: string; ts: number } | null>(null);
 
   const [lang, setLang] = useState<Lang>('tr');
   const [activeCat, setActiveCat] = useState<string | null>(categories[0]?.id || null);
@@ -345,6 +356,57 @@ export function MenuView({
       setFlyingItems((items) => items.filter((x) => x.id !== id));
     }, 800);
   }, []);
+
+  // Çağrı butonu tıklama
+  const handleCallButton = useCallback(
+    async (button: CallButton) => {
+      if (callingButtonId) return; // çift tıklama önle
+      setCallingButtonId(button.id);
+
+      // Haptic
+      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+        try {
+          navigator.vibrate(12);
+        } catch {
+          // yoksay
+        }
+      }
+
+      const result = await submitWaiterCall({
+        businessId: business.id,
+        tableId: qrTable?.id || null,
+        buttonId: button.id,
+      });
+
+      setCallingButtonId(null);
+
+      if (result.success) {
+        setCallSuccess({ name: button.name, ts: Date.now() });
+        // Sheet'i 700ms sonra kapat (success animasyonu için)
+        setTimeout(() => {
+          setServiceSheetOpen(false);
+        }, 700);
+        // Toast 3 sn sonra sönsün
+        setTimeout(() => {
+          setCallSuccess((s) =>
+            s && Date.now() - s.ts >= 2900 ? null : s
+          );
+        }, 3000);
+      } else {
+        // Spam veya hata - geçici toast benzeri callSuccess kullan ama "hata" olarak işaretle
+        setCallSuccess({
+          name: result.error || (lang === 'tr' ? 'İletilemedi' : 'Failed'),
+          ts: Date.now(),
+        });
+        setTimeout(() => {
+          setCallSuccess((s) =>
+            s && Date.now() - s.ts >= 2900 ? null : s
+          );
+        }, 3000);
+      }
+    },
+    [business.id, qrTable?.id, callingButtonId, lang]
+  );
 
   // Modal'dan onaylı ürün ekle
   const addConfiguredProduct = (
@@ -1064,6 +1126,273 @@ export function MenuView({
           </a>
         </div>
       </div>
+
+      {/* ============ HİZMET (ÇAĞRI) BUTONU ============ */}
+      {/* Sadece QR ile geldiyse (masa bilinmesi gerek) ve buton tanımlıysa göster */}
+      {qrTable && callButtons.length > 0 && (
+        <>
+          <button
+            onClick={() => {
+              setServiceSheetOpen(true);
+              if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+                try {
+                  navigator.vibrate(10);
+                } catch {
+                  // yoksay
+                }
+              }
+            }}
+            aria-label={lang === 'tr' ? 'Hizmet çağır' : 'Request service'}
+            className="fixed z-40 grid place-items-center transition-all active:scale-90"
+            style={{
+              right: 16,
+              // Cart bar varsa 84px yukarı, scroll-top varsa onun da üstünde
+              bottom:
+                cartCount > 0
+                  ? scrollY > 600
+                    ? 144
+                    : 84
+                  : scrollY > 600
+                    ? 84
+                    : 24,
+              width: 56,
+              height: 56,
+              borderRadius: 28,
+              background: 'var(--accent)',
+              color: '#FAF5EA',
+              boxShadow:
+                '0 8px 22px -4px color-mix(in srgb, var(--accent) 55%, transparent), 0 3px 8px rgba(42,31,24,0.12)',
+              animation: 'menu-service-btn-in 380ms cubic-bezier(0.34, 1.56, 0.64, 1)',
+            }}
+          >
+            {/* El kaldır ✋ ikon */}
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+              <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+            </svg>
+            {/* Sürekli yumuşak nabız */}
+            <span
+              className="absolute inset-0 rounded-full pointer-events-none"
+              style={{
+                animation: 'menu-service-pulse 2.4s ease-in-out infinite',
+                background: 'var(--accent)',
+                opacity: 0,
+              }}
+            />
+          </button>
+
+          {/* ============ BOTTOM SHEET ============ */}
+          {serviceSheetOpen && (
+            <div
+              className="fixed inset-0 z-[1000] flex items-end justify-center"
+              style={{
+                background: 'color-mix(in srgb, var(--ink) 55%, transparent)',
+                backdropFilter: 'blur(8px)',
+                WebkitBackdropFilter: 'blur(8px)',
+                animation: 'cdFadeIn 0.2s ease',
+              }}
+              onClick={() => setServiceSheetOpen(false)}
+            >
+              <div
+                className="bg-paper w-full max-w-[480px] rounded-t-[24px] border border-line"
+                style={{
+                  boxShadow: '0 -10px 40px -8px rgba(42,31,24,0.25)',
+                  animation:
+                    'cdSlideUp 0.45s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Drag handle */}
+                <div className="pt-3 pb-1 flex justify-center">
+                  <div className="w-10 h-1 rounded-full bg-ink-3 opacity-30" />
+                </div>
+
+                {/* Başlık */}
+                <div className="px-6 pt-3 pb-4 text-center">
+                  <div
+                    className="text-ink-3 uppercase mb-1.5"
+                    style={{
+                      fontFamily: 'var(--f-mono)',
+                      fontSize: 9,
+                      fontWeight: 700,
+                      letterSpacing: '0.18em',
+                    }}
+                  >
+                    {qrTable.name.toUpperCase()} · HİZMET
+                  </div>
+                  <h3
+                    className="text-ink"
+                    style={{
+                      fontFamily: 'var(--f-serif)',
+                      fontStyle: 'italic',
+                      fontSize: 26,
+                      lineHeight: 1.15,
+                    }}
+                  >
+                    {lang === 'tr' ? 'Nasıl yardımcı olabiliriz?' : 'How can we help?'}
+                  </h3>
+                </div>
+
+                {/* Butonlar */}
+                <div className="px-5 pb-5 space-y-2">
+                  {callButtons.map((btn) => {
+                    const colorVar = `var(--${btn.color || 'accent'})`;
+                    const isPending = callingButtonId === btn.id;
+                    return (
+                      <button
+                        key={btn.id}
+                        onClick={() => handleCallButton(btn)}
+                        disabled={!!callingButtonId}
+                        className="w-full p-4 rounded-[16px] flex items-center gap-3 transition-all active:scale-[0.98] disabled:opacity-60"
+                        style={{
+                          background: `color-mix(in srgb, ${colorVar} 10%, var(--card))`,
+                          border: `1px solid color-mix(in srgb, ${colorVar} 30%, transparent)`,
+                        }}
+                      >
+                        {/* Emoji / icon kutusu */}
+                        <div
+                          className="w-12 h-12 rounded-[12px] grid place-items-center flex-shrink-0"
+                          style={{
+                            background: `color-mix(in srgb, ${colorVar} 18%, transparent)`,
+                            color: colorVar,
+                            fontSize: 22,
+                          }}
+                        >
+                          {btn.emoji ? (
+                            btn.emoji
+                          ) : (
+                            <svg
+                              width="22"
+                              height="22"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+                              <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+                            </svg>
+                          )}
+                        </div>
+                        <div className="flex-1 text-left">
+                          <div
+                            className="text-ink"
+                            style={{ fontWeight: 600, fontSize: 15 }}
+                          >
+                            {btn.name}
+                          </div>
+                        </div>
+                        {/* Sağ ok / pending spinner */}
+                        {isPending ? (
+                          <div
+                            className="w-5 h-5 rounded-full border-2"
+                            style={{
+                              borderColor: colorVar,
+                              borderTopColor: 'transparent',
+                              animation: 'spin 0.7s linear infinite',
+                            }}
+                          />
+                        ) : (
+                          <svg
+                            width="18"
+                            height="18"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke={colorVar}
+                            strokeWidth="2.2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            style={{ opacity: 0.7 }}
+                          >
+                            <path d="M9 18l6-6-6-6" />
+                          </svg>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* İptal */}
+                <div className="px-5 pb-5">
+                  <button
+                    onClick={() => setServiceSheetOpen(false)}
+                    className="w-full h-11 rounded-[10px] text-sm font-semibold transition-all active:scale-[0.98]"
+                    style={{
+                      background: 'transparent',
+                      color: 'var(--ink-3)',
+                    }}
+                  >
+                    {lang === 'tr' ? 'İptal' : 'Cancel'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Çağrı sonuç toast */}
+          {callSuccess && (
+            <div
+              className="fixed left-1/2 z-[1100] pointer-events-none"
+              style={{
+                top: 'env(safe-area-inset-top, 16px)',
+                marginTop: 16,
+                transform: 'translateX(-50%)',
+                animation: 'menu-call-toast-in 320ms cubic-bezier(0.34, 1.56, 0.64, 1)',
+              }}
+            >
+              <div
+                className="px-5 py-3 rounded-full flex items-center gap-2.5"
+                style={{
+                  background: 'var(--ink)',
+                  color: '#FAF5EA',
+                  boxShadow:
+                    '0 12px 28px -6px rgba(42,31,24,0.4), 0 4px 8px rgba(42,31,24,0.18)',
+                }}
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="var(--ok)"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M20 6L9 17l-5-5" />
+                </svg>
+                <span style={{ fontSize: 13, fontWeight: 600 }}>
+                  {lang === 'tr' ? 'Çağrınız iletildi' : 'Request sent'}
+                  {callSuccess.name && (
+                    <span
+                      style={{
+                        marginLeft: 6,
+                        opacity: 0.7,
+                        fontFamily: 'var(--f-serif)',
+                        fontStyle: 'italic',
+                        fontWeight: 400,
+                      }}
+                    >
+                      · {callSuccess.name}
+                    </span>
+                  )}
+                </span>
+              </div>
+            </div>
+          )}
+        </>
+      )}
 
       {/* ============ SCROLL-TO-TOP BUTTON ============ */}
       {scrollY > 600 && (
