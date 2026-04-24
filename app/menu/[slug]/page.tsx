@@ -21,7 +21,7 @@ export default async function CustomerMenuPage({ params, searchParams }: Props) 
   // 1. İşletmeyi slug'dan bul
   const { data: business } = await supabase
     .from('businesses')
-    .select('id, slug, name, logo_url, city, subscription_status, settings, app_config')
+    .select('id, slug, name, logo_url, city, subscription_status, settings, app_config, order_config')
     .eq('slug', params.slug)
     .maybeSingle();
 
@@ -182,6 +182,11 @@ export default async function CustomerMenuPage({ params, searchParams }: Props) 
       categories={formattedCategories}
       products={formattedProducts}
       qrTable={qrTable}
+      orderConfig={
+        business.order_config || {
+          modes: { dinein: true, pickup: true, delivery: false },
+        }
+      }
     />
   );
 }

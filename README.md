@@ -1,101 +1,202 @@
-# QR MENÜ PAKET 2 — STYLED-JSX FİX
+# QR MENÜ — MODES + DİNAMİK SELAMLAMA
 
-Build hatası: nested `<style jsx>` tag.
+İki iş tek pakette:
 
-**2 dosya.**
+1. 🌅 **Saate göre selamlama** — 4 zaman dilimi (günaydın / iyi günler / iyi akşamlar / iyi geceler)
+2. 🎯 **Mode tabs (al götür / paket)** — işletme ayarlarına göre koşullu göster
 
-## 🐛 Sorun
+**2 dosya, migration yok.** Modül sistemi zaten kurulu, sadece menüye bağladık.
 
-```
-Error: Detected nested styled-jsx tag.
-```
+## 🌅 Selamlama — 4 Zaman Dilimi
 
-Flying items render'ı içinde her item için **dinamik keyframe** üretiyordum:
+**Önce:** 3 dilim — günaydın (< 11), iyi günler (< 18), iyi akşamlar
 
-```jsx
-<div ...>
-  {item.emoji}
-  <style jsx>{`
-    @keyframes fly-${item.id} { ... }
-  `}</style>
-</div>
-```
+**Sonra:** 4 dilim, daha doğal:
 
-Ama dış component'te zaten bir `<style>` var → Next.js `styled-jsx` 2 düzeyli `<style jsx>` tag kabul etmiyor.
+| Saat | Türkçe | İngilizce |
+|---|---|---|
+| 05 - 11 | Günaydın | Good morning |
+| 11 - 17 | İyi günler | Good afternoon |
+| 17 - 22 | İyi akşamlar | Good evening |
+| 22 - 05 | İyi geceler | Good night |
 
-## ✅ Fix — CSS Variables ile Tek Global Keyframe
+Gece müşterisi artık "iyi akşamlar" değil "iyi geceler" görecek. Daha sıcak.
 
-Her uçan item'ın kendi dynamic keyframe'i yerine, **CSS variable'larla dinamik koordinat** kullanıp tek global keyframe yazdım:
+## 🎯 Mode Tabs — Panel Kontrolü
 
-### `globals.css`'e eklendi:
-```css
-@keyframes menu-fly-to-cart {
-  0% {
-    transform: translate(0, 0) scale(1);
-    opacity: 1;
-  }
-  30% {
-    transform: translate(var(--fly-mid-x), var(--fly-mid-y)) scale(1.1);
-    opacity: 1;
-  }
-  100% {
-    transform: translate(var(--fly-dx), var(--fly-dy)) scale(0.2);
-    opacity: 0;
+**Önce:** Menü her zaman 3 tab gösteriyordu (Masada / Al götür / Paket), işletme delivery yapmasa bile.
+
+**Sonra:** İşletme panelinden açılmış olanlar gösteriliyor.
+
+### Nasıl Çalışır
+
+**İşletme panelinde** (Ayarlar → Siparişler sekmesi), zaten mevcut olan toggle'lar:
+- ✅ Masada (dine-in)
+- ✅ Al götür (pickup)
+- ✅ Paket servis (delivery)
+
+Bu toggle'lar `businesses.order_config.modes` kolonunda JSONB olarak saklanıyor:
+```json
+{
+  "modes": {
+    "dinein": true,
+    "pickup": true,
+    "delivery": false
   }
 }
 ```
 
-### `menu-view.tsx` flying item:
-```tsx
-<div
-  style={{
-    // ... pozisyon
-    ['--fly-dx' as string]: `${dx}px`,
-    ['--fly-dy' as string]: `${dy}px`,
-    ['--fly-mid-x' as string]: `${dx * 0.3}px`,
-    ['--fly-mid-y' as string]: `${dy * 0.15}px`,
-    animation: 'menu-fly-to-cart 700ms cubic-bezier(...) forwards',
-  } as React.CSSProperties}
->
-  {item.emoji}
-</div>
-```
+### Menü Davranışı
 
-Aynı keyframe, **her item kendi koordinatlarını CSS variable olarak inject eder**. Daha temiz, daha hızlı, nested `<style jsx>` yok.
+- **Birden fazla mod aktif** → Tab'lar görünür, müşteri seçer
+- **Tek mod aktif** → Tab'lar gizlenir (kafa karıştırmaz)
+- **QR ile gelmişse** → Otomatik "Masada" seçili
+- **QR yoksa ve dinein kapalıysa** → ilk aktif modun biri seçili
+
+### Gerçek Senaryolar
+
+**Kafe sadece al götür yapıyor:**
+- Panelde: dinein ❌, pickup ✅, delivery ❌
+- Menüde: tab yok, otomatik "Al götür"
+
+**Tam restoran:**
+- Panelde: dinein ✅, pickup ✅, delivery ✅
+- Menüde: 3 tab görünür
+
+**Klasik kafe (delivery yok):**
+- Panelde: dinein ✅, pickup ✅, delivery ❌
+- Menüde: 2 tab (Masada / Al götür)
+
+**Hayalet mutfak (sadece paket):**
+- Panelde: dinein ❌, pickup ❌, delivery ✅
+- Menüde: tab yok, otomatik "Paket"
 
 ## 📦 Dosyalar (2)
 
 ```
-app/menu/[slug]/menu-view.tsx     ← styled-jsx kaldırıldı, CSS var ekledi
-app/globals.css                    ← menu-fly-to-cart keyframe
+app/menu/[slug]/page.tsx           ← order_config fetch + MenuView'e pass
+app/menu/[slug]/menu-view.tsx      ← activeModes logic + koşullu tab render
 ```
 
-## 🚀 Push
+## 🚀 Kurulum
 
 ```powershell
 # 2 dosyayı üstüne yaz
 git add .
-git commit -m "fix(qr-menu): replace nested styled-jsx with CSS variables for fly animation"
+git commit -m "feat(qr-menu): dynamic greeting + mode tabs based on order_config"
 git push
 ```
 
-Build geçer, animasyon aynı şekilde çalışır.
+Migration yok, hot reload yeter.
 
-## 🧪 Test
+## 🧪 Test Senaryoları
 
-Push + deploy sonrası:
-1. Ürünün + butonuna tıkla
-2. ✅ Turuncu daire içinde emoji **arc çizerek sepete uçar**
-3. ✅ Birden hızlı tıklarsan birden çok eş zamanlı uçabilir
+### ✅ 1. Selamlama
+1. Menüyü gece 23:00'te aç → ✅ "İyi geceler"
+2. Sabah 09:00'da → ✅ "Günaydın"
+3. Öğlen 14:00'te → ✅ "İyi günler"
+4. Akşam 19:00'da → ✅ "İyi akşamlar"
 
-Davranış değişmedi, sadece tekniği değişti.
+### ✅ 2. Mod Tabları — 3'ü Açık
+1. Panel → Ayarlar → Siparişler → 3 modu da aç
+2. Menüyü aç → ✅ 3 tab görünür: Masada / Al götür / Paket
+
+### ✅ 3. Tek Mod — Tab Gizli
+1. Panelde sadece Masada aç, diğerleri kapat
+2. Menüyü aç → ✅ **Tab alanı tamamen görünmez**
+3. Masada moduyla devam eder
+
+### ✅ 4. İki Mod
+1. Panelde: dinein ✅, pickup ✅, delivery ❌
+2. Menüde → ✅ 2 tab: Masada / Al götür
+3. "Paket" tabı yok
+
+### ✅ 5. Delivery Only
+1. Panelde: sadece delivery
+2. Menü → ✅ Tab yok, "Paket" modu otomatik seçili
+
+### ✅ 6. QR Test
+1. Dinein açık, QR ile gir
+2. ✅ Masada seçili, diğer tablar görünür ama Masada aktif
+
+## 💡 Teknik Detaylar
+
+### activeModes Memoized
+```tsx
+const activeModes = useMemo(() => {
+  const m = orderConfig?.modes || { dinein: true, pickup: false, delivery: false };
+  return {
+    dinein: m.dinein !== false,
+    pickup: !!m.pickup,
+    delivery: !!m.delivery,
+  };
+}, [orderConfig]);
+```
+
+orderConfig değişince re-compute. Güvenli default: dinein açık.
+
+### Initial Mode Logic
+```tsx
+const initialMode = qrTable
+  ? 'dinein'
+  : activeModes.dinein ? 'dinein'
+    : activeModes.pickup ? 'pickup'
+      : activeModes.delivery ? 'delivery'
+        : 'dinein';  // fallback
+```
+
+QR varsa masada, yoksa aktif olanın önceliği: dinein > pickup > delivery.
+
+### Koşullu Tab Render
+```tsx
+{(() => {
+  const visibleModes = allModes.filter((m) => activeModes[m.id]);
+  if (visibleModes.length <= 1) return null; // gizle
+  return <tabs>...</tabs>;
+})()}
+```
+
+IIFE içinde filter + koşul → tek mod için DOM temiz.
+
+### Safe Default
+page.tsx:
+```tsx
+orderConfig={
+  business.order_config || {
+    modes: { dinein: true, pickup: true, delivery: false },
+  }
+}
+```
+
+`order_config` eski işletmelerde null olabilir, default obje ile korumalı.
 
 ## 📋 Durum
 
 | İş | Durum |
 |---|---|
-| QR Menü Paket 2 | ✅ teslim |
-| **Build fix (styled-jsx)** | **✅ BU PAKET** |
-| Paket 3 | 🔜 |
+| QR Menü Paket 1 (görsel) | ✅ |
+| QR Menü Paket 2 (animasyon) | ✅ |
+| **Selamlama + Modes** | **✅ BU PAKET** |
+| QR Menü Paket 3 (shimmer + ornament) | 🔜 |
+| Garson ekranı | 🔜 |
 
-Push çalışırsa **"paket 3 başlat"** de. 🚀
+## 🔜 Sıradaki İşler
+
+Seçeneklerin:
+
+### A) QR Menü Paket 3 — İnce Dokunuşlar
+- Shimmer loading skeleton
+- Boş hal SVG illustrasyonları
+- Ornament dekorlar
+- Gece modu toggle
+
+### B) İşletme modül yönetimi UI
+- Panel'e "Modüller" sekmesi
+- `business_modules` tablosu üzerinden loyalty/delivery/stock aktifleştirme
+- Dashboard'da sadece aktif modül kartları göster
+
+### C) Garson Ekranı
+- Mobil optimize garson sipariş alma
+- Masa seç → ürün ekle → mutfağa gönder
+
+Hangisini istersen söyle. Push → test → tercih et. 🚀

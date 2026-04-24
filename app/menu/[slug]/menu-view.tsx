@@ -84,6 +84,13 @@ interface Props {
   categories: Category[];
   products: Product[];
   qrTable?: { id: string; name: string } | null;
+  orderConfig?: {
+    modes: {
+      dinein: boolean;
+      pickup: boolean;
+      delivery: boolean;
+    };
+  };
 }
 
 // Yardımcı: dil-aware metin
@@ -101,23 +108,49 @@ function money(n: number, lang: Lang) {
 function greeting(lang: Lang) {
   const h = new Date().getHours();
   if (lang === 'tr') {
-    if (h < 11) return 'Günaydın';
-    if (h < 18) return 'İyi günler';
-    return 'İyi akşamlar';
+    // 05-11 sabah, 11-17 öğlen, 17-22 akşam, 22-05 gece
+    if (h >= 5 && h < 11) return 'Günaydın';
+    if (h >= 11 && h < 17) return 'İyi günler';
+    if (h >= 17 && h < 22) return 'İyi akşamlar';
+    return 'İyi geceler';
   }
-  if (h < 11) return 'Good morning';
-  if (h < 18) return 'Good afternoon';
-  return 'Good evening';
+  if (h >= 5 && h < 11) return 'Good morning';
+  if (h >= 11 && h < 17) return 'Good afternoon';
+  if (h >= 17 && h < 22) return 'Good evening';
+  return 'Good night';
 }
 
-export function MenuView({ business, categories, products, qrTable }: Props) {
+export function MenuView({
+  business,
+  categories,
+  products,
+  qrTable,
+  orderConfig,
+}: Props) {
+  // Hangi modlar aktif? (default: sadece dinein)
+  const activeModes = useMemo(() => {
+    const m = orderConfig?.modes || { dinein: true, pickup: false, delivery: false };
+    return {
+      dinein: m.dinein !== false, // varsayılan açık
+      pickup: !!m.pickup,
+      delivery: !!m.delivery,
+    };
+  }, [orderConfig]);
+
   const [lang, setLang] = useState<Lang>('tr');
   const [activeCat, setActiveCat] = useState<string | null>(categories[0]?.id || null);
   const [search, setSearch] = useState('');
-  // QR ile gelince otomatik "dinein" modu
-  const [mode, setMode] = useState<'dinein' | 'pickup' | 'delivery'>(
-    qrTable ? 'dinein' : 'dinein'
-  );
+  // İlk mode: QR ile geldi → dinein, yoksa aktif olanın ilki
+  const initialMode: 'dinein' | 'pickup' | 'delivery' = qrTable
+    ? 'dinein'
+    : activeModes.dinein
+      ? 'dinein'
+      : activeModes.pickup
+        ? 'pickup'
+        : activeModes.delivery
+          ? 'delivery'
+          : 'dinein';
+  const [mode, setMode] = useState<'dinein' | 'pickup' | 'delivery'>(initialMode);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartDrawerOpen, setCartDrawerOpen] = useState(false);
   const [toast, setToast] = useState<{ name: string; ts: number } | null>(null);
@@ -660,29 +693,35 @@ export function MenuView({ business, categories, products, qrTable }: Props) {
           )}
         </div>
 
-        {/* Mode toggle */}
-        <div className="flex gap-1.5 mb-2.5">
-          {(
-            [
-              { id: 'dinein', tr: 'Masada', en: 'Dine-in' },
-              { id: 'pickup', tr: 'Al götür', en: 'Pickup' },
-              { id: 'delivery', tr: 'Paket', en: 'Delivery' },
-            ] as const
-          ).map((m) => (
-            <button
-              key={m.id}
-              onClick={() => setMode(m.id)}
-              className={`flex-1 h-9 rounded-[10px] text-xs font-semibold transition-all active:scale-[0.97] ${
-                mode === m.id
-                  ? 'bg-ink text-paper'
-                  : 'bg-card border border-line text-ink-2 hover:bg-paper-2'
-              }`}
-              style={{ fontFamily: 'var(--f-sans)' }}
-            >
-              {lang === 'tr' ? m.tr : m.en}
-            </button>
-          ))}
-        </div>
+        {/* Mode toggle - sadece aktif modlar göster, tek mod varsa gizle */}
+        {(() => {
+          const allModes = [
+            { id: 'dinein' as const, tr: 'Masada', en: 'Dine-in' },
+            { id: 'pickup' as const, tr: 'Al götür', en: 'Pickup' },
+            { id: 'delivery' as const, tr: 'Paket', en: 'Delivery' },
+          ];
+          const visibleModes = allModes.filter((m) => activeModes[m.id]);
+          // Hiç mod yoksa veya sadece 1 mod aktifse tabs gizle
+          if (visibleModes.length <= 1) return null;
+          return (
+            <div className="flex gap-1.5 mb-2.5">
+              {visibleModes.map((m) => (
+                <button
+                  key={m.id}
+                  onClick={() => setMode(m.id)}
+                  className={`flex-1 h-9 rounded-[10px] text-xs font-semibold transition-all active:scale-[0.97] ${
+                    mode === m.id
+                      ? 'bg-ink text-paper'
+                      : 'bg-card border border-line text-ink-2 hover:bg-paper-2'
+                  }`}
+                  style={{ fontFamily: 'var(--f-sans)' }}
+                >
+                  {lang === 'tr' ? m.tr : m.en}
+                </button>
+              ))}
+            </div>
+          );
+        })()}
 
         {/* Kategori chip'leri - scroll-spy (arama yokken) */}
         {!search && categories.length > 0 && (
