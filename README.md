@@ -1,32 +1,26 @@
-# TYPE FİX v9 — jsPDF setFillColor API hatası
+# TYPE FİX v10 — COLORS.super Eksikti
 
 **1 dosya.**
 
 ## 🐛 Sorun
 
 ```typescript
-pdf.setFillColor(r, g, b, 'F'); // ← 4. param string, jsPDF bunu beklemiyor
+setText(pdf, COLORS.super);  // ❌ Property 'super' does not exist
 ```
 
-jsPDF `setFillColor` imzası: `(r: number, g: number, b: number)` — 3 sayı alır. 4. parametre olarak string `'F'` geçmiş.
-
-Eskiden belki farklı bir API'ye geçerken unutulan kod. Zaten alt satırda `setFill(pdf, '#A89788')` çağrısı aynı işi yapıyor → bu satır gereksiz.
+`COLORS` objesinde `super` alanı yoktu. Başka yerden kopyalanmış bir kullanım.
 
 ## ✅ Fix
 
-Hatalı satırı sildim:
+`COLORS`'a `super` eklendi (register-panel'deki mavi-gri tonu):
 
 ```diff
-  setFill(pdf, isPeak ? COLORS.accent : COLORS.ink2);
-  if (!isPeak) {
--   const [r, g, b] = hexToRgb(COLORS.ink2);
--   pdf.setFillColor(r, g, b, 'F');
-    setFill(pdf, '#A89788');
-  }
-  pdf.rect(x, barY, barW, h, 'F');
+  const COLORS = {
+    ...
+    gold: '#B8903E',
++   super: '#5A6B7E',
+  };
 ```
-
-Davranış aynı kalır: pik bar'lar accent, diğerleri ink2 soluk (`#A89788`).
 
 ## 📦 Dosya
 
@@ -38,14 +32,6 @@ lib/utils/z-report-pdf.ts
 
 ```powershell
 git add .
-git commit -m "fix(types): remove bad jsPDF setFillColor call"
+git commit -m "fix(types): add missing COLORS.super"
 git push
 ```
-
-Bu basit hata. Bu kez kesin geçer.
-
-## 🗺️ Durum
-
-v9'a kadar 8 iterasyon oldu. Sebep: pre-push hook her hatada kesildiği için hepsini bir kerede göremedik. Tek tek ilerliyoruz.
-
-Başka hata çıkarsa bildir, devam ederiz. 🚀

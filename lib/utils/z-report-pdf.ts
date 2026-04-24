@@ -33,6 +33,7 @@ const COLORS = {
   warnSoft: '#F7ECD9',
   danger: '#B83A2E',
   gold: '#B8903E',
+  super: '#5A6B7E',
 };
 
 // Rengi paper üzerine alfa ile karıştır (yaklaşık)
