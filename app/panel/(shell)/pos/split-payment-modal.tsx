@@ -40,7 +40,6 @@ type PaidRecord = {
 export function SplitPaymentModal({
   order,
   discountAmount,
-  discountReason: _discountReason,
   tipAmount,
   onClose,
   onAllPaid,
