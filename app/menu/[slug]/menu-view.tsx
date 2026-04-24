@@ -978,6 +978,137 @@ export function MenuView({
         </div>
       </div>
 
+      {/* ============ FOOTER ORNAMENT ============ */}
+      <div
+        className="px-5 pt-10 pb-32 text-center"
+        style={{ color: 'var(--ink-3)' }}
+      >
+        {/* Üstte ornament çizgi */}
+        <div className="flex items-center justify-center gap-3 mb-5 opacity-50">
+          <div
+            style={{
+              width: 40,
+              height: 1,
+              background: 'var(--ink-3)',
+            }}
+          />
+          <span style={{ fontSize: 14, opacity: 0.7 }}>✦</span>
+          <div
+            style={{
+              width: 40,
+              height: 1,
+              background: 'var(--ink-3)',
+            }}
+          />
+        </div>
+
+        {/* İşletme bilgisi */}
+        <div
+          style={{
+            fontFamily: 'var(--f-serif)',
+            fontStyle: 'italic',
+            fontSize: 18,
+            color: 'var(--ink-2)',
+          }}
+        >
+          {business.name}
+        </div>
+        {business.city && (
+          <div
+            className="mt-1.5"
+            style={{
+              fontFamily: 'var(--f-mono)',
+              fontSize: 9,
+              fontWeight: 700,
+              letterSpacing: '0.18em',
+              color: 'var(--ink-3)',
+              textTransform: 'uppercase',
+            }}
+          >
+            {business.city}
+          </div>
+        )}
+
+        {/* Powered by */}
+        <div
+          className="mt-7"
+          style={{
+            fontFamily: 'var(--f-mono)',
+            fontSize: 9,
+            fontWeight: 600,
+            letterSpacing: '0.2em',
+            color: 'var(--ink-3)',
+            opacity: 0.55,
+            textTransform: 'uppercase',
+          }}
+        >
+          {lang === 'tr' ? 'TARAFINDAN' : 'POWERED BY'}{' '}
+          <a
+            href="https://alegstudio.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              fontFamily: 'var(--f-serif)',
+              fontStyle: 'italic',
+              fontSize: 13,
+              fontWeight: 400,
+              letterSpacing: '0',
+              textTransform: 'none',
+              color: 'var(--accent)',
+              textDecoration: 'none',
+              opacity: 1,
+              marginLeft: 4,
+            }}
+          >
+            aleg
+          </a>
+        </div>
+      </div>
+
+      {/* ============ SCROLL-TO-TOP BUTTON ============ */}
+      {scrollY > 600 && (
+        <button
+          onClick={() => {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+              try {
+                navigator.vibrate(8);
+              } catch {
+                // yoksay
+              }
+            }
+          }}
+          aria-label={lang === 'tr' ? 'Yukarı çık' : 'Scroll to top'}
+          className="fixed z-40 grid place-items-center transition-all active:scale-90"
+          style={{
+            right: 16,
+            bottom: cartCount > 0 ? 84 : 24,
+            width: 42,
+            height: 42,
+            borderRadius: 21,
+            background: 'var(--card)',
+            border: '1px solid var(--line)',
+            color: 'var(--ink-2)',
+            boxShadow:
+              '0 4px 12px -2px rgba(42, 31, 24, 0.12), 0 2px 4px rgba(42, 31, 24, 0.06)',
+            animation: 'menu-scroll-top-in 280ms cubic-bezier(0.34, 1.56, 0.64, 1)',
+          }}
+        >
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M12 19V5M5 12l7-7 7 7" />
+          </svg>
+        </button>
+      )}
+
       {/* ============ FLOATING CART BUTTON ============ */}
       {cartCount > 0 && (
         <div className="fixed left-0 right-0 bottom-0 z-50 px-4 pb-4 pt-2 bg-gradient-to-t from-paper to-transparent">

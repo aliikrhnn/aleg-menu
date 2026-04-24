@@ -1,202 +1,182 @@
-# QR MENÜ — MODES + DİNAMİK SELAMLAMA
+# QR MENÜ — PAKET 3 · İNCE DOKUNUŞLAR
 
-İki iş tek pakette:
+Son dokunuşlar: shimmer loading, footer ornament, scroll-to-top.
 
-1. 🌅 **Saate göre selamlama** — 4 zaman dilimi (günaydın / iyi günler / iyi akşamlar / iyi geceler)
-2. 🎯 **Mode tabs (al götür / paket)** — işletme ayarlarına göre koşullu göster
+**3 dosya, migration yok.**
 
-**2 dosya, migration yok.** Modül sistemi zaten kurulu, sadece menüye bağladık.
+## ✨ Yenilikler
 
-## 🌅 Selamlama — 4 Zaman Dilimi
+### 1. 💀 Shimmer Loading Skeleton
 
-**Önce:** 3 dilim — günaydın (< 11), iyi günler (< 18), iyi akşamlar
+**Önce:** Sayfa yüklenirken **boş beyaz ekran** (kötü ilk izlenim)
 
-**Sonra:** 4 dilim, daha doğal:
+**Sonra:** Editorial yapıyı taklit eden **shimmer skeleton**:
+- Hero alanı (logo + isim + büyük başlık)
+- Search + mode tabs
+- Kategori chip'leri  
+- Featured carousel (200px)
+- Ürün satırları (5 adet, stagger giriş)
 
-| Saat | Türkçe | İngilizce |
-|---|---|---|
-| 05 - 11 | Günaydın | Good morning |
-| 11 - 17 | İyi günler | Good afternoon |
-| 17 - 22 | İyi akşamlar | Good evening |
-| 22 - 05 | İyi geceler | Good night |
-
-Gece müşterisi artık "iyi akşamlar" değil "iyi geceler" görecek. Daha sıcak.
-
-## 🎯 Mode Tabs — Panel Kontrolü
-
-**Önce:** Menü her zaman 3 tab gösteriyordu (Masada / Al götür / Paket), işletme delivery yapmasa bile.
-
-**Sonra:** İşletme panelinden açılmış olanlar gösteriliyor.
-
-### Nasıl Çalışır
-
-**İşletme panelinde** (Ayarlar → Siparişler sekmesi), zaten mevcut olan toggle'lar:
-- ✅ Masada (dine-in)
-- ✅ Al götür (pickup)
-- ✅ Paket servis (delivery)
-
-Bu toggle'lar `businesses.order_config.modes` kolonunda JSONB olarak saklanıyor:
-```json
-{
-  "modes": {
-    "dinein": true,
-    "pickup": true,
-    "delivery": false
-  }
+```css
+.shimmer-bar {
+  background: linear-gradient(90deg, ...soft 0%, ...med 50%, ...soft 100%);
+  background-size: 200% 100%;
+  animation: shimmer-slide 1.4s infinite;
 }
 ```
 
-### Menü Davranışı
+Soldan sağa kayan ışık efekti — kullanıcı **algılanan hızı** çok daha iyi hisseder.
 
-- **Birden fazla mod aktif** → Tab'lar görünür, müşteri seçer
-- **Tek mod aktif** → Tab'lar gizlenir (kafa karıştırmaz)
-- **QR ile gelmişse** → Otomatik "Masada" seçili
-- **QR yoksa ve dinein kapalıysa** → ilk aktif modun biri seçili
+Next.js otomatik olarak **`app/menu/[slug]/loading.tsx`** dosyasını Suspense fallback olarak kullanır. Sayfa data fetch ederken (60sn cache miss durumunda) bu skeleton görünür.
 
-### Gerçek Senaryolar
+### 2. 🎨 Footer Ornament
 
-**Kafe sadece al götür yapıyor:**
-- Panelde: dinein ❌, pickup ✅, delivery ❌
-- Menüde: tab yok, otomatik "Al götür"
-
-**Tam restoran:**
-- Panelde: dinein ✅, pickup ✅, delivery ✅
-- Menüde: 3 tab görünür
-
-**Klasik kafe (delivery yok):**
-- Panelde: dinein ✅, pickup ✅, delivery ❌
-- Menüde: 2 tab (Masada / Al götür)
-
-**Hayalet mutfak (sadece paket):**
-- Panelde: dinein ❌, pickup ❌, delivery ✅
-- Menüde: tab yok, otomatik "Paket"
-
-## 📦 Dosyalar (2)
+Menünün altında editorial dokunuş:
 
 ```
-app/menu/[slug]/page.tsx           ← order_config fetch + MenuView'e pass
-app/menu/[slug]/menu-view.tsx      ← activeModes logic + koşullu tab render
+        ── ✦ ──
+        
+       Karakoy Espresso
+        İSTANBUL
+        
+        TARAFINDAN  aleg
+```
+
+Detaylar:
+- Üstte **✦ ornament** yatay çizgilerle
+- İşletme adı **italic serif 18px**
+- Şehir mono uppercase
+- "TARAFINDAN aleg" link → alegstudio.com (italic serif accent)
+- Powered by tarzı ama daha **editorial dergi** havası
+
+### 3. ⬆️ Scroll-to-Top Butonu
+
+Uzun menülerde (scroll > 600px) sağ alt köşede:
+- 42x42 yuvarlak buton, paper background, ince border
+- Yukarı ok ikonu
+- Cart bar varsa **84px yukarı** (üst üste binmez)
+- **Cubic-bezier spring** ile çıkış animasyonu (overshoot)
+- Tıklayınca smooth scroll + haptic
+- Active scale-90 feedback
+
+```tsx
+{scrollY > 600 && <button .../>}
+```
+
+Sadece gerektiğinde görünür, yer kaplamaz.
+
+## 📦 Dosyalar (3)
+
+```
+app/menu/[slug]/loading.tsx        ← YENİ - Suspense fallback skeleton
+app/menu/[slug]/menu-view.tsx      ← Footer ornament + scroll-to-top
+app/globals.css                     ← menu-scroll-top-in keyframe
 ```
 
 ## 🚀 Kurulum
 
 ```powershell
-# 2 dosyayı üstüne yaz
-git add .
-git commit -m "feat(qr-menu): dynamic greeting + mode tabs based on order_config"
+# 3 dosyayı üstüne yaz (loading.tsx yeni dosya)
+git add app/menu/[slug]/loading.tsx app/menu/[slug]/menu-view.tsx app/globals.css
+git commit -m "feat(qr-menu): paket 3 - shimmer loading + footer ornament + scroll-to-top"
 git push
 ```
 
-Migration yok, hot reload yeter.
+## 🧪 Test
 
-## 🧪 Test Senaryoları
+### ✅ 1. Shimmer Loading
+1. Tarayıcıyı **incognito** aç (cache yok)
+2. `/menu/karakoy` adresine git
+3. ✅ Önce **shimmer skeleton** görünür (sol-sağ kayan animasyon)
+4. ~500ms sonra gerçek menü gelir
+5. Network tab'ı yavaşlatırsan (Slow 3G) skeleton uzun süre görünür → güzel test
 
-### ✅ 1. Selamlama
-1. Menüyü gece 23:00'te aç → ✅ "İyi geceler"
-2. Sabah 09:00'da → ✅ "Günaydın"
-3. Öğlen 14:00'te → ✅ "İyi günler"
-4. Akşam 19:00'da → ✅ "İyi akşamlar"
+**Production sonrası**: 60sn cache var, ilk açan görür sonrakiler hızlı.
 
-### ✅ 2. Mod Tabları — 3'ü Açık
-1. Panel → Ayarlar → Siparişler → 3 modu da aç
-2. Menüyü aç → ✅ 3 tab görünür: Masada / Al götür / Paket
+### ✅ 2. Footer Ornament
+1. Menüyü açık tut, **en aşağıya scroll** et
+2. ✅ Footer'da **── ✦ ──** ornament görünür
+3. Altında işletme adı italic serif
+4. Şehir mono uppercase
+5. "TARAFINDAN aleg" linkine tıkla → alegstudio.com açılır
 
-### ✅ 3. Tek Mod — Tab Gizli
-1. Panelde sadece Masada aç, diğerleri kapat
-2. Menüyü aç → ✅ **Tab alanı tamamen görünmez**
-3. Masada moduyla devam eder
-
-### ✅ 4. İki Mod
-1. Panelde: dinein ✅, pickup ✅, delivery ❌
-2. Menüde → ✅ 2 tab: Masada / Al götür
-3. "Paket" tabı yok
-
-### ✅ 5. Delivery Only
-1. Panelde: sadece delivery
-2. Menü → ✅ Tab yok, "Paket" modu otomatik seçili
-
-### ✅ 6. QR Test
-1. Dinein açık, QR ile gir
-2. ✅ Masada seçili, diğer tablar görünür ama Masada aktif
+### ✅ 3. Scroll-to-Top
+1. Menü uzun olsun (en az 5+ ürün)
+2. Aşağı scroll et
+3. **600px geçince** ✅ sağ alt köşede yukarı ok butonu **spring çıkış** yapar
+4. Tıkla → ✅ Smooth scroll yukarı + hafif titreşim
+5. Sepet bar varsa → buton üstünde, çakışma yok
 
 ## 💡 Teknik Detaylar
 
-### activeModes Memoized
-```tsx
-const activeModes = useMemo(() => {
-  const m = orderConfig?.modes || { dinein: true, pickup: false, delivery: false };
-  return {
-    dinein: m.dinein !== false,
-    pickup: !!m.pickup,
-    delivery: !!m.delivery,
-  };
-}, [orderConfig]);
+### Loading.tsx Otomatik
+Next.js App Router'da `app/{path}/loading.tsx` dosyası **otomatik** olarak React Suspense fallback olarak kullanılır:
+
+```
+app/menu/[slug]/
+├── page.tsx       ← async server component
+├── loading.tsx    ← otomatik fallback (yeni)
+└── menu-view.tsx
 ```
 
-orderConfig değişince re-compute. Güvenli default: dinein açık.
+Hiçbir kod değişikliği yok — Next.js convention.
 
-### Initial Mode Logic
-```tsx
-const initialMode = qrTable
-  ? 'dinein'
-  : activeModes.dinein ? 'dinein'
-    : activeModes.pickup ? 'pickup'
-      : activeModes.delivery ? 'delivery'
-        : 'dinein';  // fallback
-```
+### Shimmer Performans
+- Sadece CSS animation — JS yok
+- GPU accelerated (`background-position`)
+- 1.4s döngü — yavaş ama dikkat çekici
+- 5 ürün satırı stagger — `animationDelay` 80ms arayla
 
-QR varsa masada, yoksa aktif olanın önceliği: dinein > pickup > delivery.
+### Scroll-to-Top Optimizasyon
+- `scrollY > 600` koşullu render — DOM temiz
+- `passive: true` scroll listener (mevcut)
+- Haptic try-catch ile guard
 
-### Koşullu Tab Render
-```tsx
-{(() => {
-  const visibleModes = allModes.filter((m) => activeModes[m.id]);
-  if (visibleModes.length <= 1) return null; // gizle
-  return <tabs>...</tabs>;
-})()}
-```
-
-IIFE içinde filter + koşul → tek mod için DOM temiz.
-
-### Safe Default
-page.tsx:
-```tsx
-orderConfig={
-  business.order_config || {
-    modes: { dinein: true, pickup: true, delivery: false },
-  }
-}
-```
-
-`order_config` eski işletmelerde null olabilir, default obje ile korumalı.
+### Footer Boşluğu
+`pb-32` (128px alt padding) — floating cart button'ın altında kaybolmaz, hatta cart yokken bile güzel duruyor.
 
 ## 📋 Durum
 
-| İş | Durum |
+| Paket | Durum |
 |---|---|
-| QR Menü Paket 1 (görsel) | ✅ |
-| QR Menü Paket 2 (animasyon) | ✅ |
-| **Selamlama + Modes** | **✅ BU PAKET** |
-| QR Menü Paket 3 (shimmer + ornament) | 🔜 |
-| Garson ekranı | 🔜 |
+| Paket 1 (görsel) | ✅ |
+| Paket 2 (animasyon) | ✅ |
+| Selamlama + modes | ✅ |
+| **Paket 3 (incelikler)** | **✅ BU PAKET** |
+
+## 🎯 Menü Tamamlandı!
+
+QR menü artık tam profesyonel:
+- ✨ Sinematik hero + scroll-spy + featured carousel
+- 🎬 Sepete uçma arc + badge pop + haptic + spring
+- 🌅 Saate göre selamlama + panel-driven mod tabları
+- 💀 Shimmer loading + footer ornament + scroll-to-top
 
 ## 🔜 Sıradaki İşler
 
-Seçeneklerin:
+QR menüsü tamamlandı. Şimdi bunlardan birini seçebilirsin:
 
-### A) QR Menü Paket 3 — İnce Dokunuşlar
-- Shimmer loading skeleton
-- Boş hal SVG illustrasyonları
-- Ornament dekorlar
-- Gece modu toggle
-
-### B) İşletme modül yönetimi UI
-- Panel'e "Modüller" sekmesi
-- `business_modules` tablosu üzerinden loyalty/delivery/stock aktifleştirme
-- Dashboard'da sadece aktif modül kartları göster
-
-### C) Garson Ekranı
-- Mobil optimize garson sipariş alma
+### A) 🍽 Garson Ekranı
+- Mobil garson sipariş alma
 - Masa seç → ürün ekle → mutfağa gönder
+- Dokunmatik optimize
 
-Hangisini istersen söyle. Push → test → tercih et. 🚀
+### B) 🎯 İşletme Modül Yönetimi UI
+- Panel'e "Modüller" sekmesi
+- Loyalty/Stock/Shifts/Reviews aktifleştirme
+- `business_modules` tablosu
+
+### C) 📊 Dashboard İyileştirmeleri
+- Daha detaylı grafikler
+- Trend göstergeleri
+- Performans metrikleri
+
+### D) 🔔 Notifications/Bildirimler
+- Yeni sipariş ses
+- Garson çağırma
+- Mutfak alarm
+
+### E) Başka bir şey
+- Aklında ne varsa söyle
+
+**Hangisini başlatalım?** 🚀
