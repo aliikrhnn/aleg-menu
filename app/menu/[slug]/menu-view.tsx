@@ -125,7 +125,7 @@ export function MenuView({ business, categories, products, qrTable }: Props) {
   // Scroll-spy: hangi kategori görünürde
   const [scrollY, setScrollY] = useState(0);
   // Kategori scroll navigation için ref'ler
-  const categoryRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
+  const categoryRefs = useRef<Map<string, HTMLElement | null>>(new Map());
   // Scroll handler - sticky header + scroll-spy
   useEffect(() => {
     const onScroll = () => {
