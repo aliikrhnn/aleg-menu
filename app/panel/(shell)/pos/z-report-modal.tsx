@@ -8,6 +8,9 @@ import { toast } from '@/components/ui/toast';
 type Props = {
   open: boolean;
   onClose: () => void;
+  businessName?: string;
+  businessAddress?: string;
+  businessLogoUrl?: string;
 };
 
 const METHOD_LABELS: Record<string, string> = {
@@ -31,9 +34,6 @@ const METHOD_COLORS: Record<string, string> = {
 export function ZReportModal({
   open,
   onClose,
-  businessName: _businessName,
-  businessAddress: _businessAddress,
-  businessLogoUrl: _businessLogoUrl,
 }: Props) {
   const [report, setReport] = useState<ZReport | null>(null);
   const [loading, setLoading] = useState(false);
