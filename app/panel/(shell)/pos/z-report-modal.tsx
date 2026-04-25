@@ -31,6 +31,9 @@ const METHOD_COLORS: Record<string, string> = {
 export function ZReportModal({
   open,
   onClose,
+  businessName: _businessName,
+  businessAddress: _businessAddress,
+  businessLogoUrl: _businessLogoUrl,
 }: Props) {
   const [report, setReport] = useState<ZReport | null>(null);
   const [loading, setLoading] = useState(false);

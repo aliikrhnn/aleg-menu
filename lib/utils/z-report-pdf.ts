@@ -33,7 +33,6 @@ const COLORS = {
   warnSoft: '#F7ECD9',
   danger: '#B83A2E',
   gold: '#B8903E',
-  super: '#5A6B7E',
 };
 
 // Rengi paper üzerine alfa ile karıştır (yaklaşık)
@@ -935,6 +934,8 @@ export async function generateZReportPdf(
 
       setFill(pdf, isPeak ? COLORS.accent : COLORS.ink2);
       if (!isPeak) {
+        const [r, g, b] = hexToRgb(COLORS.ink2);
+        pdf.setFillColor(r, g, b, 'F'); // alpha desteklenmiyor jsPDF'de, opacity için farklı renk
         setFill(pdf, '#A89788'); // ink2'nin soluk hali
       }
       pdf.rect(x, barY, barW, h, 'F');

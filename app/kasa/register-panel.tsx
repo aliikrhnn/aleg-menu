@@ -137,11 +137,7 @@ export function RegisterPanel({ businessId }: Props) {
   return <RegisterContent onLockRequest={() => setUnlocked(false)} />;
 }
 
-function RegisterContent({
-  onLockRequest,
-}: {
-  onLockRequest: () => void;
-}) {
+function RegisterContent({ onLockRequest }: { onLockRequest: () => void }) {
   const { status, simulating, toggleSimulate } = useOnlineStatus();
   const { cashier } = useCashierSession();
   // Session ilk render için sessionStorage'dan oku (anında göster)
