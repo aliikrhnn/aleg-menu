@@ -159,3 +159,54 @@ export function playCall(volume = 0.35) {
     // Sessiz geç
   }
 }
+
+/**
+ * Yeni sipariş sesi - 2'li melodik ding (E6 → A6)
+ * Çağrı sesinden farklı, daha tatlı/davetkar.
+ */
+export function playOrderDing(volume = 0.32) {
+  if (typeof window === 'undefined') return;
+
+  try {
+    const AudioCtx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext })
+        .webkitAudioContext;
+    if (!AudioCtx) return;
+
+    const ctx = new AudioCtx();
+
+    // E6 → A6 yumuşak iniş (yeni sipariş, bilgi verici)
+    const notes = [
+      { freq: 1318.51, start: 0, duration: 0.18 },     // E6
+      { freq: 1760.0, start: 0.14, duration: 0.28 },   // A6 (üstüne biner)
+    ];
+
+    notes.forEach(({ freq, start, duration }) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'triangle'; // sıcak, melodik
+      osc.frequency.value = freq;
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      const t0 = ctx.currentTime + start;
+      gain.gain.setValueAtTime(0, t0);
+      gain.gain.linearRampToValueAtTime(volume, t0 + 0.025);
+      gain.gain.setValueAtTime(volume * 0.6, t0 + duration - 0.1);
+      gain.gain.linearRampToValueAtTime(0, t0 + duration);
+
+      osc.start(t0);
+      osc.stop(t0 + duration + 0.05);
+    });
+
+    setTimeout(() => {
+      ctx.close().catch(() => {
+        /* ignore */
+      });
+    }, 1500);
+  } catch {
+    // Sessiz geç
+  }
+}

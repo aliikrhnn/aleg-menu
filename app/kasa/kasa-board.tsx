@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useCashierSession } from '@/lib/cashier-session';
 import { OrdersBoard } from '@/app/panel/(shell)/pos/orders-board';
 import { KasaTabs, type KasaTab } from './kasa-tabs';
@@ -22,7 +22,11 @@ import {
   resolveAllPendingCalls,
   type WaiterCall,
 } from '@/lib/actions/call-buttons';
-import { playCall } from '@/lib/sounds';
+import {
+  getRecentNewOrders,
+  type NewOrderNotification,
+} from '@/lib/actions/orders-notify';
+import { playCall, playOrderDing } from '@/lib/sounds';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from '@/components/ui/toast';
 import type { ActiveOrder } from '@/lib/actions/pos';
@@ -68,6 +72,202 @@ export function KasaBoard({ initialOrders, businessId }: Props) {
     return map;
   }, [activeCalls]);
 
+  // ============================================================
+  // SESSIZE ALMA (mute)
+  // ============================================================
+  const [muted, setMuted] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return localStorage.getItem('aleg-kasa-muted') === '1';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.setItem('aleg-kasa-muted', muted ? '1' : '0');
+    } catch {
+      // yoksay
+    }
+  }, [muted]);
+
+  // Polling/realtime callbacks içinde stale closure olmasın diye ref
+  const mutedRef = useRef(muted);
+  useEffect(() => {
+    mutedRef.current = muted;
+  }, [muted]);
+
+  // ============================================================
+  // YENİ SİPARİŞ BİLDİRİMLERİ (orders.source='qr')
+  // ============================================================
+  // Daha önce ses çaldığımız sipariş ID'leri — tekrar çalmasın
+  const [seenOrderIds, setSeenOrderIds] = useState<Set<string>>(new Set());
+  const [newOrderBump, setNewOrderBump] = useState(0);
+
+  // Polling - 5 saniyede bir son 30 saniyenin yeni QR siparişleri
+  useEffect(() => {
+    let canceled = false;
+    let initialized = false;
+
+    const fetchOrders = async () => {
+      const result = await getRecentNewOrders(30);
+      if (canceled) return;
+      if (!result.success || !result.orders) return;
+
+      const orders = result.orders;
+
+      if (!initialized) {
+        // İlk çağrıda mevcut olanları "görüldü" işaretle (ses çalma)
+        setSeenOrderIds(new Set(orders.map((o) => o.id)));
+        initialized = true;
+        return;
+      }
+
+      // Yeni gelenleri bul
+      setSeenOrderIds((prev) => {
+        const fresh = orders.filter((o) => !prev.has(o.id));
+        if (fresh.length > 0) {
+          if (!mutedRef.current) {
+            playOrderDing();
+          }
+          fresh.forEach((o) => {
+            const tableLabel = o.table_name
+              ? o.table_name.toUpperCase()
+              : 'AL-GÖTÜR';
+            const totalLabel = `₺${Math.round(o.total)}`;
+            toast.info(`🍽 ${tableLabel} · Yeni sipariş · ${totalLabel}`, 6000);
+          });
+          setNewOrderBump((n) => n + 1);
+          // Browser notification (sayfa arka planda ise)
+          if (
+            typeof Notification !== 'undefined' &&
+            Notification.permission === 'granted' &&
+            document.visibilityState === 'hidden'
+          ) {
+            try {
+              const n = new Notification('Yeni sipariş', {
+                body: `${fresh.length} yeni sipariş geldi`,
+                icon: '/icon-192.png',
+                tag: 'aleg-new-order',
+              });
+              setTimeout(() => n.close(), 4500);
+            } catch {
+              // yoksay
+            }
+          }
+          // Refresh tetikle - masa/sipariş listesi güncellensin
+          setRefreshKey((k) => k + 1);
+        }
+        // Set'i güncelle — yeni gelenleri ekle
+        const next = new Set(prev);
+        orders.forEach((o) => next.add(o.id));
+        // 100'den fazla birikmesin (eski olanları temizle)
+        if (next.size > 100) {
+          const arr = Array.from(next);
+          return new Set(arr.slice(-50));
+        }
+        return next;
+      });
+    };
+
+    // İlk fetch
+    fetchOrders();
+    // Polling - 5 saniye
+    const interval = setInterval(fetchOrders, 5000);
+
+    return () => {
+      canceled = true;
+      clearInterval(interval);
+    };
+  }, []);
+
+  // Realtime subscribe - INSERT yeni sipariş
+  useEffect(() => {
+    if (!businessId) return;
+    const supabase = createClient();
+    const channel = supabase
+      .channel('orders_new_kasa_board')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'orders',
+          filter: `business_id=eq.${businessId}`,
+        },
+        async (payload) => {
+          const newOrder = payload.new as NewOrderNotification;
+          // Sadece QR kaynaklılar için bildirim
+          if (newOrder.source !== 'qr') return;
+
+          // Görüldü olarak işaretle — polling tekrar çalmasın
+          setSeenOrderIds((prev) => {
+            if (prev.has(newOrder.id)) return prev;
+            const next = new Set(prev);
+            next.add(newOrder.id);
+
+            // Masa adını çek
+            (async () => {
+              if (newOrder.table_id) {
+                try {
+                  const sb = createClient();
+                  const { data: tbl } = await sb
+                    .from('tables')
+                    .select('name')
+                    .eq('id', newOrder.table_id)
+                    .maybeSingle();
+                  if (tbl) {
+                    newOrder.table_name = (tbl as { name: string }).name;
+                  }
+                } catch {
+                  // yoksay
+                }
+              }
+
+              if (!mutedRef.current) {
+                playOrderDing();
+              }
+              const tableLabel = newOrder.table_name
+                ? newOrder.table_name.toUpperCase()
+                : 'AL-GÖTÜR';
+              const totalLabel = `₺${Math.round(newOrder.total)}`;
+              toast.info(
+                `🍽 ${tableLabel} · Yeni sipariş · ${totalLabel}`,
+                6000
+              );
+              setNewOrderBump((n) => n + 1);
+              setRefreshKey((k) => k + 1);
+            })();
+
+            return next;
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      try {
+        supabase.removeChannel(channel);
+      } catch {
+        // yoksay
+      }
+    };
+  }, [businessId]);
+
+  // Browser notification izni iste (kasa sayfası ilk açılışta)
+  useEffect(() => {
+    if (typeof Notification === 'undefined') return;
+    if (Notification.permission === 'default') {
+      // Kullanıcı bir tıklama yaptıktan sonra istemek daha güvenli
+      // Ama sessiz iste — reddederse rahatsız etme
+      Notification.requestPermission().catch(() => {
+        // yoksay
+      });
+    }
+  }, []);
+
   // Polling - 5 saniyede bir aktif çağrıları çek (realtime fallback)
   useEffect(() => {
     let canceled = false;
@@ -83,7 +283,7 @@ export function KasaBoard({ initialOrders, businessId }: Props) {
         const fresh = newCalls.filter((c) => !lastIds.has(c.id));
         if (fresh.length > 0 && lastIds.size > 0) {
           // İlk fetch DEĞİL, gerçekten yeni çağrı geldi
-          playCall();
+          if (!mutedRef.current) playCall();
           fresh.forEach((c) => {
             const tableLabel = c.table_name
               ? c.table_name.toUpperCase()
@@ -149,7 +349,7 @@ export function KasaBoard({ initialOrders, businessId }: Props) {
             return [newCall, ...prev];
           });
           setCallsBump((n) => n + 1);
-          playCall();
+          if (!mutedRef.current) playCall();
           const tableLabel = newCall.table_name
             ? newCall.table_name.toUpperCase()
             : 'BİLİNMEYEN MASA';
@@ -391,6 +591,53 @@ export function KasaBoard({ initialOrders, businessId }: Props) {
 
         <div className="flex items-center gap-2">
           <PrinterStatusWidget />
+
+          {/* Sessize al toggle - tüm bildirim seslerini kapatır/açar */}
+          <button
+            onClick={() => setMuted((m) => !m)}
+            className="h-9 w-9 rounded-[8px] flex items-center justify-center transition-all hover:scale-[1.05] active:scale-95"
+            style={{
+              background: muted
+                ? 'color-mix(in srgb, var(--warn) 12%, transparent)'
+                : 'var(--paper-2)',
+              border: `1px solid ${muted ? 'color-mix(in srgb, var(--warn) 35%, var(--line))' : 'var(--line)'}`,
+              color: muted ? 'var(--warn)' : 'var(--ink-3)',
+            }}
+            title={muted ? 'Sesi aç' : 'Sessize al'}
+            aria-label={muted ? 'Sesi aç' : 'Sessize al'}
+          >
+            {muted ? (
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M11 5L6 9H2v6h4l5 4V5z" />
+                <line x1="23" y1="9" x2="17" y2="15" />
+                <line x1="17" y1="9" x2="23" y2="15" />
+              </svg>
+            ) : (
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M11 5L6 9H2v6h4l5 4V5z" />
+                <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+              </svg>
+            )}
+          </button>
+
           <button
             onClick={lock}
             className="h-9 px-3 rounded-[8px] text-xs font-semibold flex items-center gap-1.5 transition-all hover:scale-[1.02]"
