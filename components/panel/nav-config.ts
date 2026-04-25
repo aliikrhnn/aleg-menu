@@ -32,6 +32,13 @@ export const PANEL_NAV: PanelNavGroup[] = [
         icon: '₺',
         external: true,
       },
+      {
+        id: 'garson',
+        label: 'Garson Uygulaması',
+        href: '/garson',
+        icon: '⌬',
+        external: true,
+      },
     ],
   },
   {
