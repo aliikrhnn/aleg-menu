@@ -1642,3 +1642,167 @@ export async function splitItemsFromMultipleOrders(input: {
     };
   }
 }
+
+// ============================================================
+// CANCEL ORDER ITEMS — Seçili kalemleri iptal et
+// ============================================================
+export async function cancelOrderItems(input: {
+  itemIds: string[];
+  reason?: string;
+}): Promise<{
+  success: boolean;
+  cancelledCount?: number;
+  error?: string;
+}> {
+  try {
+    const { businessId } = await requireBusinessAccess();
+    const admin = createAdminClient();
+
+    if (!input.itemIds || input.itemIds.length === 0) {
+      return { success: false, error: 'En az bir kalem seç' };
+    }
+
+    // Kalemleri al + sipariş güvenlik kontrolü
+    const { data: items } = await admin
+      .from('order_items')
+      .select('id, order_id, unit_price, quantity, is_complimentary, status, paid_by_log_id')
+      .in('id', input.itemIds);
+
+    if (!items || items.length === 0) {
+      return { success: false, error: 'Kalem bulunamadı' };
+    }
+
+    // Ödenmiş kalemler iptal edilemez
+    const paidItems = items.filter((it) => it.paid_by_log_id);
+    if (paidItems.length > 0) {
+      return { success: false, error: 'Ödenmiş kalemler iptal edilemez' };
+    }
+
+    // Zaten iptal edilmiş olanları çıkar
+    const toCancel = items.filter((it) => it.status !== 'cancelled');
+    if (toCancel.length === 0) {
+      return { success: false, error: 'Seçili kalemler zaten iptal' };
+    }
+
+    // Sipariş güvenliği
+    const orderIds = [...new Set(toCancel.map((it) => it.order_id))];
+    const { data: orders } = await admin
+      .from('orders')
+      .select('id, business_id, subtotal, total, complimentary_total, payment_status')
+      .in('id', orderIds);
+
+    if (!orders || orders.some((o) => o.business_id !== businessId)) {
+      return { success: false, error: 'Yetkisiz sipariş' };
+    }
+    if (orders.some((o) => o.payment_status === 'paid')) {
+      return { success: false, error: 'Ödenmiş sipariş kalemleri iptal edilemez' };
+    }
+
+    // Kalemleri iptal et
+    await admin
+      .from('order_items')
+      .update({
+        status: 'cancelled',
+        complimentary_reason: input.reason?.trim() || null,
+      })
+      .in('id', toCancel.map((it) => it.id));
+
+    // Sipariş bazlı total güncelle
+    for (const order of orders) {
+      const orderItems = toCancel.filter((it) => it.order_id === order.id);
+      const cancelledAmount = orderItems.reduce((s, it) => {
+        if (it.is_complimentary) return s; // ikram zaten total'a etki etmiyor
+        return s + Number(it.unit_price) * it.quantity;
+      }, 0);
+      const cancelledComp = orderItems.reduce((s, it) => {
+        if (!it.is_complimentary) return s;
+        return s + Number(it.unit_price) * it.quantity;
+      }, 0);
+
+      const newSubtotal = Math.max(0, Number(order.subtotal) - cancelledAmount);
+      const newTotal = Math.max(0, Number(order.total) - cancelledAmount);
+      const newComp = Math.max(
+        0,
+        Number(order.complimentary_total) - cancelledComp
+      );
+
+      await admin
+        .from('orders')
+        .update({
+          subtotal: newSubtotal,
+          total: newTotal,
+          complimentary_total: newComp,
+        })
+        .eq('id', order.id);
+    }
+
+    return { success: true, cancelledCount: toCancel.length };
+  } catch (e) {
+    return {
+      success: false,
+      error: e instanceof Error ? e.message : 'Bilinmeyen hata',
+    };
+  }
+}
+
+// ============================================================
+// CLOSE ORDER ON ACCOUNT — Açık hesap (cari) olarak kapat
+// ============================================================
+export async function closeOrderOnAccount(input: {
+  orderId: string;
+  cashierId: string;
+  customerNote?: string;
+}): Promise<{
+  success: boolean;
+  error?: string;
+}> {
+  try {
+    const { businessId } = await requireBusinessAccess();
+    const admin = createAdminClient();
+
+    const { data: order } = await admin
+      .from('orders')
+      .select('id, business_id, payment_status, total')
+      .eq('id', input.orderId)
+      .maybeSingle();
+
+    if (!order || order.business_id !== businessId) {
+      return { success: false, error: 'Sipariş bulunamadı' };
+    }
+    if (order.payment_status === 'paid') {
+      return { success: false, error: 'Sipariş zaten ödenmiş' };
+    }
+
+    // Açık hesap olarak işaretle - payment_logs'a açıklayıcı kayıt + orders.payment_status
+    const noteText = input.customerNote?.trim()
+      ? `Açık hesap: ${input.customerNote.trim()}`
+      : 'Açık hesap (cari)';
+
+    await admin.from('payment_logs').insert({
+      business_id: businessId,
+      order_id: input.orderId,
+      cashier_id: input.cashierId,
+      amount: Number(order.total),
+      payment_method: 'other',
+      note: noteText,
+    });
+
+    // Siparişi 'paid' olarak işaretle (cari hesap kabul edildi)
+    // Note alanı içine 'on_account' bilgisi eklenir
+    await admin
+      .from('orders')
+      .update({
+        payment_status: 'paid',
+        payment_method: 'other',
+        note: noteText,
+      })
+      .eq('id', input.orderId);
+
+    return { success: true };
+  } catch (e) {
+    return {
+      success: false,
+      error: e instanceof Error ? e.message : 'Bilinmeyen hata',
+    };
+  }
+}
