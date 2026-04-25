@@ -9,6 +9,7 @@ import {
   changePin,
   listCashiers,
   type Cashier,
+  type CashierRole,
 } from '@/lib/actions/cashiers';
 
 type Props = {
@@ -67,14 +68,14 @@ export function CashierManager({ initialCashiers, error: initialError }: Props) 
               color: 'var(--ink)',
             }}
           >
-            Kasiyer{' '}
+            Kasiyer & Garson{' '}
             <span style={{ fontStyle: 'italic', fontWeight: 400, color: 'var(--accent)' }}>
               hesapları.
             </span>
           </h1>
           <p className="text-sm mt-2" style={{ color: 'var(--ink-2)', maxWidth: 540 }}>
-            Kasa uygulamasına giriş yapacak kişilere hesap aç. Her kasiyerin kendi PIN&apos;i
-            olur — tüm kasa işlemleri isimleriyle kaydedilir.
+            Kasa ve garson uygulamalarına giriş yapacak kişilere hesap aç. Her kişinin
+            kendi PIN&apos;i olur, rolüne göre uygun ekrana erişebilir.
           </p>
         </div>
 
@@ -88,7 +89,7 @@ export function CashierManager({ initialCashiers, error: initialError }: Props) 
           }}
         >
           <span>+</span>
-          <span>Yeni Kasiyer</span>
+          <span>Yeni Hesap</span>
         </button>
       </div>
 
@@ -342,6 +343,16 @@ function CashierCard({
             <span className="font-semibold truncate" style={{ color: 'var(--ink)' }}>
               {cashier.display_name}
             </span>
+            {/* Rol badge - her zaman göster */}
+            {cashier.role === 'waiter' && (
+              <Badge label="GARSON" color="var(--ok)" />
+            )}
+            {cashier.role === 'both' && (
+              <Badge label="HER İKİSİ" color="var(--accent)" />
+            )}
+            {cashier.role === 'cashier' && (
+              <Badge label="KASİYER" color="var(--super)" />
+            )}
             {cashier.can_close_day && (
               <Badge label="GÜN KAPATIR" color="var(--gold)" />
             )}
@@ -537,6 +548,7 @@ function CashierFormModal({
   const [name, setName] = useState(initial?.display_name || '');
   const [color, setColor] = useState(initial?.color || COLORS[0]);
   const [emoji, setEmoji] = useState(initial?.emoji || EMOJIS[0]);
+  const [role, setRole] = useState<CashierRole>(initial?.role || 'cashier');
   const [canCloseDay, setCanCloseDay] = useState(initial?.can_close_day || false);
   const [canRefund, setCanRefund] = useState(initial?.can_refund || false);
   const [pin, setPin] = useState('');
@@ -569,6 +581,7 @@ function CashierFormModal({
           pin,
           color,
           emoji,
+          role,
           canCloseDay,
           canRefund,
         });
@@ -582,6 +595,7 @@ function CashierFormModal({
           displayName: name,
           color,
           emoji,
+          role,
           canCloseDay,
           canRefund,
         });
@@ -595,7 +609,14 @@ function CashierFormModal({
   };
 
   return (
-    <ModalShell onClose={onClose} title={mode === 'create' ? 'Yeni Kasiyer' : 'Kasiyeri Düzenle'}>
+    <ModalShell
+      onClose={onClose}
+      title={
+        mode === 'create'
+          ? 'Yeni Hesap'
+          : `${initial?.display_name || 'Hesap'} · Düzenle`
+      }
+    >
       <div className="px-6 py-5 space-y-4">
         {/* Görünüm preview */}
         <div
@@ -672,6 +693,68 @@ function CashierFormModal({
                 {e}
               </button>
             ))}
+          </div>
+        </FormField>
+
+        {/* Rol seçimi - hesap tipi */}
+        <FormField label="ROL">
+          <div className="grid grid-cols-3 gap-1.5">
+            {([
+              { id: 'cashier', label: 'Kasiyer', icon: '₺', desc: 'Sadece kasa' },
+              { id: 'waiter', label: 'Garson', icon: '⌬', desc: 'Sadece servis' },
+              { id: 'both', label: 'Her İkisi', icon: '◆', desc: 'Kasa + servis' },
+            ] as Array<{ id: CashierRole; label: string; icon: string; desc: string }>).map(
+              (r) => {
+                const isSel = role === r.id;
+                return (
+                  <button
+                    key={r.id}
+                    type="button"
+                    onClick={() => setRole(r.id)}
+                    className="p-3 rounded-[10px] flex flex-col items-center gap-1 transition-all active:scale-[0.97]"
+                    style={{
+                      background: isSel
+                        ? 'color-mix(in srgb, var(--accent) 10%, var(--paper))'
+                        : 'var(--paper-2)',
+                      border: `1.5px solid ${isSel ? 'var(--accent)' : 'var(--line)'}`,
+                      boxShadow: isSel
+                        ? '0 2px 8px -2px color-mix(in srgb, var(--accent) 28%, transparent)'
+                        : 'none',
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: 18,
+                        color: isSel ? 'var(--accent)' : 'var(--ink-2)',
+                        lineHeight: 1,
+                      }}
+                    >
+                      {r.icon}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 600,
+                        color: isSel ? 'var(--ink)' : 'var(--ink-2)',
+                      }}
+                    >
+                      {r.label}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 10,
+                        color: 'var(--ink-3)',
+                        fontFamily: 'var(--f-mono)',
+                        letterSpacing: '0.04em',
+                        textAlign: 'center',
+                      }}
+                    >
+                      {r.desc}
+                    </div>
+                  </button>
+                );
+              }
+            )}
           </div>
         </FormField>
 

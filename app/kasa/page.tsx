@@ -6,7 +6,7 @@ import { KasaApp } from './kasa-app';
 export const dynamic = 'force-dynamic';
 
 export default async function KasaPage() {
-  const cashiersResult = await listActiveCashiers();
+  const cashiersResult = await listActiveCashiers('cashier');
 
   if (!cashiersResult.success) {
     // Giriş yapılmadıysa panel giriş ekranına

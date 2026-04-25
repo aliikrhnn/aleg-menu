@@ -31,11 +31,14 @@ async function requireBusinessAccess() {
 // TYPES
 // ============================================================
 
+export type CashierRole = 'cashier' | 'waiter' | 'both';
+
 export type Cashier = {
   id: string;
   display_name: string;
   color: string;
   emoji: string;
+  role: CashierRole;
   can_close_day: boolean;
   can_refund: boolean;
   is_active: boolean;
@@ -60,7 +63,7 @@ export async function listCashiers(): Promise<{
 
     const { data, error } = await admin
       .from('cashier_accounts')
-      .select('id, display_name, color, emoji, can_close_day, can_refund, is_active, created_at, last_used_at')
+      .select('id, display_name, color, emoji, role, can_close_day, can_refund, is_active, created_at, last_used_at')
       .eq('business_id', businessId)
       .order('created_at', { ascending: false });
 
@@ -106,13 +109,14 @@ export async function listCashiers(): Promise<{
 // ============================================================
 // Aktif kasiyerler (kasa giriş ekranı için - PIN hash DAHİL değil)
 // ============================================================
-export async function listActiveCashiers(): Promise<{
+export async function listActiveCashiers(filterRole?: 'cashier' | 'waiter'): Promise<{
   success: boolean;
   cashiers?: Array<{
     id: string;
     display_name: string;
     color: string;
     emoji: string;
+    role: CashierRole;
   }>;
   businessName?: string;
   error?: string;
@@ -121,13 +125,21 @@ export async function listActiveCashiers(): Promise<{
     const { businessId } = await requireBusinessAccess();
     const admin = createAdminClient();
 
+    let cashierQuery = admin
+      .from('cashier_accounts')
+      .select('id, display_name, color, emoji, role')
+      .eq('business_id', businessId)
+      .eq('is_active', true);
+
+    // Role filtresi: 'cashier' istenirse role IN (cashier, both); 'waiter' istenirse role IN (waiter, both)
+    if (filterRole === 'cashier') {
+      cashierQuery = cashierQuery.in('role', ['cashier', 'both']);
+    } else if (filterRole === 'waiter') {
+      cashierQuery = cashierQuery.in('role', ['waiter', 'both']);
+    }
+
     const [cashierResp, bizResp] = await Promise.all([
-      admin
-        .from('cashier_accounts')
-        .select('id, display_name, color, emoji')
-        .eq('business_id', businessId)
-        .eq('is_active', true)
-        .order('display_name'),
+      cashierQuery.order('display_name'),
       admin
         .from('businesses')
         .select('name')
@@ -141,7 +153,13 @@ export async function listActiveCashiers(): Promise<{
 
     return {
       success: true,
-      cashiers: cashierResp.data || [],
+      cashiers: (cashierResp.data || []) as Array<{
+        id: string;
+        display_name: string;
+        color: string;
+        emoji: string;
+        role: CashierRole;
+      }>,
       businessName: bizResp.data?.name || 'Kafe',
     };
   } catch (err) {
@@ -157,6 +175,7 @@ export async function createCashier(input: {
   pin: string; // 4-6 hane sayı
   color?: string;
   emoji?: string;
+  role?: CashierRole;
   canCloseDay?: boolean;
   canRefund?: boolean;
 }): Promise<{ success: boolean; id?: string; error?: string }> {
@@ -169,6 +188,10 @@ export async function createCashier(input: {
     if (name.length > 40) return { success: false, error: 'İsim en fazla 40 harf' };
     if (!/^\d{4,6}$/.test(input.pin)) {
       return { success: false, error: 'PIN 4-6 haneli sayı olmalı' };
+    }
+    const role: CashierRole = input.role || 'cashier';
+    if (!['cashier', 'waiter', 'both'].includes(role)) {
+      return { success: false, error: 'Geçersiz rol' };
     }
 
     const admin = createAdminClient();
@@ -183,7 +206,7 @@ export async function createCashier(input: {
       .maybeSingle();
 
     if (existing) {
-      return { success: false, error: 'Bu isimde aktif bir kasiyer zaten var' };
+      return { success: false, error: 'Bu isimde aktif bir kayıt zaten var' };
     }
 
     const pinHash = await bcrypt.hash(input.pin, 10);
@@ -196,6 +219,7 @@ export async function createCashier(input: {
         pin_hash: pinHash,
         color: input.color || '#C4553A',
         emoji: input.emoji || '👤',
+        role: role,
         can_close_day: input.canCloseDay ?? false,
         can_refund: input.canRefund ?? false,
         created_by: memberId,
@@ -221,6 +245,7 @@ export async function updateCashier(
     displayName?: string;
     color?: string;
     emoji?: string;
+    role?: CashierRole;
     canCloseDay?: boolean;
     canRefund?: boolean;
     isActive?: boolean;
@@ -230,7 +255,7 @@ export async function updateCashier(
     const { businessId } = await requireBusinessAccess();
     const admin = createAdminClient();
 
-    // Güvenlik: bu kasiyer bizim business'ımızda mı?
+    // Güvenlik: bu kayıt bizim business'ımızda mı?
     const { data: existing } = await admin
       .from('cashier_accounts')
       .select('id, business_id, display_name')
@@ -238,7 +263,7 @@ export async function updateCashier(
       .maybeSingle();
 
     if (!existing || existing.business_id !== businessId) {
-      return { success: false, error: 'Kasiyer bulunamadı' };
+      return { success: false, error: 'Kayıt bulunamadı' };
     }
 
     const updates: Record<string, unknown> = {};
@@ -249,6 +274,12 @@ export async function updateCashier(
     }
     if (input.color !== undefined) updates.color = input.color;
     if (input.emoji !== undefined) updates.emoji = input.emoji;
+    if (input.role !== undefined) {
+      if (!['cashier', 'waiter', 'both'].includes(input.role)) {
+        return { success: false, error: 'Geçersiz rol' };
+      }
+      updates.role = input.role;
+    }
     if (input.canCloseDay !== undefined) updates.can_close_day = input.canCloseDay;
     if (input.canRefund !== undefined) updates.can_refund = input.canRefund;
     if (input.isActive !== undefined) updates.is_active = input.isActive;

@@ -10,6 +10,7 @@ export type ReadyOrder = {
   table_name?: string | null;
   total: number;
   source: string;
+  order_type: string; // 'dinein' | 'pickup' | 'delivery'
   created_at: string;
   ready_at?: string | null;
   status: string;
@@ -49,7 +50,7 @@ export async function getReadyOrders(): Promise<{
 
     const { data, error } = await admin
       .from('orders')
-      .select('id, business_id, table_id, total, source, created_at, status, updated_at')
+      .select('id, business_id, table_id, total, source, order_type, created_at, status, updated_at')
       .eq('business_id', businessId)
       .eq('status', 'ready')
       .order('updated_at', { ascending: true }); // ilk hazırlanan ilk teslim edilsin
@@ -64,6 +65,7 @@ export async function getReadyOrders(): Promise<{
         table_id: oo.table_id,
         total: oo.total,
         source: oo.source,
+        order_type: oo.order_type || 'dinein',
         created_at: oo.created_at,
         ready_at: oo.updated_at,
         status: oo.status,

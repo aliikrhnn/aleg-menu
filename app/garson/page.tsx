@@ -6,7 +6,7 @@ import { WaiterApp } from './waiter-app';
 export const dynamic = 'force-dynamic';
 
 export default async function GarsonPage() {
-  const cashiersResult = await listActiveCashiers();
+  const cashiersResult = await listActiveCashiers('waiter');
 
   if (!cashiersResult.success) {
     redirect('/panel/giris?error=garson_gerekli');

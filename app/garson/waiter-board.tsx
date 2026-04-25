@@ -30,6 +30,35 @@ type Props = {
   businessId: string;
 };
 
+// ============================================================
+// HELPERS
+// ============================================================
+
+/**
+ * Sipariş başlığı - masa adı veya order_type'a göre etiket
+ * dinein → masa adı (örn "MASA 5") veya yoksa "MASA"
+ * pickup → "PAKET"
+ * delivery → "KAPIYA"
+ */
+function getOrderDestination(o: {
+  order_type?: string;
+  table_name?: string | null;
+}): string {
+  if (o.order_type === 'pickup') return 'PAKET';
+  if (o.order_type === 'delivery') return 'KAPIYA';
+  // dinein veya tanımsız → masa
+  return o.table_name?.toUpperCase() || 'MASA';
+}
+
+function getOrderDestinationDisplay(o: {
+  order_type?: string;
+  table_name?: string | null;
+}): string {
+  if (o.order_type === 'pickup') return 'Paket';
+  if (o.order_type === 'delivery') return 'Kapıya';
+  return o.table_name || 'Masa';
+}
+
 export function WaiterBoard({ businessId }: Props) {
   const { cashier, businessName, lock, signOut } = useCashierSession();
   const [activeTab, setActiveTab] = useState<WaiterTab>('calls');
@@ -159,7 +188,7 @@ export function WaiterBoard({ businessId }: Props) {
         if (fresh.length > 0 && lastIds.size > 0) {
           playOrderSound();
           fresh.forEach((o) => {
-            const tableLabel = o.table_name?.toUpperCase() || 'AL-GÖTÜR';
+            const tableLabel = getOrderDestination(o);
             toast.info(
               `🍽 ${tableLabel} · Sipariş hazır · ${o.item_count} ürün`,
               6000
@@ -624,7 +653,7 @@ function CallsTab({
                 textTransform: 'uppercase',
               }}
             >
-              ✓ Çözüldüm
+              ✓ Çözüldü
             </button>
           </div>
         );
@@ -680,7 +709,7 @@ function ReadyTab({
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-ink" style={{ fontWeight: 600, fontSize: 16 }}>
-                  {order.table_name || 'Al-Götür'}
+                  {getOrderDestinationDisplay(order)}
                 </div>
                 <div className="mt-0.5 flex items-center gap-2" style={{ fontSize: 13 }}>
                   <span className="text-ink-2">{order.item_count} ürün</span>
