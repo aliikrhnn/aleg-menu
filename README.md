@@ -1,130 +1,146 @@
-# 🍽 GARSON — TÜM SİPARİŞLER DETAYLI + TÜM MASALAR
+# 📝 GARSON SİPARİŞ ALMA
 
-Garson sekmesi büyük revizyon. **Eski "Hazır" sekmesi kaldırıldı, yerine "Siparişler" geldi** — tüm aktif siparişleri (yeni/onaylandı/hazırlanıyor/hazır) gösterir, kalemler ve istasyon bilgisiyle birlikte.
+Garson tüm masalardan tıklayarak sipariş alabilir. Kasa register-panel'in sadeleştirilmiş, mobile-first versiyonu.
 
-**2 dosya · Migration yok.**
+**2 dosya · Migration yok · Mevcut `createManualOrder` action'ını kullanır.**
 
-## 🎯 Değişiklikler
+## 🎯 Akış
 
-### 1. Tab Adları
-| Eski | Yeni |
-|------|------|
-| 🍽 Hazır | 🍽 Siparişler |
-| ◍ Tümü | ◍ Tüm Masalar |
+```
+Garson → Tüm Masalar / Açık Masa
+   ↓
+Masaya tıkla
+   ↓
+Sipariş Alma Modal açılır:
+   ├─ Header: ✕ + masa adı
+   ├─ Search: ürün ara
+   ├─ Category chips: yatay scroll
+   ├─ Product grid: 2-3 sütun
+   └─ Cart (sticky bottom):
+       ├─ Her item: − adet + × kaldır + not
+       ├─ Toplam
+       └─ ✓ Mutfağa Gönder
+   ↓
+Sipariş DB'ye yazılır (status='confirmed', order_type='dine_in')
+   ↓
+Mutfak ekranında / POS'ta görünür
+   ↓
+Garson "Siparişler" sekmesinde de görünür (ONAYLANDI rozeti)
+```
 
-### 2. Yeni "Siparişler" Sekmesi
-Eskiden sadece `status='ready'` olan siparişleri gösteriyordu. Şimdi:
-- **Status filtresi:** `received / confirmed / preparing / ready` — son 24 saat
-- **Yeni ready'ye geçen** siparişlerde **ses + toast** çalar (transition tracking)
-- **Mevcut akışlar bozulmaz** — mutfak/POS hâlâ statüleri yönetir
+## ✨ Özellikler
 
-### 3. Tıklanabilir Sipariş Kartı
-Her kart **collapsed** başlar, tıklayınca açılır.
+### Modal UI
+- **Tam ekran modal** (mobile-first)
+- **Search box** — ürün adı + açıklamada arama
+- **Kategori chips** — yatay scroll, hero_icon + isim, search aktif olunca gizlenir
+- **Ürün kartları** — 2-3 sütun grid, hero_icon + isim + 2 satır açıklama + fiyat
+- **Tıklayınca sepete eklenir** (aynı ürün → adet artar)
+- **Variant desteği** — varyantlı ürünlerde ilki default seçilir (basit akış)
 
-**Collapsed (kapalı) hali:**
-- Status indicator (ikon + renk):
-  - 🟠 ◉ **YENİ** (received)
-  - 🟡 ◈ **ONAYLANDI** (confirmed)
-  - 🟧 ◐ **HAZIRLANIYOR** (preparing)
-  - 🟢 ✓ **HAZIR** (ready)
-- Hedef başlığı: **Masa 5** / **Paket** / **Kapıya**
-- Toplam ürün adedi + bekleme süresi
-- Tutar
-- Genişle/daralt ikon (▾)
-- 3dk+ ready için kırmızı uyarı (⚠)
+### Sepet (Sticky Bottom Sheet)
+- **Item bazında kontroller:**
+  - − / sayı / + (adet)
+  - × kaldır
+  - "+ NOT EKLE" / "DÜZENLE" — müşteri notu (örn "az şekerli")
+- **TEMİZLE** butonu — sepeti boşaltır
+- **Toplam** + **✓ Mutfağa Gönder** sticky footer
 
-**Expanded (açık) hali:**
-- Her kalem için satır:
-  - **Adet** (örn `2×`)
-  - **Ürün adı**
-  - **İstasyon rozet** (icon + renk + isim) — Mutfak / Bar / Pastane vb. (varsa)
-  - **Müşteri notu** (italic, varsa)
-- `status === 'ready'` ise **✓ Teslim Ettim** butonu görünür
-
-### 4. İstasyon Bilgisi
-Backend'de `order_items.product_id → products.station_id → stations` join yapılır. Her kalemin istasyonu otomatik tespit edilir. İstasyon yoksa rozet hiç görünmez.
+### Backend
+- `createManualOrder()` action mevcut (kasa da kullanıyor)
+- Parametreler:
+  - `tableId`: masa ID
+  - `orderType: 'dine_in'`
+  - `cashierId`: garson hesabının ID'si
+  - `items[]`: ürün + adet + not
+  - `sendToKitchen: true` → status `confirmed`, mutfağa gider
+- `payment_status` `pending` kalır (ödeme kasada alınır)
 
 ## 📦 Dosyalar (2)
 
 ```
-lib/actions/waiter.ts                  (getAllActiveOrders + WaiterOrder/Item types)
-app/garson/waiter-board.tsx            (tab adları + OrdersTab component)
+app/garson/order-taking-modal.tsx     (yeni - tam fonksiyonel sipariş ekranı)
+app/garson/waiter-board.tsx           (TableCard tıklanabilir + modal entegrasyon)
 ```
 
 ## 🚀 Push
 
 ```powershell
 git add .
-git commit -m "feat(garson): tüm aktif siparişler + kalem detay + istasyon rozet"
+git commit -m "feat(garson): sipariş alma modal - masaya tıkla, ürün ekle, mutfağa gönder"
 git push
 ```
 
 ## 🧪 Test
 
-### A) Tab Adları
-1. Garson aç → ✅ "🍽 **Siparişler**" ve "◍ **Tüm Masalar**" görünür
+### A) Sipariş Alma
+1. Garson sekmesi → **Tüm Masalar** veya **Açık Masa**
+2. Bir masaya tıkla → ✅ tam ekran modal açılır, başlıkta masa adı
+3. Search'te bir kelime yaz → ürünler filtrelenir, kategori chips gizlenir
+4. Search'i temizle → kategoriler geri gelir
+5. Bir kategori seç (Kahveler, Yemekler, vb.) → ✅ ürünler filtrelenir
+6. Bir ürün kartına tıkla → sepete eklenir (sticky alttan açılır)
+7. Aynı ürüne tekrar tıkla → adet 2 olur (ayrı satır değil)
 
-### B) Sipariş Akışı
-1. Telefondan QR menüden bir sipariş ver (örn 2 ürün, birinde not)
-2. Garson "Siparişler" sekmesi → ✅ kart **YENİ** rozetiyle görünür
-3. **Henüz ses çalmaz** (ready değil)
-4. Mutfak/POS'tan status'u **"Hazırlanıyor"** yap → ✅ kartta **HAZIRLANIYOR** rozet
-5. **"Hazır"** yap → ✅ Garsonda **ses çalar + toast + ✓ Teslim Ettim butonu görünür** (genişletilince)
-6. Karta tıkla → genişler:
-   - Her kalem: adet + ürün adı + istasyon rozet (varsa)
-   - Notlu kalemde italic notu görünür
-7. **✓ Teslim Ettim** → kart kaybolur, status `delivered`, toast "Sipariş teslim edildi"
+### B) Sepet İşlemleri
+1. Sepetteki bir ürünün **+** butonuna bas → adet artar
+2. **−** ile azalt, 0'a inerse silinir
+3. **×** ile direkt kaldır
+4. **+ NOT EKLE** → input açılır → "az şekerli" yaz → ✓ ile kaydet
+5. Not eklenmiş satır artık ayrı görünür (DÜZENLE ile değiştirilebilir)
+6. **TEMİZLE** ile sepeti boşalt
 
-### C) İstasyon Rozet
-1. Bir ürünü Panel → Menü → o ürüne git → istasyon ata (örn "Mutfak")
-2. Bu üründen sipariş ver
-3. Garson Siparişler sekmesi → karta tıkla
-4. ✅ Kalemde "🔪 MUTFAK" rozeti görünür (config'e göre icon ve renk)
+### C) Mutfağa Gönder
+1. Sepette ürünler varken → **✓ Mutfağa Gönder**
+2. Loading "Gönderiliyor..." → toast "Masa X · sipariş gönderildi"
+3. Modal kapanır
+4. Garson **Siparişler** sekmesine geç → ✅ siparişin **ONAYLANDI** rozetiyle görünür
+5. Karta tıkla → kalemleri + notları gör
+6. Mutfak panel/POS'ta da görünür ✅
 
-### D) 3dk+ Uyarı
-1. Bir ready sipariş 3dk+ beklerse → kırmızı border + ⚠ uyarı
-2. Hâlâ teslim edilmemişse Garson dikkat etmeli
+### D) Senaryolar
+1. **Boş sepetle gönder** → toast "Sepet boş", gönderilmez
+2. **Modal'ı kapat** → ✕ veya geri tuşuna bas, sepet temizlenir
+3. **Açık masa zaten varken yeni sipariş** → her sipariş bağımsız (eski siparişler etkilenmez)
 
 ## 💡 Mimari Notlar
 
-### `getAllActiveOrders` Action
-3 sorgu yapısı:
-1. **Orders** (status filtresi + son 24 saat)
-2. **Order_items** (orderIds için tek sorgu)
-3. **Products + stations** (kalemlerin product_id'leri için)
-4. **Tables** (table_id resolve için)
+### Mevcut Action Kullanımı
+`createManualOrder` action'ı zaten kasa register-panel'de kullanılıyordu. Aynı action garson için de mükemmel:
+- Cashier güvenlik kontrolü ✓
+- Masa güvenlik kontrolü ✓
+- Total hesaplama ✓
+- `sendToKitchen` parametresi ile direkt confirmed'a geçiş ✓
+- `source: 'manual'` (kasa source'undan ayırt etmek için ileride filter konabilir)
 
-Tüm joinler **manuel map ile** yapılır — Supabase nested select'inden daha kontrollü ve performanslı.
+### Cashier ID
+`useCashierSession()` zaten garson login'de cashier objesini döndürüyor. `cashier.id` direkt kullanılır.
 
-### Ses Transition Tracking
-```typescript
-const freshlyReady = newOrders.filter(
-  (o) => o.status === 'ready' && !lastReadyIds.has(o.id)
-);
-```
+### Variant Sadeleştirmesi
+Varyantlı ürünlerde **ilk varyant otomatik seçilir**. Bu basitlik için. İleri seviye:
+- Varyant seçim modalı (kahve: küçük/orta/büyük)
+- Option preset desteği (sütlü/sütsüz vs)
 
-Bir sipariş `preparing → ready` geçtiğinde **bir kez** ses çalar. Aynı ready siparişi tekrar polling'de gelirse ses çalmaz (lastReadyIds'a girmiştir).
+Şu an garson akışında bunlar yok; ekleneceği zaman ayrı bir paket olur.
 
-### State Reset
-`firstFetch` flag — ilk yüklemede zaten ready olan siparişlerde ses çalmaz (sadece sayfa açıldı).
+### Ödeme Akışı
+Sipariş `payment_status: 'pending'` ile yazılır. Müşteri ayrılırken garson masayı kasaya yönlendirir, kasada ödeme alınır. Bu mevcut akış değişmez.
 
 ## 🗺️ Durum
 
 | | |
 |---|---|
-| Auth izolasyon + sipariş refresh | ✅ |
-| **Tüm siparişler + kalem detay** | **✅ BU PAKET** |
-| Garson sipariş alma | 🔜 (sonraki paket) |
-| Süper admin paneli | 🔜 |
+| Garson tüm siparişler + kalem detay | ✅ |
+| **Garson sipariş alma** | **✅ BU PAKET** |
+| Süper admin panel | 🔜 |
+| Modül yönetimi | 🔜 |
 
-## 🔮 Sonraki Paket: Garson Sipariş Alma
+## 🔮 Sonraki İyileştirmeler
 
-Bu pakette **Tüm Masalar** sekmesi sadece görünüm. Bir sonraki pakette:
-- Masa kartına tıklayınca → POS-benzeri sipariş alma ekranı
-- Ürün seçme + adet + not + masaya gönderme
-- Açık masaya yeni kalem ekleme
-- Kasa register-panel'in sadeleştirilmiş versiyonu
+- **Varyant seçim modalı** — küçük/orta/büyük gibi
+- **Option preset desteği** — sütlü/sütsüz, az şekerli
+- **Açık masaya kalem ekleme** — yeni bağımsız sipariş yerine mevcut hesaba ekleme
+- **Hızlı satış** (masa olmayan paket/al-götür) — garson tarafında
+- **Geçmiş sipariş şablonları** — sık tekrar edilen siparişler
 
-İstediğinde "**garson sipariş alma**" deyip o paketi başlatırız.
-
-Push → test → çalışırsa garson sipariş almaya geçeriz 🚀
+Push → test → çalışırsa bir sonraki feature'a 🚀

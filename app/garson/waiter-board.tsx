@@ -19,6 +19,7 @@ import {
   type TableWithStatus,
   type TableZoneWithTables,
 } from '@/lib/actions/tables-status';
+import { OrderTakingModal } from './order-taking-modal';
 import { getKasaSoundSettings } from '@/lib/actions/sound-settings';
 import { type SoundSettings, DEFAULT_SOUND_SETTINGS } from '@/lib/sound-types';
 import { playSound, type SoundId } from '@/lib/sounds';
@@ -354,6 +355,27 @@ export function WaiterBoard({ businessId }: Props) {
     return map;
   }, [activeCalls]);
 
+  // ============================================================
+  // SİPARİŞ ALMA MODAL
+  // ============================================================
+  const [orderModalTable, setOrderModalTable] = useState<TableWithStatus | null>(
+    null
+  );
+
+  const handleSelectTable = useCallback((t: TableWithStatus) => {
+    setOrderModalTable(t);
+  }, []);
+
+  const handleOrderSuccess = useCallback(async () => {
+    // Masaları + siparişleri tazele
+    const [tRes, oRes] = await Promise.all([
+      getTablesWithStatus(),
+      getAllActiveOrders(),
+    ]);
+    if (tRes.success) setZones(tRes.zones || []);
+    if (oRes.success) setActiveOrders(oRes.orders || []);
+  }, []);
+
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'var(--paper)' }}>
       {/* HEADER */}
@@ -523,12 +545,27 @@ export function WaiterBoard({ businessId }: Props) {
           <ActiveTablesTab
             tables={activeTables}
             callsByTable={callsByTable}
+            onSelectTable={handleSelectTable}
           />
         )}
         {activeTab === 'tables' && (
-          <AllTablesTab zones={zones} callsByTable={callsByTable} />
+          <AllTablesTab
+            zones={zones}
+            callsByTable={callsByTable}
+            onSelectTable={handleSelectTable}
+          />
         )}
       </main>
+
+      {/* SİPARİŞ ALMA MODAL */}
+      {orderModalTable && cashier && (
+        <OrderTakingModal
+          table={orderModalTable}
+          cashierId={cashier.id}
+          onClose={() => setOrderModalTable(null)}
+          onSuccess={handleOrderSuccess}
+        />
+      )}
     </div>
   );
 }
@@ -995,9 +1032,11 @@ function OrdersTab({
 function ActiveTablesTab({
   tables,
   callsByTable,
+  onSelectTable,
 }: {
   tables: TableWithStatus[];
   callsByTable: Map<string, number>;
+  onSelectTable: (t: TableWithStatus) => void;
 }) {
   if (tables.length === 0) {
     return <EmptyState icon="📋" title="Açık masa yok" subtitle="Tüm masalar boş şu an." />;
@@ -1005,7 +1044,12 @@ function ActiveTablesTab({
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
       {tables.map((t) => (
-        <TableCard key={t.id} table={t} callCount={callsByTable.get(t.id) || 0} />
+        <TableCard
+          key={t.id}
+          table={t}
+          callCount={callsByTable.get(t.id) || 0}
+          onSelect={onSelectTable}
+        />
       ))}
     </div>
   );
@@ -1017,9 +1061,11 @@ function ActiveTablesTab({
 function AllTablesTab({
   zones,
   callsByTable,
+  onSelectTable,
 }: {
   zones: TableZoneWithTables[];
   callsByTable: Map<string, number>;
+  onSelectTable: (t: TableWithStatus) => void;
 }) {
   if (zones.length === 0) {
     return <EmptyState icon="◍" title="Masa bulunamadı" subtitle="Henüz masa eklenmemiş." />;
@@ -1053,6 +1099,7 @@ function AllTablesTab({
                 key={t.id}
                 table={t}
                 callCount={callsByTable.get(t.id) || 0}
+                onSelect={onSelectTable}
               />
             ))}
           </div>
@@ -1068,9 +1115,11 @@ function AllTablesTab({
 function TableCard({
   table,
   callCount,
+  onSelect,
 }: {
   table: TableWithStatus;
   callCount: number;
+  onSelect?: (t: TableWithStatus) => void;
 }) {
   const statusConfig: Record<
     string,
@@ -1114,12 +1163,17 @@ function TableCard({
   const cfg = statusConfig[effectiveStatus] || statusConfig.empty;
 
   return (
-    <div
-      className="relative rounded-[14px] p-3"
+    <button
+      type="button"
+      onClick={() => onSelect?.(table)}
+      disabled={!onSelect}
+      className="relative rounded-[14px] p-3 text-left transition-all active:scale-[0.97]"
       style={{
         background: cfg.bg,
         border: `1.5px solid ${effectiveStatus === 'empty' ? 'var(--line)' : `color-mix(in srgb, ${cfg.color} 30%, var(--line))`}`,
         minHeight: 90,
+        cursor: onSelect ? 'pointer' : 'default',
+        width: '100%',
       }}
     >
       {/* Çağrı rozeti - sağ üst */}
@@ -1184,7 +1238,7 @@ function TableCard({
           ₺{Math.round(table.total_amount)}
         </div>
       )}
-    </div>
+    </button>
   );
 }
 
