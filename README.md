@@ -1,125 +1,141 @@
-# 🔧 HESAP PANELİ — İYİLEŞTİRMELER
+# 🔧 HESAP PANEL — Mutfak Fişi Toggle
 
-İki sorunu birden çözer.
+Sepete ürün eklenirken **kasiyer karar versin** — mutfağa gitsin mi gitmesin mi.
 
-**3 dosya · Migration yok.**
+**2 dosya · Migration yok.**
 
-## 🐛 Sorun 1: Ödenen Kalem Kayboluyordu
+## 🎨 UI
 
-### Eski Davranış
-1. 2 kalem seç → **Seçili Öde** → ödendi ✅
-2. Hesap paneli yenileniyor → ödenen kalemler **görünmüyor** ❌
+Sepet altında yeni bir toggle:
 
-### Sebep
-`getTableOrders` query'si sadece **aktif** veya **delivered+unpaid** siparişleri alıyordu. Ödenmiş (`status='delivered' + payment_status='paid'`) siparişler filtreden düşüyordu → kalemleri masa detayında görünmez.
+```
+┌─────────────────────────────────────────┐
+│ 🛒 SEPET                                │
+│ ─────────────────────────────────────── │
+│ 1× Su                            ₺10   │
+│ 1× Bardak                        ₺5    │
+│ ─────────────────────────────────────── │
+│ 2 ÜRÜN              [+ Masaya Ekle]    │
+│ ₺15                                     │
+│ ─────────────────────────────────────── │
+│ 🚫 MUTFAĞA YOLLAMA           [○──]    │  ← KAPALI (default)
+│ Sadece hesaba eklenir                  │
+└─────────────────────────────────────────┘
 
-### Çözüm
-Üçüncü bir query eklendi: **Yakın zamanda ödenenler**
+Toggle açıldığında:
+┌─────────────────────────────────────────┐
+│ 🖨️ MUTFAĞA YOLLA              [──●]   │  ← AÇIK
+│ Fiş basılır, istasyona düşer            │
+└─────────────────────────────────────────┘
+```
+
+## ⚙️ Davranış
+
+- **HesapPanel'de default**: KAPALI (mutfağa gitmez)
+- **Garson akışında default**: AÇIK
+- Kasiyer her seferinde **toggle ile değiştirebilir**
+- Sepet temizlenince state korunur (kasiyer ayarladığı gibi devam eder)
+
+## 🎯 Kullanım Senaryoları
+
+| Senaryo | Toggle |
+|---------|--------|
+| Müşteri "1 su daha ister" — masada zaten su var | KAPALI |
+| Müşteri "1 yeni kahve" — barista yapacak | AÇIK |
+| "Bardak getir" gibi servis ürün | KAPALI |
+| Yemek sipariş ekleme | AÇIK |
+
+## 🔧 API
 
 ```typescript
-// Son 4 saatte ödenmiş siparişleri de getir
-.eq('payment_status', 'paid')
-.gte('created_at', son_4_saat)
+type Props = {
+  tableId: string;
+  targetOrderId?: string;
+  cashierId: string;
+  onAdded: () => void;
+  /**
+   * Toggle'ın başlangıç değeri.
+   * HesapPanel: false (kapalı)
+   * Garson/Quick Add: true (açık)
+   */
+  defaultSendToKitchen?: boolean;
+  /**
+   * Toggle'ı tamamen gizle (forced behavior)
+   */
+  hideKitchenToggle?: boolean;
+};
 ```
 
-### Sonuç
-- ✅ Ödenen kalemler **grileşmiş**, "✓ ÖDENDİ" rozetiyle listede kalır
-- ✅ Opacity 0.55, accent kutu yerine ok (yeşil) tinted bg
-- ✅ Checkbox disabled (tekrar seçilemez)
-- ✅ Header'da **iki tutar**: "MASA TOPLAM ₺630" + altında "Kalan: ₺315" (sadece ödenmemiş)
-
-## 🐛 Sorun 2: Kategoriler Yarım Görünüyordu
-
-### Eski Davranış
-Sağ menü dar (380px) → kategori chip'leri yatay scroll → kullanıcı kategoriyi göremiyor, scrollu fark etmiyor.
-
-### Çözüm: Modern Dropdown
-```
-┌─────────────────────────────┐
-│ [☕] Kahveler          ▼    │  ← seçili kategori, tıklanır
-└─────────────────────────────┘
-   ↓ (tıkla)
-┌─────────────────────────────┐
-│ ☕ Kahveler              ●  │  ← aktif accent
-│ 🍵 Çaylar                   │
-│ 🥐 Atıştırmalıklar          │
-│ 🍰 Tatlılar                 │
-│ 🥤 Soğuk İçecekler          │
-│ 🍔 Ana Yemekler             │
-│ 🥗 Salatalar                │
-└─────────────────────────────┘
-```
-
-- **Compact**: tek satır, kategori adı + ▼ ok
-- **Açılır**: modal değil dropdown (max 280px yükseklik, içeride scroll)
-- **Akıllı kapatma**: dışarı tıklayınca kapanır
-- **Aktif gösterim**: seçili kategoride accent renk + ● dot
-- Tüm kategoriler ikon + isim ile rahat görünür
-
-## 📦 Dosyalar (3)
+## 📦 Dosyalar (2)
 
 ```
-lib/actions/tables-status.ts         (getTableOrders - 3. query: recently paid)
-components/order/menu-picker.tsx     (CategoryDropdown component)
-components/order/hesap-panel.tsx     (header - Kalan tutar gösterimi)
+components/order/menu-picker.tsx    (toggle UI + state + ToggleSwitch component)
+components/order/hesap-panel.tsx    (defaultSendToKitchen={false})
 ```
 
 ## 🚀 Push
 
 ```powershell
 git add .
-git commit -m "fix(hesap-panel): ödenen kalem grileşsin + kategori dropdown"
+git commit -m "feat(hesap-panel): mutfak fişi toggle - kasiyer karar versin"
 git push
 ```
 
 ## 🧪 Test
 
-### A) Ödenen Kalem Görünümü
-1. Masa B5'te 6 kalem var
-2. 2 kalem seç → **Seçili Öde** → onayla → ödendi
-3. ✅ Hesap paneli yenilenince **ödenen 2 kalem grileşmiş** olarak listede görünür
-4. ✅ "✓ ÖDENDİ" rozeti, line-through fiyat
-5. ✅ Header: "MASA TOPLAM ₺630" + altında "Kalan: ₺315"
-6. ✅ Checkbox tıklanmıyor (disabled, opacity düşük)
-7. Kalan 4 kalem hâlâ seçilebilir, ödenebilir
+### A) Hesap Panel — Default Kapalı
+1. Hesap Al → sağ menü
+2. Sepete ürün ekle
+3. ✅ Toggle: **KAPALI** (gri 🚫 + "Sadece hesaba eklenir")
+4. **+ Masaya Ekle** → ✅ mutfağa GİTMEZ, sadece hesaba düşer
 
-### B) Kategori Dropdown
-1. Sağ menü açık
-2. ✅ Üstte: "[☕] Kahveler ▼" tek satırlık dropdown
-3. Tıkla → ✅ tüm kategoriler aşağı açılır
-4. Bir kategori tıkla → ✅ dropdown kapanır, ürünler değişir
-5. Dropdown açıkken dışarı tıkla → ✅ kapanır
-6. Çok fazla kategori varsa → ✅ dropdown içinde scroll çalışır (max 280px)
-7. Aktif kategori → ✅ accent renk + ● dot
+### B) Toggle Açma
+1. Sepette ürün varken toggle'a tıkla
+2. ✅ Toggle accent renge döner (🖨️ + "Fiş basılır, istasyona düşer")
+3. **+ Masaya Ekle** → ✅ mutfağa fiş basılır
 
-### C) Edge Case
-- Tüm masa ödendi → "Kalan: ₺0" görünür mü? **Hayır, gizli** (`unpaidTotal !== tableTotal` kontrolü)
-- 4 saatten eski ödemeler → görünmez (eski kalmasın, performans)
+### C) State Korunma
+1. Toggle'ı AÇIK yap → ürün ekle → sepet temizlenir
+2. Yeni ürün ekle
+3. ✅ Toggle hâlâ AÇIK (kasiyerin tercihi korundu)
+
+### D) Garson Akışı (etkilenmedi)
+1. Garson masaya tıkla → OrderTakingModal
+2. Bu MenuPicker değil OrderTakingModal — toggle yok
+3. Eski davranış: her zaman mutfağa gider ✓
 
 ## 💡 Mimari
 
-### `getTableOrders` Yeni Query
-3. query: `payment_status='paid' AND created_at > 4saat önce`
+### State Yönetimi
+```typescript
+const [sendToKitchen, setSendToKitchen] = useState(defaultSendToKitchen);
+```
 
-**Neden 4 saat?** 
-- Tipik bir oturum 1-3 saat
-- 4 saat içinde ödenen kalemler hâlâ ekranda kalır
-- Daha eski → silinmez ama listeye düşmez (performans + temizlik)
+- Component mount'ta `defaultSendToKitchen` ile başlar
+- Kasiyer toggle ile değiştirir
+- Component yeniden render olmadıkça state korunur
 
-İstersen bu süreyi `12h` veya `1 gün` yapabiliriz.
+### `hideKitchenToggle` Prop
+Toggle'ı tamamen gizlemek için (örn. ileride kiosk modunda):
+```tsx
+<MenuPicker hideKitchenToggle defaultSendToKitchen={true} />
+```
 
-### CategoryDropdown
-- Native popover (extra dep yok)
-- `setTimeout` ile dış tıklama yakalama (ilk açılış event'ini engellemek için)
-- max-height 280px + scroll → çok kategoriye uyumlu
-- Accent border açıkken (focus state)
+### Görsel İpuçları
+
+| Durum | İkon | Renk | Mesaj |
+|-------|------|------|-------|
+| Açık | 🖨️ | accent | "Fiş basılır, istasyona düşer" |
+| Kapalı | 🚫 | gri | "Sadece hesaba eklenir" |
 
 ## 🗺️ Durum
 
 | | |
 |---|---|
-| Hesap Panel B (tam özellik) | ✅ |
-| **Ödenen kalem + kategori dropdown** | **✅ BU PAKET** |
+| Hesap panel B (tam özellik) | ✅ |
+| Ödenen kalem grileşme | ✅ |
+| Kalan tutar + satır click | ✅ |
+| **Mutfak fişi toggle** | **✅ BU PAKET** |
 | Süper admin paneli | 🔜 |
 
 Push → test → çalışırsa **"süper admin paneli"** veya başka iş söyle 🚀

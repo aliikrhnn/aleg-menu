@@ -1100,6 +1100,7 @@ export function HesapPanel({
               targetOrderId={unpaidOrders[0]?.id}
               cashierId={cashierId}
               onAdded={onChanged}
+              defaultSendToKitchen={false}
             />
           </div>
         </div>
@@ -1245,10 +1246,24 @@ function FlatItemRow({
   const itemCfg =
     itemStatusConfig[flatItem.orderStatus] || itemStatusConfig.received;
   const isCancelled = item.status === 'cancelled';
+  const canToggle = !!onToggle && !isCancelled;
 
   return (
     <div
-      className="flex items-start gap-2.5 p-2.5 rounded-[10px] transition-all"
+      role={canToggle ? 'button' : undefined}
+      tabIndex={canToggle ? 0 : undefined}
+      onClick={canToggle ? onToggle : undefined}
+      onKeyDown={
+        canToggle
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onToggle!();
+              }
+            }
+          : undefined
+      }
+      className="flex items-start gap-2.5 p-2.5 rounded-[10px] transition-all select-none"
       style={{
         background: isSelected
           ? 'color-mix(in srgb, var(--accent) 6%, var(--paper))'
@@ -1261,22 +1276,15 @@ function FlatItemRow({
             : 'var(--line)'
         }`,
         opacity: isPaid || isCancelled ? 0.55 : 1,
+        cursor: canToggle ? 'pointer' : 'default',
       }}
     >
-      <button
-        type="button"
-        onClick={onToggle}
-        disabled={!onToggle || isCancelled}
-        className="flex-shrink-0 mt-0.5"
-        style={{
-          cursor: onToggle && !isCancelled ? 'pointer' : 'not-allowed',
-        }}
-      >
+      <div className="flex-shrink-0 mt-0.5" aria-hidden="true">
         <CheckBoxIndicator
           active={isSelected}
           disabled={!onToggle || isCancelled}
         />
-      </button>
+      </div>
 
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline gap-2 flex-wrap">

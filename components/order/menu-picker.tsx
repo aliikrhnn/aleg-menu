@@ -44,6 +44,17 @@ type Props = {
   targetOrderId?: string;
   cashierId: string;
   onAdded: () => void;
+  /**
+   * Mutfağa gönderme toggle'ının default değeri.
+   * Hesap alma akışında genelde `false` (kasiyer hızlı eklerken),
+   * Garson akışında `true` (yeni sipariş alınıyor).
+   * Kasiyer toggle ile her durumda değiştirebilir.
+   */
+  defaultSendToKitchen?: boolean;
+  /**
+   * Toggle switch'ini gizle - değer her zaman defaultSendToKitchen olur
+   */
+  hideKitchenToggle?: boolean;
 };
 
 export function MenuPicker({
@@ -51,6 +62,8 @@ export function MenuPicker({
   targetOrderId,
   cashierId,
   onAdded,
+  defaultSendToKitchen = true,
+  hideKitchenToggle = false,
 }: Props) {
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState<CategoryForPos[]>([]);
@@ -60,6 +73,8 @@ export function MenuPicker({
   const [cart, setCart] = useState<CartItem[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [pickerProduct, setPickerProduct] = useState<ProductForPos | null>(null);
+  // Kasiyer her seferinde değiştirebilir
+  const [sendToKitchen, setSendToKitchen] = useState(defaultSendToKitchen);
 
   useEffect(() => {
     let live = true;
@@ -205,7 +220,7 @@ export function MenuPicker({
         orderId: targetOrderId,
         cashierId,
         items,
-        sendToKitchen: true,
+        sendToKitchen,
       });
       success = r.success;
       errorMsg = r.error;
@@ -215,7 +230,7 @@ export function MenuPicker({
         orderType: 'dine_in',
         cashierId,
         items,
-        sendToKitchen: true,
+        sendToKitchen,
       });
       success = r.success;
       errorMsg = r.error;
@@ -229,7 +244,15 @@ export function MenuPicker({
     toast.success(`${cartItemCount} ürün masaya eklendi`);
     setCart([]);
     onAdded();
-  }, [cart, cartItemCount, targetOrderId, tableId, cashierId, onAdded]);
+  }, [
+    cart,
+    cartItemCount,
+    targetOrderId,
+    tableId,
+    cashierId,
+    onAdded,
+    sendToKitchen,
+  ]);
 
   if (loading) {
     return (
@@ -469,6 +492,54 @@ export function MenuPicker({
               {submitting ? 'Ekleniyor…' : '+ Masaya Ekle'}
             </button>
           </div>
+
+          {/* MUTFAK FİŞİ TOGGLE */}
+          {!hideKitchenToggle && (
+            <button
+              type="button"
+              onClick={() => setSendToKitchen((v) => !v)}
+              className="w-full px-3 py-2 flex items-center justify-between gap-2 transition-colors"
+              style={{
+                borderTop: '1px solid var(--line)',
+                background: sendToKitchen
+                  ? 'color-mix(in srgb, var(--accent) 5%, transparent)'
+                  : 'var(--paper-2)',
+                color: sendToKitchen ? 'var(--accent)' : 'var(--ink-3)',
+              }}
+            >
+              <div className="flex items-center gap-2">
+                <span style={{ fontSize: 14 }}>
+                  {sendToKitchen ? '🖨️' : '🚫'}
+                </span>
+                <div className="text-left">
+                  <div
+                    className="uppercase"
+                    style={{
+                      fontFamily: 'var(--f-mono)',
+                      fontSize: 9,
+                      fontWeight: 700,
+                      letterSpacing: '0.14em',
+                    }}
+                  >
+                    {sendToKitchen ? 'MUTFAĞA YOLLA' : 'MUTFAĞA YOLLAMA'}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 10,
+                      color: 'var(--ink-3)',
+                      lineHeight: 1.3,
+                      marginTop: 1,
+                    }}
+                  >
+                    {sendToKitchen
+                      ? 'Fiş basılır, istasyona düşer'
+                      : 'Sadece hesaba eklenir'}
+                  </div>
+                </div>
+              </div>
+              <ToggleSwitch active={sendToKitchen} />
+            </button>
+          )}
         </div>
       )}
 
@@ -1078,6 +1149,37 @@ function CategoryDropdown({
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+// ============================================================
+// TOGGLE SWITCH — Mutfak fişi açık/kapalı
+// ============================================================
+function ToggleSwitch({ active }: { active: boolean }) {
+  return (
+    <div
+      className="relative flex-shrink-0 transition-colors"
+      style={{
+        width: 36,
+        height: 20,
+        borderRadius: 10,
+        background: active ? 'var(--accent)' : 'var(--ink-3)',
+      }}
+    >
+      <div
+        className="absolute transition-transform"
+        style={{
+          top: 2,
+          left: 2,
+          width: 16,
+          height: 16,
+          borderRadius: 8,
+          background: '#FAF5EA',
+          transform: active ? 'translateX(16px)' : 'translateX(0)',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+        }}
+      />
     </div>
   );
 }
