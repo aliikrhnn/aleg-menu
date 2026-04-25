@@ -815,7 +815,6 @@ export function PaymentModal({
         <SplitPaymentModal
           order={order}
           discountAmount={discountAmount}
-          discountReason={discountReason}
           tipAmount={tipAmount}
           onClose={() => setSplitOpen(false)}
           onAllPaid={() => {

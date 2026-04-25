@@ -11,7 +11,6 @@ import {
   type TableWithStatus,
 } from '@/lib/actions/tables-status';
 import { PaymentModal } from '@/app/panel/(shell)/pos/payment-modal';
-import { PrintButton } from '@/components/panel/print-button';
 import { useCashierSession } from '@/lib/cashier-session';
 import { toast } from '@/components/ui/toast';
 import { confirmDialog } from '@/components/ui/confirm-dialog';

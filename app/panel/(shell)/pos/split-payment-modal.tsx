@@ -21,7 +21,6 @@ type OrderInput = {
 type Props = {
   order: OrderInput;
   discountAmount: number;
-  discountReason: string;
   tipAmount: number;
   onClose: () => void;
   onAllPaid: () => void;
@@ -40,7 +39,6 @@ type PaidRecord = {
 export function SplitPaymentModal({
   order,
   discountAmount,
-  discountReason: _discountReason,
   tipAmount,
   onClose,
   onAllPaid,
