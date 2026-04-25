@@ -1,146 +1,189 @@
-# 📝 GARSON SİPARİŞ ALMA
+# 🎛 GARSON — VARYANTLAR + SEÇENEKLER
 
-Garson tüm masalardan tıklayarak sipariş alabilir. Kasa register-panel'in sadeleştirilmiş, mobile-first versiyonu.
+Garson sipariş alma modalına varyant ve option_preset desteği eklendi. Bottom sheet seçim modalı ile gerçek POS deneyimi.
 
-**2 dosya · Migration yok · Mevcut `createManualOrder` action'ını kullanır.**
+**1 dosya · Migration yok · `createManualOrder` zaten options destekliyordu (sadece UI işi).**
 
 ## 🎯 Akış
 
 ```
-Garson → Tüm Masalar / Açık Masa
+Sipariş alma modalı
    ↓
-Masaya tıkla
+Ürün kartına tıkla
    ↓
-Sipariş Alma Modal açılır:
-   ├─ Header: ✕ + masa adı
-   ├─ Search: ürün ara
-   ├─ Category chips: yatay scroll
-   ├─ Product grid: 2-3 sütun
-   └─ Cart (sticky bottom):
-       ├─ Her item: − adet + × kaldır + not
-       ├─ Toplam
-       └─ ✓ Mutfağa Gönder
+Eğer varyantlı veya option_preset'li ise
+   → Bottom sheet seçim modalı açılır:
+     ├─ Header: ürün adı + açıklama + ✕
+     ├─ VARYANT (radio): Boyut → Küçük/Orta/Büyük (+₺X)
+     ├─ OPTION PRESET'LER:
+     │   ├─ Single (radio): Şeker → Yok/Az/Normal/Bol
+     │   └─ Multi (checkbox): Ekstralar → Sucuk +₺5, Kaşar +₺5, ...
+     ├─ Müşteri Notu (input)
+     └─ Footer: TOPLAM (real-time) + + Sepete Ekle
    ↓
-Sipariş DB'ye yazılır (status='confirmed', order_type='dine_in')
-   ↓
-Mutfak ekranında / POS'ta görünür
-   ↓
-Garson "Siparişler" sekmesinde de görünür (ONAYLANDI rozeti)
+Düz ürün ise (varyant + preset yok)
+   → Direkt sepete eklenir
 ```
 
 ## ✨ Özellikler
 
-### Modal UI
-- **Tam ekran modal** (mobile-first)
-- **Search box** — ürün adı + açıklamada arama
-- **Kategori chips** — yatay scroll, hero_icon + isim, search aktif olunca gizlenir
-- **Ürün kartları** — 2-3 sütun grid, hero_icon + isim + 2 satır açıklama + fiyat
-- **Tıklayınca sepete eklenir** (aynı ürün → adet artar)
-- **Variant desteği** — varyantlı ürünlerde ilki default seçilir (basit akış)
+### Bottom Sheet Modal
+- **Mobile**: aşağıdan slide-up (rounded top)
+- **Desktop**: ortada modal (rounded full)
+- Backdrop tıklanınca kapanır
+- Animasyon: spring bounce in
 
-### Sepet (Sticky Bottom Sheet)
-- **Item bazında kontroller:**
-  - − / sayı / + (adet)
-  - × kaldır
-  - "+ NOT EKLE" / "DÜZENLE" — müşteri notu (örn "az şekerli")
-- **TEMİZLE** butonu — sepeti boşaltır
-- **Toplam** + **✓ Mutfağa Gönder** sticky footer
+### Varyant Seçimi (radio)
+- Tek seçim, ilk varyant default
+- Her satırda fiyat farkı (`+₺5`, `+₺10`)
+- Seçili olan accent border + filled radio dot
 
-### Backend
-- `createManualOrder()` action mevcut (kasa da kullanıyor)
-- Parametreler:
-  - `tableId`: masa ID
-  - `orderType: 'dine_in'`
-  - `cashierId`: garson hesabının ID'si
-  - `items[]`: ürün + adet + not
-  - `sendToKitchen: true` → status `confirmed`, mutfağa gider
-- `payment_status` `pending` kalır (ödeme kasada alınır)
+### Option Preset'ler
+- **Single** type → radio buttons
+- **Multi** type → checkboxes
+- **Required** preset → "* ZORUNLU" rozet, seçilmeden eklenemez
+- **Default values** otomatik seçili (DB'deki `is_default`)
+- Her değer için price_delta gösterimi
 
-## 📦 Dosyalar (2)
+### Real-Time Fiyat
+```
+TOPLAM = base_price + variant_delta + sum(selected_options.price_delta)
+```
+Her seçim değişikliğinde anında güncellenir.
+
+### Validation
+- Tüm `required` alanlar dolu olana kadar **+ Sepete Ekle** butonu disabled
+- Disabled state: opaklık 40%
+
+### Sepette Görünüm
+- Her cart item'da seçilen options küçük accent chip'leri
+- Format: `Orta · Az şeker · Yulaf süt · Bademli`
+- Chip'lerde price_delta da görünür (`+₺5`)
+
+### ProductCard Önizleme
+- Varyantlı veya option'lı ürünlerde sağ üstte **"◈ SEÇENEK"** rozeti
+- Garson hangi ürünlerin seçenekli olduğunu önceden görür
+
+### Hash Bazlı Birleştirme
+Sepete ekleme key:
+```
+${productId}__${variantId || 'none'}__${optsHash}__${note || ''}
+```
+
+- **Aynı seçimli aynı ürün** → adet artar
+- **Farklı seçimli aynı ürün** → yeni satır
+
+Örnek:
+```
+1× Latte (Büyük) · Bol şekerli       ← bir satır
+1× Latte (Orta)  · Şekersiz · Bademli ← ayrı satır
+2× Latte (Büyük) · Bol şekerli       ← üstüne tıklanırsa adet 2 olur
+```
+
+## 📦 Dosya (1)
 
 ```
-app/garson/order-taking-modal.tsx     (yeni - tam fonksiyonel sipariş ekranı)
-app/garson/waiter-board.tsx           (TableCard tıklanabilir + modal entegrasyon)
+app/garson/order-taking-modal.tsx     (CartItem.options + ProductOptionsPicker + chip'ler)
 ```
 
 ## 🚀 Push
 
 ```powershell
 git add .
-git commit -m "feat(garson): sipariş alma modal - masaya tıkla, ürün ekle, mutfağa gönder"
+git commit -m "feat(garson): varyant + option_preset seçim modalı (radio/checkbox/required)"
 git push
 ```
 
 ## 🧪 Test
 
-### A) Sipariş Alma
-1. Garson sekmesi → **Tüm Masalar** veya **Açık Masa**
-2. Bir masaya tıkla → ✅ tam ekran modal açılır, başlıkta masa adı
-3. Search'te bir kelime yaz → ürünler filtrelenir, kategori chips gizlenir
-4. Search'i temizle → kategoriler geri gelir
-5. Bir kategori seç (Kahveler, Yemekler, vb.) → ✅ ürünler filtrelenir
-6. Bir ürün kartına tıkla → sepete eklenir (sticky alttan açılır)
-7. Aynı ürüne tekrar tıkla → adet 2 olur (ayrı satır değil)
+### A) Varyantlı Ürün
+1. Panel'den bir ürüne varyant ekle (örn Kahve: Küçük/Orta/Büyük, fiyat farklarıyla)
+2. Garson → masa tıkla → modal açılır
+3. Kahve kartında ✅ "◈ SEÇENEK" rozeti görünür
+4. Karta tıkla → ✅ seçim modalı açılır (bottom sheet)
+5. Boyut listesinde 3 seçenek + her birinde fiyat farkı
+6. "Orta" seç → ✅ TOPLAM güncellenir
+7. **+ Sepete Ekle** → sepette `Latte (Orta)` görünür, accent chip: `Orta`
 
-### B) Sepet İşlemleri
-1. Sepetteki bir ürünün **+** butonuna bas → adet artar
-2. **−** ile azalt, 0'a inerse silinir
-3. **×** ile direkt kaldır
-4. **+ NOT EKLE** → input açılır → "az şekerli" yaz → ✓ ile kaydet
-5. Not eklenmiş satır artık ayrı görünür (DÜZENLE ile değiştirilebilir)
-6. **TEMİZLE** ile sepeti boşalt
+### B) Option Preset (Single + Required)
+1. Bir ürüne preset ekle: "Şeker" (single, required, values: Yok/Az/Normal/Bol)
+2. Modal aç → "Şeker" başlığında ✅ "* ZORUNLU" rozet
+3. **+ Sepete Ekle** disabled (henüz seçim yok ya da default'tan dolayı seçili olabilir)
+4. "Az" seç → buton aktif → ekle
+5. Sepette chip: `Az`
 
-### C) Mutfağa Gönder
-1. Sepette ürünler varken → **✓ Mutfağa Gönder**
-2. Loading "Gönderiliyor..." → toast "Masa X · sipariş gönderildi"
-3. Modal kapanır
-4. Garson **Siparişler** sekmesine geç → ✅ siparişin **ONAYLANDI** rozetiyle görünür
-5. Karta tıkla → kalemleri + notları gör
-6. Mutfak panel/POS'ta da görünür ✅
+### C) Option Preset (Multi)
+1. Ürüne preset ekle: "Ekstralar" (multi, optional, values: Sucuk +5, Kaşar +5, Mantar +3)
+2. Modal aç → "Ekstralar" başlığı + "Birden fazla seçilebilir" subtitle
+3. Sucuk + Mantar seç → toplam +₺8 artar
+4. Ekle → sepette: `Sucuk +₺5 · Mantar +₺3` chip'leri
 
-### D) Senaryolar
-1. **Boş sepetle gönder** → toast "Sepet boş", gönderilmez
-2. **Modal'ı kapat** → ✕ veya geri tuşuna bas, sepet temizlenir
-3. **Açık masa zaten varken yeni sipariş** → her sipariş bağımsız (eski siparişler etkilenmez)
+### D) Default Values
+1. Bir preset value'sını `is_default=true` yap
+2. Modal aç → ✅ o değer otomatik seçili gelir
+3. Required preset için en az bir default varsa → buton aktif gelir
 
-## 💡 Mimari Notlar
+### E) Aynı/Farklı Seçim Birleştirme
+1. Latte (Büyük) + Az şekerli ekle
+2. Aynı seçimle tekrar Latte (Büyük) + Az şekerli ekle → ✅ adet 2 olur
+3. Latte (Büyük) + **Bol şekerli** ekle → ✅ ayrı satır olarak eklenir
 
-### Mevcut Action Kullanımı
-`createManualOrder` action'ı zaten kasa register-panel'de kullanılıyordu. Aynı action garson için de mükemmel:
-- Cashier güvenlik kontrolü ✓
-- Masa güvenlik kontrolü ✓
-- Total hesaplama ✓
-- `sendToKitchen` parametresi ile direkt confirmed'a geçiş ✓
-- `source: 'manual'` (kasa source'undan ayırt etmek için ileride filter konabilir)
+### F) Düz Ürün
+1. Varyantsız ve option_preset'siz bir ürüne tıkla
+2. ✅ Modal AÇILMAZ, direkt sepete eklenir (eski akış)
 
-### Cashier ID
-`useCashierSession()` zaten garson login'de cashier objesini döndürüyor. `cashier.id` direkt kullanılır.
+### G) Mutfağa Gönder
+1. Çeşitli seçimlerle birkaç ürün ekle
+2. **✓ Mutfağa Gönder**
+3. Garson "Siparişler" sekmesinde kartı aç
+4. ✅ Her kalemde ürün adı + adet + (varsa) options görünür
+5. Mutfak panel/POS'ta da options ile birlikte yazdırılır
 
-### Variant Sadeleştirmesi
-Varyantlı ürünlerde **ilk varyant otomatik seçilir**. Bu basitlik için. İleri seviye:
-- Varyant seçim modalı (kahve: küçük/orta/büyük)
-- Option preset desteği (sütlü/sütsüz vs)
+## 💡 Mimari
 
-Şu an garson akışında bunlar yok; ekleneceği zaman ayrı bir paket olur.
+### Backend Değişikliği YOK
+`createManualOrder` action zaten `items[].options` parametresi alıyordu:
+```typescript
+options?: Array<{
+  preset_name: string;
+  value_name: string;
+  price_delta: number;
+}>;
+```
 
-### Ödeme Akışı
-Sipariş `payment_status: 'pending'` ile yazılır. Müşteri ayrılırken garson masayı kasaya yönlendirir, kasada ödeme alınır. Bu mevcut akış değişmez.
+DB'ye `order_items.options` JSONB olarak yazılır. Mutfak/POS sipariş gösterirken zaten okuyor.
+
+### State Yapısı
+```typescript
+const [pickerProduct, setPickerProduct] = useState<ProductForPos | null>(null);
+const [variantId, setVariantId] = useState<string | undefined>(...);
+const [selectedOpts, setSelectedOpts] = useState<Record<string, string[]>>(...);
+```
+
+`selectedOpts` haritası: `presetId → [valueId, ...]`. Single'da tek eleman, multi'de birden fazla.
+
+### Validation
+```typescript
+const isValid = sortedPresets.every((p) => {
+  if (!p.required) return true;
+  return (selectedOpts[p.preset_id] || []).length > 0;
+});
+```
 
 ## 🗺️ Durum
 
 | | |
 |---|---|
-| Garson tüm siparişler + kalem detay | ✅ |
-| **Garson sipariş alma** | **✅ BU PAKET** |
-| Süper admin panel | 🔜 |
+| Garson sipariş alma | ✅ |
+| **Varyantlar + option preset'ler** | **✅ BU PAKET** |
+| Süper admin paneli | 🔜 |
 | Modül yönetimi | 🔜 |
 
-## 🔮 Sonraki İyileştirmeler
+## 🔮 Sonra
 
-- **Varyant seçim modalı** — küçük/orta/büyük gibi
-- **Option preset desteği** — sütlü/sütsüz, az şekerli
 - **Açık masaya kalem ekleme** — yeni bağımsız sipariş yerine mevcut hesaba ekleme
-- **Hızlı satış** (masa olmayan paket/al-götür) — garson tarafında
-- **Geçmiş sipariş şablonları** — sık tekrar edilen siparişler
+- **Hızlı satış** garson tarafında (masa olmayan paket/al-götür)
+- **Kalem düzenleme** sepette → seçimleri tekrar açma
+- **Geçmiş sipariş şablonları** — sık tekrar siparişler
 
-Push → test → çalışırsa bir sonraki feature'a 🚀
+Push → test → çalışırsa sonraki feature'a 🚀
