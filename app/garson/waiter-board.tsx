@@ -20,6 +20,10 @@ import {
   type TableZoneWithTables,
 } from '@/lib/actions/tables-status';
 import { OrderTakingModal } from './order-taking-modal';
+import {
+  TablesFullView,
+  type ZoneFilterId,
+} from '@/components/tables/table-card';
 import { getKasaSoundSettings } from '@/lib/actions/sound-settings';
 import { type SoundSettings, DEFAULT_SOUND_SETTINGS } from '@/lib/sound-types';
 import { playSound, type SoundId } from '@/lib/sounds';
@@ -362,6 +366,9 @@ export function WaiterBoard({ businessId }: Props) {
     null
   );
 
+  // Zone filter (Tümü/zone-id)
+  const [tableFilter, setTableFilter] = useState<ZoneFilterId>('all');
+
   const handleSelectTable = useCallback((t: TableWithStatus) => {
     setOrderModalTable(t);
   }, []);
@@ -542,15 +549,19 @@ export function WaiterBoard({ businessId }: Props) {
           <OrdersTab orders={activeOrders} onDeliver={handleDeliverOrder} />
         )}
         {activeTab === 'active' && (
-          <ActiveTablesTab
-            tables={activeTables}
+          <ActiveTablesView
+            zones={zones}
+            activeFilter={tableFilter}
+            onFilterChange={setTableFilter}
             callsByTable={callsByTable}
             onSelectTable={handleSelectTable}
           />
         )}
         {activeTab === 'tables' && (
-          <AllTablesTab
+          <TablesFullView
             zones={zones}
+            activeFilter={tableFilter}
+            onFilterChange={setTableFilter}
             callsByTable={callsByTable}
             onSelectTable={handleSelectTable}
           />
@@ -1027,220 +1038,54 @@ function OrdersTab({
 }
 
 // ============================================================
-// TAB 3: AÇIK MASALAR
+// TAB 3: AÇIK MASALAR (sadece dolu/aktif olanlar) - yeni tasarım
 // ============================================================
-function ActiveTablesTab({
-  tables,
-  callsByTable,
-  onSelectTable,
-}: {
-  tables: TableWithStatus[];
-  callsByTable: Map<string, number>;
-  onSelectTable: (t: TableWithStatus) => void;
-}) {
-  if (tables.length === 0) {
-    return <EmptyState icon="📋" title="Açık masa yok" subtitle="Tüm masalar boş şu an." />;
-  }
-  return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-      {tables.map((t) => (
-        <TableCard
-          key={t.id}
-          table={t}
-          callCount={callsByTable.get(t.id) || 0}
-          onSelect={onSelectTable}
-        />
-      ))}
-    </div>
-  );
-}
-
-// ============================================================
-// TAB 4: TÜM MASALAR (zone'lara göre)
-// ============================================================
-function AllTablesTab({
+function ActiveTablesView({
   zones,
+  activeFilter,
+  onFilterChange,
   callsByTable,
   onSelectTable,
 }: {
   zones: TableZoneWithTables[];
+  activeFilter: ZoneFilterId;
+  onFilterChange: (id: ZoneFilterId) => void;
   callsByTable: Map<string, number>;
   onSelectTable: (t: TableWithStatus) => void;
 }) {
-  if (zones.length === 0) {
-    return <EmptyState icon="◍" title="Masa bulunamadı" subtitle="Henüz masa eklenmemiş." />;
+  // Sadece aktif/dolu/yeni/hazir/unpaid masalar
+  const activeZones = useMemo(() => {
+    return zones
+      .map((zg) => ({
+        ...zg,
+        tables: zg.tables.filter((t) =>
+          ['active', 'new', 'ready', 'unpaid'].includes(t.live_status)
+        ),
+      }))
+      .filter((zg) => zg.tables.length > 0);
+  }, [zones]);
+
+  if (activeZones.length === 0) {
+    return (
+      <EmptyState
+        icon="📋"
+        title="Açık masa yok"
+        subtitle="Tüm masalar boş şu an."
+      />
+    );
   }
+
   return (
-    <div className="space-y-5">
-      {zones.map((zg, idx) => (
-        <div key={zg.zone?.id || `zone-${idx}`}>
-          <div
-            className="px-1 mb-2 flex items-baseline gap-2"
-            style={{ fontFamily: 'var(--f-mono)' }}
-          >
-            <span
-              className="uppercase"
-              style={{
-                fontSize: 9,
-                fontWeight: 700,
-                letterSpacing: '0.16em',
-                color: zg.zone?.color || 'var(--accent)',
-              }}
-            >
-              {zg.zone?.name || 'Diğer'}
-            </span>
-            <span style={{ fontSize: 10, color: 'var(--ink-3)' }}>
-              · {zg.tables.length}
-            </span>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-            {zg.tables.map((t) => (
-              <TableCard
-                key={t.id}
-                table={t}
-                callCount={callsByTable.get(t.id) || 0}
-                onSelect={onSelectTable}
-              />
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
+    <TablesFullView
+      zones={activeZones}
+      activeFilter={activeFilter}
+      onFilterChange={onFilterChange}
+      callsByTable={callsByTable}
+      onSelectTable={onSelectTable}
+    />
   );
 }
 
-// ============================================================
-// TABLE CARD
-// ============================================================
-function TableCard({
-  table,
-  callCount,
-  onSelect,
-}: {
-  table: TableWithStatus;
-  callCount: number;
-  onSelect?: (t: TableWithStatus) => void;
-}) {
-  const statusConfig: Record<
-    string,
-    { color: string; label: string; bg: string }
-  > = {
-    empty: {
-      color: 'var(--ok)',
-      label: 'BOŞ',
-      bg: 'color-mix(in srgb, var(--ok) 6%, var(--card))',
-    },
-    active: {
-      color: 'var(--gold)',
-      label: 'DOLU',
-      bg: 'color-mix(in srgb, var(--gold) 6%, var(--card))',
-    },
-    new: {
-      color: 'var(--accent)',
-      label: 'YENİ',
-      bg: 'color-mix(in srgb, var(--accent) 8%, var(--card))',
-    },
-    ready: {
-      color: 'var(--ok)',
-      label: 'HAZIR',
-      bg: 'color-mix(in srgb, var(--ok) 8%, var(--card))',
-    },
-    unpaid: {
-      color: 'var(--danger)',
-      label: 'ÖDEME BEK.',
-      bg: 'color-mix(in srgb, var(--danger) 6%, var(--card))',
-    },
-    reserved: {
-      color: 'var(--olive)',
-      label: 'REZERVE',
-      bg: 'color-mix(in srgb, var(--olive) 6%, var(--card))',
-    },
-  };
-  const effectiveStatus =
-    table.has_unpaid && table.live_status === 'active'
-      ? 'unpaid'
-      : table.live_status;
-  const cfg = statusConfig[effectiveStatus] || statusConfig.empty;
-
-  return (
-    <button
-      type="button"
-      onClick={() => onSelect?.(table)}
-      disabled={!onSelect}
-      className="relative rounded-[14px] p-3 text-left transition-all active:scale-[0.97]"
-      style={{
-        background: cfg.bg,
-        border: `1.5px solid ${effectiveStatus === 'empty' ? 'var(--line)' : `color-mix(in srgb, ${cfg.color} 30%, var(--line))`}`,
-        minHeight: 90,
-        cursor: onSelect ? 'pointer' : 'default',
-        width: '100%',
-      }}
-    >
-      {/* Çağrı rozeti - sağ üst */}
-      {callCount > 0 && (
-        <div
-          className="absolute z-10 flex items-center justify-center"
-          style={{
-            top: -6,
-            right: -6,
-            minWidth: 22,
-            height: 22,
-            padding: '0 6px',
-            borderRadius: 11,
-            background: 'var(--accent)',
-            color: '#FAF5EA',
-            fontFamily: 'var(--f-mono)',
-            fontSize: 11,
-            fontWeight: 700,
-            boxShadow:
-              '0 4px 10px -2px color-mix(in srgb, var(--accent) 55%, transparent), 0 0 0 2.5px var(--paper)',
-            animation: 'callsBumpPulse 1.4s ease-in-out infinite',
-          }}
-        >
-          🔔 {callCount > 1 ? callCount : ''}
-        </div>
-      )}
-
-      <div
-        className="uppercase mb-0.5"
-        style={{
-          fontFamily: 'var(--f-mono)',
-          fontSize: 9,
-          fontWeight: 700,
-          letterSpacing: '0.14em',
-          color: cfg.color,
-        }}
-      >
-        {cfg.label}
-      </div>
-      <div
-        style={{
-          fontFamily: 'var(--f-serif)',
-          fontStyle: 'italic',
-          fontSize: 20,
-          fontWeight: 500,
-          lineHeight: 1.1,
-          color: 'var(--ink)',
-          letterSpacing: '-0.02em',
-        }}
-      >
-        {table.name}
-      </div>
-      {table.total_amount > 0 && (
-        <div
-          className="mt-1 text-ink-2"
-          style={{
-            fontFamily: 'var(--f-mono)',
-            fontSize: 11,
-            fontWeight: 700,
-          }}
-        >
-          ₺{Math.round(table.total_amount)}
-        </div>
-      )}
-    </button>
-  );
-}
 
 // ============================================================
 // EMPTY STATE

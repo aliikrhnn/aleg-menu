@@ -1,189 +1,187 @@
-# 🎛 GARSON — VARYANTLAR + SEÇENEKLER
+# 🎨 PAYLAŞILAN MASA TASARIMI
 
-Garson sipariş alma modalına varyant ve option_preset desteği eklendi. Bottom sheet seçim modalı ile gerçek POS deneyimi.
+Garson ve kasa uygulamasında ortak, editorial, status-aware masa kartı sistemi. Tek bir paylaşılan component üzerinden tüm masa görünümleri tutarlı.
 
-**1 dosya · Migration yok · `createManualOrder` zaten options destekliyordu (sadece UI işi).**
+**3 dosya · Migration yok.**
 
-## 🎯 Akış
-
-```
-Sipariş alma modalı
-   ↓
-Ürün kartına tıkla
-   ↓
-Eğer varyantlı veya option_preset'li ise
-   → Bottom sheet seçim modalı açılır:
-     ├─ Header: ürün adı + açıklama + ✕
-     ├─ VARYANT (radio): Boyut → Küçük/Orta/Büyük (+₺X)
-     ├─ OPTION PRESET'LER:
-     │   ├─ Single (radio): Şeker → Yok/Az/Normal/Bol
-     │   └─ Multi (checkbox): Ekstralar → Sucuk +₺5, Kaşar +₺5, ...
-     ├─ Müşteri Notu (input)
-     └─ Footer: TOPLAM (real-time) + + Sepete Ekle
-   ↓
-Düz ürün ise (varyant + preset yok)
-   → Direkt sepete eklenir
-```
-
-## ✨ Özellikler
-
-### Bottom Sheet Modal
-- **Mobile**: aşağıdan slide-up (rounded top)
-- **Desktop**: ortada modal (rounded full)
-- Backdrop tıklanınca kapanır
-- Animasyon: spring bounce in
-
-### Varyant Seçimi (radio)
-- Tek seçim, ilk varyant default
-- Her satırda fiyat farkı (`+₺5`, `+₺10`)
-- Seçili olan accent border + filled radio dot
-
-### Option Preset'ler
-- **Single** type → radio buttons
-- **Multi** type → checkboxes
-- **Required** preset → "* ZORUNLU" rozet, seçilmeden eklenemez
-- **Default values** otomatik seçili (DB'deki `is_default`)
-- Her değer için price_delta gösterimi
-
-### Real-Time Fiyat
-```
-TOPLAM = base_price + variant_delta + sum(selected_options.price_delta)
-```
-Her seçim değişikliğinde anında güncellenir.
-
-### Validation
-- Tüm `required` alanlar dolu olana kadar **+ Sepete Ekle** butonu disabled
-- Disabled state: opaklık 40%
-
-### Sepette Görünüm
-- Her cart item'da seçilen options küçük accent chip'leri
-- Format: `Orta · Az şeker · Yulaf süt · Bademli`
-- Chip'lerde price_delta da görünür (`+₺5`)
-
-### ProductCard Önizleme
-- Varyantlı veya option'lı ürünlerde sağ üstte **"◈ SEÇENEK"** rozeti
-- Garson hangi ürünlerin seçenekli olduğunu önceden görür
-
-### Hash Bazlı Birleştirme
-Sepete ekleme key:
-```
-${productId}__${variantId || 'none'}__${optsHash}__${note || ''}
-```
-
-- **Aynı seçimli aynı ürün** → adet artar
-- **Farklı seçimli aynı ürün** → yeni satır
-
-Örnek:
-```
-1× Latte (Büyük) · Bol şekerli       ← bir satır
-1× Latte (Orta)  · Şekersiz · Bademli ← ayrı satır
-2× Latte (Büyük) · Bol şekerli       ← üstüne tıklanırsa adet 2 olur
-```
-
-## 📦 Dosya (1)
+## 📐 Tasarım
 
 ```
-app/garson/order-taking-modal.tsx     (CartItem.options + ProductOptionsPicker + chip'ler)
+┌────────────────────────────────────────────────────────────────────┐
+│ [Tümü 43] [Bahçe 13] [Bar 12] [Teras 8]      ● Yeni ● Dolu ● ...  │  ← Filter + Legend
+├────────────────────────────────────────────────────────────────────┤
+│ ▌ Bahçe   4/8 DOLU · ₺1.855 AÇIK            ━━━━━━━─────         │  ← Zone başlığı
+│ ┌────────┐  ┌────────┐  ┌────────┐  ┌────────┐                    │
+│ │YENİ 3× │  │BOŞ  4p │  │DOLU 7× │  │HESAP   │                    │
+│ │ B1     │  │ B2     │  │ B3     │  │ B5     │                    │
+│ │  ₺220  │  │        │  │  ₺485  │  │  ₺840  │                    │
+│ └────────┘  └────────┘  └────────┘  └────────┘
+```
+
+### Kart Anatomisi
+- **Üst rozet**: Status (YENİ/DOLU/BOŞ/HESAP/REZERVE/TEMİZLİK) + sağda adet (3×) veya kapasite (4p) + süre (18 dk)
+- **Orta**: Masa adı (büyük serif italic) + tutar (mono italic)
+- **Alt** *(opsiyonel)*: Garson adı + son sipariş kategori — `waiterName` ve `lastCategory` props ile (paket 2'de backend enrichment)
+
+### Status Renkleri
+| Status | Renk | Kullanım |
+|--------|------|----------|
+| BOŞ | ink-3 | Müşteri yok |
+| DOLU | gold | Aktif sipariş var |
+| YENİ | accent | Mutfağa yollanmamış kalem |
+| HAZIR | ok | Teslim edilmemiş hazır var |
+| HESAP | super | Ödeme bekliyor |
+| REZERVE | olive | Rezervasyon |
+| TEMİZLİK | ink-3 | Temizlik gerekli |
+
+### Filter Bar
+- **Tümü** + her zone bir chip (renk + sayı)
+- Aktif olan dolu, pasif olanlar zone rengiyle nokta + isim + sayı
+- Yatay scroll (mobile-first)
+
+### Legend
+- Sağ üstte küçük renk legend'ı
+- ● Yeni ● Dolu ● Hesap ● Rezerve ● Temizlik
+
+### Zone Header
+- Renk noktası + zone adı (italic serif)
+- "4/8 DOLU · ₺1.855 AÇIK" özet
+- Alt bar: doluluk progress (zone rengiyle)
+
+## 📦 Bileşenler
+
+`components/tables/table-card.tsx` 5 export sağlar:
+
+### `TableCard`
+Tek bir masa kartı. Standalone kullanılabilir.
+```tsx
+<TableCard
+  table={tableWithStatus}
+  callCount={3}
+  onClick={(t) => openModal(t)}
+  waiterName="Ayşe"      // opsiyonel
+  lastCategory="İçecek"  // opsiyonel
+/>
+```
+
+### `TableFilterBar`
+Tümü + zone chip'leri. Yatay scroll.
+
+### `TableLegend`
+Status renk legend'ı.
+
+### `TableZoneSection`
+Bir zone başlık + alt bar + grid.
+
+### `TablesFullView` ⭐ (En çok kullanılan)
+Hepsi bir arada: filter bar + legend üstte + zone section'ları.
+```tsx
+const [filter, setFilter] = useState<ZoneFilterId>('all');
+
+<TablesFullView
+  zones={zones}
+  activeFilter={filter}
+  onFilterChange={setFilter}
+  callsByTable={callsByTable}
+  onSelectTable={(t) => openModal(t)}
+/>
+```
+
+## 🔧 Kullanım Yerleri
+
+### 1. Garson `app/garson/waiter-board.tsx`
+- **"Açık Masa"** tab → `ActiveTablesView` (sadece dolu olanları filtreler) → `TablesFullView`
+- **"Tüm Masalar"** tab → `TablesFullView` direkt
+- Eski `ActiveTablesTab` + `AllTablesTab` + local `TableCard` silindi (~210 satır azaldı)
+
+### 2. Kasa `app/kasa/tables-grid.tsx`
+- Eski filter (Tümü/Boş/Dolu/Hesap) + custom card → `TablesFullView`
+- Eski helper component'ler (`FilterPill`, `TableCard`, `ZoneHeader`) silindi (~440 satır azaldı)
+- Mevcut `onTableClick` ve `callsByTable` props korundu
+
+## 📦 Dosyalar (3)
+
+```
+components/tables/table-card.tsx         (yeni - 470 satır, paylaşılan)
+app/garson/waiter-board.tsx              (TablesFullView entegrasyonu, eski component'ler silindi)
+app/kasa/tables-grid.tsx                 (TablesFullView entegrasyonu, ~440 satır azaldı)
 ```
 
 ## 🚀 Push
 
 ```powershell
 git add .
-git commit -m "feat(garson): varyant + option_preset seçim modalı (radio/checkbox/required)"
+git commit -m "feat(design): paylaşılan masa kartı tasarımı (garson + kasa)"
 git push
 ```
 
 ## 🧪 Test
 
-### A) Varyantlı Ürün
-1. Panel'den bir ürüne varyant ekle (örn Kahve: Küçük/Orta/Büyük, fiyat farklarıyla)
-2. Garson → masa tıkla → modal açılır
-3. Kahve kartında ✅ "◈ SEÇENEK" rozeti görünür
-4. Karta tıkla → ✅ seçim modalı açılır (bottom sheet)
-5. Boyut listesinde 3 seçenek + her birinde fiyat farkı
-6. "Orta" seç → ✅ TOPLAM güncellenir
-7. **+ Sepete Ekle** → sepette `Latte (Orta)` görünür, accent chip: `Orta`
+### A) Garson — Açık Masa
+1. Garson → **📋 Açık Masa** tab
+2. ✅ Üstte filter chip'leri (Tümü + zone'lar) + sağda legend
+3. ✅ Zone başlıkları: "Bahçe 4/8 DOLU · ₺1.855 AÇIK" + alt bar
+4. ✅ Sadece dolu/yeni/hazır/hesap masalar görünür
+5. ✅ Kart üst: status rozet + adet/kapasite + süre
+6. ✅ Kart orta: masa adı (italic) + tutar
+7. Bir masaya tıkla → ✅ sipariş alma modalı açılır
 
-### B) Option Preset (Single + Required)
-1. Bir ürüne preset ekle: "Şeker" (single, required, values: Yok/Az/Normal/Bol)
-2. Modal aç → "Şeker" başlığında ✅ "* ZORUNLU" rozet
-3. **+ Sepete Ekle** disabled (henüz seçim yok ya da default'tan dolayı seçili olabilir)
-4. "Az" seç → buton aktif → ekle
-5. Sepette chip: `Az`
+### B) Garson — Tüm Masalar
+1. **◍ Tüm Masalar** tab
+2. ✅ Boş masalar da dahil hepsi görünür
+3. **Bahçe** chip'ine tıkla → sadece Bahçe zone'u
+4. **Tümü** → tüm zone'lar geri gelir
 
-### C) Option Preset (Multi)
-1. Ürüne preset ekle: "Ekstralar" (multi, optional, values: Sucuk +5, Kaşar +5, Mantar +3)
-2. Modal aç → "Ekstralar" başlığı + "Birden fazla seçilebilir" subtitle
-3. Sucuk + Mantar seç → toplam +₺8 artar
-4. Ekle → sepette: `Sucuk +₺5 · Mantar +₺3` chip'leri
+### C) Kasa — Masalar Tab
+1. Kasa → **Masalar** tab (varsa)
+2. ✅ Aynı tasarım: filter + legend + zone'lar
+3. ✅ Çağrı rozeti masalarda görünür (kırmızı 🔔)
+4. Masaya tıkla → ✅ mevcut akış (açık siparişler + ödeme)
 
-### D) Default Values
-1. Bir preset value'sını `is_default=true` yap
-2. Modal aç → ✅ o değer otomatik seçili gelir
-3. Required preset için en az bir default varsa → buton aktif gelir
+### D) Responsive
+1. Telefon: 2 sütun grid
+2. Tablet: 3 sütun
+3. Desktop: 4-6 sütun
+4. Filter bar yatay scroll
 
-### E) Aynı/Farklı Seçim Birleştirme
-1. Latte (Büyük) + Az şekerli ekle
-2. Aynı seçimle tekrar Latte (Büyük) + Az şekerli ekle → ✅ adet 2 olur
-3. Latte (Büyük) + **Bol şekerli** ekle → ✅ ayrı satır olarak eklenir
-
-### F) Düz Ürün
-1. Varyantsız ve option_preset'siz bir ürüne tıkla
-2. ✅ Modal AÇILMAZ, direkt sepete eklenir (eski akış)
-
-### G) Mutfağa Gönder
-1. Çeşitli seçimlerle birkaç ürün ekle
-2. **✓ Mutfağa Gönder**
-3. Garson "Siparişler" sekmesinde kartı aç
-4. ✅ Her kalemde ürün adı + adet + (varsa) options görünür
-5. Mutfak panel/POS'ta da options ile birlikte yazdırılır
+### E) Boş Durumlar
+1. Hiç masa yoksa → "Henüz masa tanımlı değil" + masa ayarlarına git
+2. Filter aktifken eşleşen yoksa → "Bu bölgede masa yok"
+3. Hata → kırmızı hata kutusu
 
 ## 💡 Mimari
 
-### Backend Değişikliği YOK
-`createManualOrder` action zaten `items[].options` parametresi alıyordu:
+### Single Source of Truth
+`TableCard` ve `TablesFullView` tek dosyada. Kasada veya garsonda görünüm değişmek istendiğinde **bir yerden** güncellenir.
+
+### Forward Compatibility
+`TableCard` props'ları `waiterName` ve `lastCategory` opsiyonel — şu an tetiklenmez (data yok). Paket 2'de backend `getTablesWithStatus`'a bu alanlar eklendiğinde direkt görünmeye başlar.
+
+### Çağrı Rozeti
+`callsByTable: Map<string, number>` — masa ID → çağrı sayısı. Kart sağ üstte 🔔 rozet, animated pulse.
+
+### Filter ID Tipi
 ```typescript
-options?: Array<{
-  preset_name: string;
-  value_name: string;
-  price_delta: number;
-}>;
+export type ZoneFilterId = string | 'all';
 ```
 
-DB'ye `order_items.options` JSONB olarak yazılır. Mutfak/POS sipariş gösterirken zaten okuyor.
+`'all'` veya zone UUID'si. State management dışarıda, prop ile geçilir.
 
-### State Yapısı
-```typescript
-const [pickerProduct, setPickerProduct] = useState<ProductForPos | null>(null);
-const [variantId, setVariantId] = useState<string | undefined>(...);
-const [selectedOpts, setSelectedOpts] = useState<Record<string, string[]>>(...);
-```
+## 🔮 Sonra (Paket 2: Backend Enrichment)
 
-`selectedOpts` haritası: `presetId → [valueId, ...]`. Single'da tek eleman, multi'de birden fazla.
+`getTablesWithStatus` action'a eklenebilir:
+- `assigned_waiter_name` — siparişi alan kasiyer/garson adı (orders join)
+- `last_item_category` — son siparişin son kalemi (order_items + categories join)
 
-### Validation
-```typescript
-const isValid = sortedPresets.every((p) => {
-  if (!p.required) return true;
-  return (selectedOpts[p.preset_id] || []).length > 0;
-});
-```
+Ekran görüntüsündeki "Ayşe" ve "İçecek" alt satırları o zaman görünür hale gelir. Kart kodu **zaten hazır**, sadece backend dönmeye başlayacak.
 
 ## 🗺️ Durum
 
 | | |
 |---|---|
-| Garson sipariş alma | ✅ |
-| **Varyantlar + option preset'ler** | **✅ BU PAKET** |
+| Garson varyantlar | ✅ |
+| **Paylaşılan masa tasarımı** | **✅ BU PAKET** |
+| Backend enrichment (waiter+category) | 🔜 Paket 2 |
 | Süper admin paneli | 🔜 |
-| Modül yönetimi | 🔜 |
 
-## 🔮 Sonra
-
-- **Açık masaya kalem ekleme** — yeni bağımsız sipariş yerine mevcut hesaba ekleme
-- **Hızlı satış** garson tarafında (masa olmayan paket/al-götür)
-- **Kalem düzenleme** sepette → seçimleri tekrar açma
-- **Geçmiş sipariş şablonları** — sık tekrar siparişler
-
-Push → test → çalışırsa sonraki feature'a 🚀
+Push → test → çalışırsa "**masa enrichment**" veya "**süper admin paneli**" söyle 🚀
