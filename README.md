@@ -1,62 +1,94 @@
-# 🔧 KASA LİNK FİX — Subdomain'de Doğru Yere Götür
+# 🔔 ÇAĞRI BİLDİRİM FİX — KasaBoard Polling
 
-Panel sidebar'daki "Kasa Uygulaması" linki `panel.alegstudio.com/kasa` adresine gidiyordu. Ama:
-- Middleware `panel.*` subdomain'inde URL'leri `/panel/*`'a rewrite ediyor
-- `panel.alegstudio.com/kasa` → `/panel/kasa` route'a gider
-- Ama `/panel/kasa` route'u **yok** (kasa root'ta `/kasa`)
-- Sonuç: **404**
+**Asıl bug:** Polling kodu `RegisterPanel` içindeydi ama kasa sayfası `KasaBoard`'u render ediyor — `RegisterPanel` sadece `register` tab açıkken render olur. Yani sen "Masalar" tab'ındayken polling **hiç başlamıyordu**, o yüzden Network tab'da hiç istek görünmüyordu.
 
-**1 dosya.**
+**2 dosya.**
 
-## ✅ Fix
-
-Sidebar'da `external: true` linkler için subdomain'deyken **root domain'e tam URL** ile yönlendir:
-
-```diff
-  const resolvedHref = external
--   ? item.href                                  // /kasa
-+   ? isOnPanelSubdomain
-+     ? `${window.location.protocol}//${window.location.hostname.replace('panel.', '')}${item.href}`
-+     : item.href
-    : ...
-```
-
-### Sonuç
-
-**Eskiden:**
-- `panel.alegstudio.com` → "Kasa Uygulaması" → `panel.alegstudio.com/kasa` → ❌ 404
-
-**Şimdi:**
-- `panel.alegstudio.com` → "Kasa Uygulaması" → `https://alegstudio.com/kasa` → ✅ açılır (yeni sekmede)
-- `localhost:3000/panel` → "Kasa Uygulaması" → `localhost:3000/kasa` → ✅ açılır
-
-External nav item'lar `target="_blank"` zaten ayarlı — yeni sekmede açılır.
-
-## 📦 Dosya
+## 🐛 Sorun
 
 ```
-components/panel/sidebar.tsx
+KasaPage → KasaApp → KasaBoard
+                       ├─ activeTab='tables'   → TablesGrid
+                       ├─ activeTab='orders'   → OrdersBoard
+                       ├─ activeTab='quick'    → QuickSale
+                       └─ activeTab='register' → RegisterPanel  ← polling burada
+```
+
+Sen "Masalar" sekmesinde olunca `RegisterPanel` **mount bile olmuyordu**, dolayısıyla polling/realtime/ses/toast/rozet çalışmıyordu.
+
+## ✅ Çözüm
+
+Tüm bildirim sistemi `KasaBoard` seviyesine taşındı — **tab'dan bağımsız çalışır**:
+
+### KasaBoard'a eklendi
+
+1. **State**: `activeCalls`, `callsPanelOpen`, `callsBump`
+2. **Polling useEffect** — 5 saniyede bir `getActiveWaiterCalls`
+3. **Realtime subscribe** — `waiter_calls_kasa_board` channel (ayrı isim, conflict önler)
+4. **Header rozeti** — KILITLE butonu yanında, tüm tab'larda görünür
+5. **Sağdan açılır panel** — çağrı listesi, çözüldü butonları
+6. **handleResolveCall**, **handleResolveAllCalls** callbacks
+
+### RegisterPanel'den çıkarıldı
+
+- State, polling, realtime, callbacks (162 satır)
+- Header rozet UI (51 satır)
+- Panel modal UI (254 satır)
+- Gereksiz importlar (`getActiveWaiterCalls`, `playCall`, `createClient`, vb.)
+
+**Sonuç:** Çakışma yok, ses çift çalmıyor, herhangi bir sekmede çağrı bildirimi gelir.
+
+## 📦 Dosyalar
+
+```
+app/kasa/kasa-board.tsx       (state + polling + realtime + header rozeti + panel modal)
+app/kasa/register-panel.tsx   (waiter calls kodu silindi, sade kaldı)
 ```
 
 ## 🚀 Push
 
 ```powershell
-git add . && git commit -m "fix(panel): kasa link goes to root domain when on subdomain" && git push
+git add .
+git commit -m "fix(kasa): waiter calls notifications work on all tabs (kasa-board polling)"
+git push
 ```
 
-## 🧪 Test
+## 🧪 Test (önemli — hard refresh yap)
 
-1. `https://panel.alegstudio.com` → giriş → ana sayfa
-2. Sol menü → **Kasa Uygulaması** tıkla
-3. ✅ Yeni sekmede `https://alegstudio.com/kasa` açılır
-4. Kasa sayfası gelir (PIN ekranı varsa PIN, yoksa direkt panel)
-5. Telefondan QR menüden çağrı yap
-6. ✅ Kasada ses + toast + rozet
+1. **Ctrl+Shift+R** ile kasa sayfasını yenile (cache temizle)
+2. Kasa açıldıktan sonra (PIN sorulursa gir):
+   - **F12 → Network → Fetch/XHR**
+   - 5 saniyede bir `getActiveWaiterCalls` request görmen lazım ✅
+3. **Masalar sekmesinde** dur (önemli!)
+4. Telefondan QR menüden bir çağrı yap
+5. **En geç 5 saniye içinde:**
+   - 🔔 3'lü ding sesi ✅
+   - Üst köşede toast ✅
+   - Header'da turuncu rozet (KILITLE butonunun yanında) ✅
+6. **Rozete tıkla** → sağdan panel kayar
+7. **✓ Çözüldü** tıkla → liste güncellenir
+8. Diğer sekmelere geç (Siparişler, Hızlı Satış) → rozet hâlâ görünüyor olmalı
 
-## 🔮 Sonra
+## 💡 Mimari Notu
 
-Kasa sayfasında bildirimler çalışıyorsa:
-- D2 başlat (yeni sipariş bildirimi)
-- veya garson ekranı
+**Polling channel adı**: `waiter_calls_kasa_board` (RegisterPanel'in `waiter_calls_kasa` olanından farklı — eski deploy'da kalıntı varsa çakışmasın diye).
 
-Çalışmıyorsa debug ederiz.
+**Polling stratejisi**:
+- İlk fetch sessiz (ses çalmaz, sadece state init)
+- Sonraki fetch'lerde yeni ID varsa → ses + toast + bump
+- Realtime varsa anında, yoksa 5sn'de yedek
+
+## 🗺️ Durum
+
+| | |
+|---|---|
+| Çağrı butonları sistemi (D1) | ✅ |
+| Cache + realtime fix | ✅ |
+| Lint quotes fix | ✅ |
+| ConfirmDialog API fix | ✅ |
+| Kasa link subdomain fix | ✅ |
+| **KasaBoard polling fix (gerçek bug)** | **✅ BU PAKET** |
+| D2 (yeni sipariş bildirimi) | 🔜 |
+| Garson ekranı | 🔜 |
+
+Push → hard refresh → test → çalışırsa **"D2 başlat"** veya **"garson ekranı"** de. 🚀
