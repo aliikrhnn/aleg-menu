@@ -1,59 +1,64 @@
-# 🔧 Z-REPORT FIX — Props Tipi
+# 🔧 Z-REPORT PDF FIX — Tüm Dosya
 
-TypeScript build hatası düzeltildi.
+`lib/utils/z-report-pdf.ts` sandbox'taki temiz versiyonu — `COLORS.super` ve diğer eksiklerle birlikte.
+
+**1 dosya · ~58 KB · ~1900 satır.**
 
 ## 🐛 Hata
 
 ```
-./app/panel/(shell)/pos/z-report-modal.tsx:34:3
-Type error: Property 'businessName' does not exist on type 'Props'.
+./lib/utils/z-report-pdf.ts:1653:25
+Type error: Property 'super' does not exist on type 
+'{ paper: string; paper2: string; ... gold: string; }'.
 
-  32 |   open,
-  33 |   onClose,
-> 34 |   businessName: _businessName,
-  35 |   businessAddress: _businessAddress,
-  36 |   businessLogoUrl: _businessLogoUrl,
-  37 | }: Props) {
+  setText(pdf, COLORS.super);
+                      ^
 ```
-
-## 🧠 Neden
-
-Component destructure'da `businessName/Address/LogoUrl` alanlarını alıyor (underscore prefix ile, kullanılmadığı için), ama Props type'ında bu alanlar yoktu.
 
 ## ✅ Çözüm
 
-Props type'a 3 alan **opsiyonel** olarak eklendi:
+`COLORS` objesinde `super` alanı eksikti. Sandbox'ta zaten doğru tanımlı:
 
 ```typescript
-type Props = {
-  open: boolean;
-  onClose: () => void;
-  businessName?: string;
-  businessAddress?: string;
-  businessLogoUrl?: string;
+const COLORS = {
+  paper: '#FAF5EA',
+  paper2: '#F2ECDD',
+  card: '#FFFFFF',
+  ink: '#2A1F18',
+  ink2: '#564439',
+  ink3: '#8A7A6D',
+  line: '#E5DCC7',
+  accent: '#C4553A',
+  accentSoft: '#F4E5DF',
+  ok: '#6B8E4E',
+  okSoft: '#E8EEDE',
+  warn: '#D4903F',
+  warnSoft: '#F7ECD9',
+  danger: '#B83A2E',
+  gold: '#B8903E',
+  super: '#5A6B7E',  // ← bu
 };
 ```
 
-**Neden opsiyonel?** Çünkü:
-- Caller geçmek zorunda olmasın
-- Sandbox tarafında destructure satırları yokken bile uyumlu kalır
-- İleride raporda "İşletme adı, adres, logo" görünmesi istenirse direkt geçilebilir
-
-Underscore-prefix sayesinde (önceki paket `lint-fix-2`) bu alanlar destructure'da kullanılmasa bile lint hatası vermez.
+Ek olarak (önceki paketten) `setFillColor(r, g, b, 'F')` yanlış 4. parametresi de düzeltilmiş durumda.
 
 ## 📦 Dosya (1)
 
 ```
-app/panel/(shell)/pos/z-report-modal.tsx
+lib/utils/z-report-pdf.ts        (~1927 satır, sandbox temiz versiyonu)
 ```
 
 ## 🚀 Push
 
 ```powershell
-npm run build  # ✅ başarılı
+npm run build              # ✅ başarılı
 git add .
-git commit -m "fix(z-report): Props tipine business alanları eklendi"
-git push       # ✅ pre-push geçer
+git commit -m "fix(z-report-pdf): COLORS.super eksikti + setFillColor düzeltildi"
+git push                   # ✅ pre-push geçer
 ```
+
+## ⚠️ Eğer Yeni Hata Çıkarsa
+
+Eğer build hala başka bir dosyada error veriyorsa, **o dosyanın da sandbox versiyonunu** alabilirim. Hata çıktısını gönder.
 
 Push ✓
