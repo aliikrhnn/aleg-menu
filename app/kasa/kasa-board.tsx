@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useCashierSession } from '@/lib/cashier-session';
 import { OrdersBoard } from '@/app/panel/(shell)/pos/orders-board';
 import { KasaTabs, type KasaTab } from './kasa-tabs';
@@ -56,6 +56,17 @@ export function KasaBoard({ initialOrders, businessId }: Props) {
   const [activeCalls, setActiveCalls] = useState<WaiterCall[]>([]);
   const [callsPanelOpen, setCallsPanelOpen] = useState(false);
   const [callsBump, setCallsBump] = useState(0);
+
+  // Masaya göre aktif çağrı sayısı haritası — TableCard rozet için
+  const callsByTable = useMemo(() => {
+    const map = new Map<string, number>();
+    activeCalls.forEach((call) => {
+      if (call.table_id) {
+        map.set(call.table_id, (map.get(call.table_id) || 0) + 1);
+      }
+    });
+    return map;
+  }, [activeCalls]);
 
   // Polling - 5 saniyede bir aktif çağrıları çek (realtime fallback)
   useEffect(() => {
@@ -537,7 +548,7 @@ export function KasaBoard({ initialOrders, businessId }: Props) {
 
         {activeTab === 'tables' && (
           <div key={refreshKey}>
-            <TablesGrid onTableClick={handleTableClick} />
+            <TablesGrid onTableClick={handleTableClick} callsByTable={callsByTable} />
           </div>
         )}
         {activeTab === 'orders' && (

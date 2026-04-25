@@ -6,9 +6,10 @@ import { cn } from '@/lib/utils';
 
 type Props = {
   onTableClick: (table: TableWithStatus) => void;
+  callsByTable?: Map<string, number>;
 };
 
-export function TablesGrid({ onTableClick }: Props) {
+export function TablesGrid({ onTableClick, callsByTable }: Props) {
   const [zones, setZones] = useState<TableZoneWithTables[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -216,6 +217,7 @@ export function TablesGrid({ onTableClick }: Props) {
                 <TableCard
                   key={table.id}
                   table={table}
+                  activeCallCount={callsByTable?.get(table.id) || 0}
                   onClick={() => onTableClick(table)}
                 />
               ))}
@@ -241,9 +243,11 @@ export function TablesGrid({ onTableClick }: Props) {
 
 function TableCard({
   table,
+  activeCallCount,
   onClick,
 }: {
   table: TableWithStatus;
+  activeCallCount: number;
   onClick: () => void;
 }) {
   const statusConfig = {
@@ -304,6 +308,57 @@ function TableCard({
         minHeight: 110,
       }}
     >
+      {/* Aktif çağrı rozeti - sağ üst köşede, dikkat çekici */}
+      {activeCallCount > 0 && (
+        <div
+          className="absolute z-10 flex items-center justify-center"
+          style={{
+            top: -6,
+            right: -6,
+            minWidth: 22,
+            height: 22,
+            padding: '0 6px',
+            borderRadius: 11,
+            background: 'var(--accent)',
+            color: '#FAF5EA',
+            fontFamily: 'var(--f-mono)',
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: '-0.01em',
+            boxShadow:
+              '0 4px 10px -2px color-mix(in srgb, var(--accent) 55%, transparent), 0 0 0 2.5px var(--paper)',
+            animation: 'callsBumpPulse 1.4s ease-in-out infinite',
+          }}
+        >
+          {/* Zil ikon (1 çağrı) veya sayı (2+) */}
+          {activeCallCount === 1 ? (
+            <svg
+              width="11"
+              height="11"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+              <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+            </svg>
+          ) : (
+            activeCallCount
+          )}
+          {/* Sürekli ping efekti */}
+          <span
+            className="absolute inset-0 pointer-events-none rounded-full"
+            style={{
+              background: 'var(--accent)',
+              animation: 'callsPing 1.8s ease-out infinite',
+            }}
+          />
+        </div>
+      )}
+
       {/* Üst satır: masa no + pulse dot */}
       <div className="flex items-start justify-between gap-2">
         <div>
