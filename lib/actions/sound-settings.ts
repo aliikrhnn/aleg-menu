@@ -5,9 +5,9 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { revalidatePath } from 'next/cache';
 
 export type SoundSettings = {
-  call_sound: string; // SoundId — çağrı sesi
-  order_sound: string; // SoundId — yeni sipariş sesi
-  volume: number; // 0..1 (default 0.35)
+  call_sound: string;
+  order_sound: string;
+  volume: number;
 };
 
 export const DEFAULT_SOUND_SETTINGS: SoundSettings = {
@@ -26,13 +26,32 @@ async function requireBusinessAccess() {
 
   const { data: membership } = await supabase
     .from('business_members')
-    .select('id, business_id')
+    .select('business_id')
     .eq('user_id', user.id)
     .eq('status', 'active')
     .maybeSingle();
 
   if (!membership) throw new Error('İşletme üyeliği bulunamadı');
-  return { user, businessId: membership.business_id };
+  return { businessId: membership.business_id };
+}
+
+function parseSoundSettings(raw: unknown): SoundSettings {
+  const obj = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const sound = (obj.kasa_sounds as Partial<SoundSettings> | undefined) || {};
+  return {
+    call_sound:
+      typeof sound.call_sound === 'string'
+        ? sound.call_sound
+        : DEFAULT_SOUND_SETTINGS.call_sound,
+    order_sound:
+      typeof sound.order_sound === 'string'
+        ? sound.order_sound
+        : DEFAULT_SOUND_SETTINGS.order_sound,
+    volume:
+      typeof sound.volume === 'number' && sound.volume >= 0 && sound.volume <= 1
+        ? sound.volume
+        : DEFAULT_SOUND_SETTINGS.volume,
+  };
 }
 
 // ============================================================
@@ -45,9 +64,9 @@ export async function getSoundSettings(): Promise<{
 }> {
   try {
     const { businessId } = await requireBusinessAccess();
-    const supabase = createClient();
+    const admin = createAdminClient();
 
-    const { data, error } = await supabase
+    const { data, error } = await admin
       .from('businesses')
       .select('settings')
       .eq('id', businessId)
@@ -55,20 +74,9 @@ export async function getSoundSettings(): Promise<{
 
     if (error) return { success: false, error: error.message };
 
-    const settingsObj =
-      ((data?.settings as Record<string, unknown> | null) || {}) ?? {};
-    const sound = (settingsObj.kasa_sounds as Partial<SoundSettings>) || {};
-
     return {
       success: true,
-      settings: {
-        call_sound: sound.call_sound || DEFAULT_SOUND_SETTINGS.call_sound,
-        order_sound: sound.order_sound || DEFAULT_SOUND_SETTINGS.order_sound,
-        volume:
-          typeof sound.volume === 'number' && sound.volume >= 0 && sound.volume <= 1
-            ? sound.volume
-            : DEFAULT_SOUND_SETTINGS.volume,
-      },
+      settings: parseSoundSettings(data?.settings),
     };
   } catch (err) {
     return {
@@ -86,19 +94,21 @@ export async function updateSoundSettings(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const { businessId } = await requireBusinessAccess();
-    const supabase = createClient();
+    const admin = createAdminClient();
 
-    // Mevcut settings'i al, kasa_sounds bölümünü güncelle
-    const { data: current } = await supabase
+    // Mevcut settings JSONB'sini al
+    const { data: current, error: getErr } = await admin
       .from('businesses')
       .select('settings')
       .eq('id', businessId)
       .maybeSingle();
 
+    if (getErr) return { success: false, error: getErr.message };
+
     const currentSettings =
       ((current?.settings as Record<string, unknown> | null) || {}) ?? {};
     const currentSound =
-      (currentSettings.kasa_sounds as Partial<SoundSettings>) || {};
+      (currentSettings.kasa_sounds as Partial<SoundSettings> | undefined) || {};
 
     const merged: SoundSettings = {
       call_sound:
@@ -122,14 +132,14 @@ export async function updateSoundSettings(
       kasa_sounds: merged,
     };
 
-    const { error } = await supabase
+    const { error } = await admin
       .from('businesses')
       .update({ settings: newSettings })
       .eq('id', businessId);
 
     if (error) return { success: false, error: error.message };
 
-    revalidatePath('/panel/ayarlar/sesler');
+    revalidatePath('/panel/ayarlar');
     return { success: true };
   } catch (err) {
     return {
@@ -140,14 +150,15 @@ export async function updateSoundSettings(
 }
 
 // ============================================================
-// KASA: Anonim olmayan kasa için ses ayarlarını çek
-// (kasa client component, server action ile çağırır)
+// KASA: Ses ayarlarını çek (admin client)
 // ============================================================
 export async function getKasaSoundSettings(
   businessId: string
 ): Promise<{ success: boolean; settings?: SoundSettings; error?: string }> {
   try {
-    // Admin client - kasa businessId'si zaten orderresult'tan geliyor
+    if (!businessId) {
+      return { success: true, settings: DEFAULT_SOUND_SETTINGS };
+    }
     const admin = createAdminClient();
 
     const { data, error } = await admin
@@ -158,20 +169,9 @@ export async function getKasaSoundSettings(
 
     if (error) return { success: false, error: error.message };
 
-    const settingsObj =
-      ((data?.settings as Record<string, unknown> | null) || {}) ?? {};
-    const sound = (settingsObj.kasa_sounds as Partial<SoundSettings>) || {};
-
     return {
       success: true,
-      settings: {
-        call_sound: sound.call_sound || DEFAULT_SOUND_SETTINGS.call_sound,
-        order_sound: sound.order_sound || DEFAULT_SOUND_SETTINGS.order_sound,
-        volume:
-          typeof sound.volume === 'number' && sound.volume >= 0 && sound.volume <= 1
-            ? sound.volume
-            : DEFAULT_SOUND_SETTINGS.volume,
-      },
+      settings: parseSoundSettings(data?.settings),
     };
   } catch (err) {
     return {

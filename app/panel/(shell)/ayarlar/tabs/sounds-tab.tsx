@@ -13,16 +13,26 @@ import { toast } from '@/components/ui/toast';
 export function SoundsTab() {
   const [settings, setSettings] = useState<SoundSettings>(DEFAULT_SOUND_SETTINGS);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
     (async () => {
-      const r = await getSoundSettings();
-      if (r.success && r.settings) {
-        setSettings(r.settings);
+      try {
+        const r = await getSoundSettings();
+        if (r.success && r.settings) {
+          setSettings(r.settings);
+          setLoadError(null);
+        } else {
+          // Yüklemede hata - default'larla devam et
+          setLoadError(r.error || 'Ayarlar yüklenemedi');
+        }
+      } catch (err) {
+        setLoadError(err instanceof Error ? err.message : 'Bilinmeyen hata');
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     })();
   }, []);
 
@@ -69,6 +79,19 @@ export function SoundsTab() {
 
   return (
     <div className="max-w-[760px]">
+      {loadError && (
+        <div
+          className="mb-5 p-4 rounded-[12px]"
+          style={{
+            background: 'color-mix(in srgb, var(--warn) 8%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--warn) 30%, transparent)',
+            color: 'var(--warn)',
+            fontSize: 13,
+          }}
+        >
+          ⚠ {loadError} — Varsayılan ayarlar gösteriliyor. Değiştirip kaydedebilirsin.
+        </div>
+      )}
       {/* Başlık */}
       <div className="mb-7">
         <div
