@@ -911,7 +911,7 @@ function TableCard({
       >
         {table.name}
       </div>
-      {table.unpaid_total != null && table.unpaid_total > 0 && (
+      {table.total_amount > 0 && (
         <div
           className="mt-1 text-ink-2"
           style={{
@@ -920,7 +920,7 @@ function TableCard({
             fontWeight: 700,
           }}
         >
-          ₺{Math.round(table.unpaid_total)}
+          ₺{Math.round(table.total_amount)}
         </div>
       )}
     </div>
