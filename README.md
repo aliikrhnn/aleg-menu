@@ -1,124 +1,62 @@
-# 🔔 ÇAĞRI SİSTEMİ — DÜZELTMELER
+# 🔧 KASA LİNK FİX — Subdomain'de Doğru Yere Götür
 
-İki sorun:
-1. **Yeni eklenen butonlar menüde görünmüyor** → 60sn cache yüzünden
-2. **Kasaya bildirim gelmiyor** → realtime publication problemi olabilir
+Panel sidebar'daki "Kasa Uygulaması" linki `panel.alegstudio.com/kasa` adresine gidiyordu. Ama:
+- Middleware `panel.*` subdomain'inde URL'leri `/panel/*`'a rewrite ediyor
+- `panel.alegstudio.com/kasa` → `/panel/kasa` route'a gider
+- Ama `/panel/kasa` route'u **yok** (kasa root'ta `/kasa`)
+- Sonuç: **404**
 
-**3 dosya · 1 yeni migration.**
+**1 dosya.**
 
-## 🐛 Sorun 1: Buton Cache
+## ✅ Fix
 
-Menü sayfası `revalidate = 60` ile **60 saniye cache**'leniyor. Panelden buton ekleyince 60sn beklenen kadar görünmez.
+Sidebar'da `external: true` linkler için subdomain'deyken **root domain'e tam URL** ile yönlendir:
 
-### ✅ Fix
-Sheet (bottom sheet) açıldığında `getPublicCallButtons` ile **anlık fetch** yapıldı.
-
-```tsx
-// Sheet açılışında en güncel butonları getir
-useEffect(() => {
-  if (!serviceSheetOpen) return;
-  (async () => {
-    const result = await getPublicCallButtons(business.id);
-    if (result.success) setCallButtons(result.buttons);
-  })();
-}, [serviceSheetOpen, business.id]);
+```diff
+  const resolvedHref = external
+-   ? item.href                                  // /kasa
++   ? isOnPanelSubdomain
++     ? `${window.location.protocol}//${window.location.hostname.replace('panel.', '')}${item.href}`
++     : item.href
+    : ...
 ```
 
-İlk render server-side'dan gelir (hızlı), sheet her açıldığında client-side refresh olur.
+### Sonuç
 
-## 🐛 Sorun 2: Realtime Bildirim
+**Eskiden:**
+- `panel.alegstudio.com` → "Kasa Uygulaması" → `panel.alegstudio.com/kasa` → ❌ 404
 
-Realtime için 2 şart:
-1. `waiter_calls` tablosu `supabase_realtime` publication'da olmalı
-2. `REPLICA IDENTITY FULL` (UPDATE event payload'ı için)
+**Şimdi:**
+- `panel.alegstudio.com` → "Kasa Uygulaması" → `https://alegstudio.com/kasa` → ✅ açılır (yeni sekmede)
+- `localhost:3000/panel` → "Kasa Uygulaması" → `localhost:3000/kasa` → ✅ açılır
 
-Migration 0027'de varmış ama bazen Supabase Dashboard'dan kontrol gerekli.
+External nav item'lar `target="_blank"` zaten ayarlı — yeni sekmede açılır.
 
-### ✅ Fix - Çift Çözüm
-
-**A) Realtime garantili migration `0028_realtime_fix.sql`:**
-```sql
-ALTER PUBLICATION supabase_realtime ADD TABLE waiter_calls;
-ALTER TABLE waiter_calls REPLICA IDENTITY FULL;
-```
-
-**B) Polling fallback (kasada):**
-Realtime çalışmasa bile, kasa **5 saniyede bir** aktif çağrıları kontrol eder:
-- Yeni çağrı varsa: ses + toast + rozet bump
-- Yoksa: sessiz
-
-Bu sayede:
-- Realtime varsa → **anlık** (saniye altı)
-- Realtime yoksa → **5 saniye içinde** her halükarda bildirim gelir
-
-## 📦 Dosyalar (3)
+## 📦 Dosya
 
 ```
-app/menu/[slug]/menu-view.tsx                    ← Sheet açılınca refresh
-app/kasa/register-panel.tsx                      ← Polling 5sn fallback
-supabase/migrations/0028_realtime_fix.sql        ← Realtime garantili
+components/panel/sidebar.tsx
 ```
 
-## 🚀 Kurulum
-
-### 1. Migration çalıştır
-
-Supabase Dashboard → SQL Editor → `0028_realtime_fix.sql` içeriğini yapıştır → **Run**
-
-### 2. Realtime ayarını manuel kontrol et (önemli!)
-
-Supabase Dashboard → **Database** → **Replication**
-- `supabase_realtime` publication'a tıkla
-- `waiter_calls` tablosu listede olmalı ✅
-- Yoksa "Add table" → seç → ekle
-
-### 3. 3 dosyayı yerleştir + push
+## 🚀 Push
 
 ```powershell
-git add .
-git commit -m "fix: çağrı butonları cache + realtime fallback polling"
-git push
+git add . && git commit -m "fix(panel): kasa link goes to root domain when on subdomain" && git push
 ```
 
 ## 🧪 Test
 
-### Buton Cache
-1. Kasayı kapat (test için), panel'e geç
-2. Çağrı Butonları → "Test Buton" 🎉 ekle
-3. Hemen QR menüye geç → ✋ tıkla → "Test Buton" listede ✅
+1. `https://panel.alegstudio.com` → giriş → ana sayfa
+2. Sol menü → **Kasa Uygulaması** tıkla
+3. ✅ Yeni sekmede `https://alegstudio.com/kasa` açılır
+4. Kasa sayfası gelir (PIN ekranı varsa PIN, yoksa direkt panel)
+5. Telefondan QR menüden çağrı yap
+6. ✅ Kasada ses + toast + rozet
 
-### Bildirim Akışı
-1. Bilgisayarda: Kasa sekmesini aç
-2. Telefonda: QR menüden çağrı yap
-3. Bilgisayarda **en geç 5 saniye içinde**:
-   - 🔔 3'lü ding sesi
-   - Toast: "🔔 MASA X · Buton Adı"
-   - Header'da rozet pop
+## 🔮 Sonra
 
-### Sürekli Test
-Console aç (F12) → kasa sekmesinde:
-- Network tab → her 5 saniyede `getActiveWaiterCalls` çağrısı görünür
-- Realtime çalışıyorsa: WebSocket connection (yeşil) `realtime.supabase.co`
+Kasa sayfasında bildirimler çalışıyorsa:
+- D2 başlat (yeni sipariş bildirimi)
+- veya garson ekranı
 
-## 💡 Neden Polling?
-
-**Realtime avantajları:**
-- Anlık (< 1sn)
-- WebSocket - tek bağlantı
-
-**Polling avantajları:**
-- Her zaman çalışır (firewall/proxy sorunu yok)
-- Basit ve güvenilir
-- Migration sorunlarına dirençli
-
-**İkisi birlikte = bulletproof.** Realtime varsa hızlı, yoksa 5sn'de yedekler.
-
-## 🗺️ Durum
-
-| İş | Durum |
-|---|---|
-| Çağrı butonları (D1) | ✅ |
-| **Buton cache + realtime fix** | **✅ BU PAKET** |
-| D2 (yeni sipariş bildirimi) | 🔜 |
-
-Push → migration → test → çalışırsa **"D2 başlat"** veya **"garson ekranı"** de. 🚀
+Çalışmıyorsa debug ederiz.

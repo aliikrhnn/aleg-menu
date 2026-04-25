@@ -218,9 +218,12 @@ export function PanelSidebar({
 
               // external: yeni sekmede açılacak (/kasa gibi ayrı app)
               const external = 'external' in item && item.external;
-              // External linkler her zaman absolute '/kasa' gibi, panel prefix EKLEME
+              // External linkler her zaman absolute '/kasa' gibi
+              // Subdomain'deysek root domain'e gitmek için tam URL kullan
               const resolvedHref = external
-                ? item.href
+                ? isOnPanelSubdomain
+                  ? `${window.location.protocol}//${window.location.hostname.replace('panel.', '')}${item.href}`
+                  : item.href
                 : isOnPanelSubdomain
                   ? item.href
                   : item.href === '/'
