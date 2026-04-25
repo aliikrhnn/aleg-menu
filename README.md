@@ -1,90 +1,70 @@
-# 🔧 SOUND `'use server'` FİX — Build Hatası Çözümü
+# 🔧 KASIYER-MANAGER KASA LİNK FİX
 
-Panel'de "Application error" çıkıyordu çünkü Next.js 14+ kuralı: `'use server'` dosyalarından **sadece async function** export edilebilir.
+Kasiyerler sayfasındaki "KASA'YI AÇ ↗" butonu `panel.alegstudio.com/kasa` açıyordu → middleware `/panel/kasa`'ya rewrite → 404.
 
-**4 dosya** (1 yeni `sound-types.ts`).
+**1 dosya.**
 
 ## 🐛 Sorun
 
-`lib/actions/sound-settings.ts` `'use server'` direktifiyle başlıyordu ama içinde:
-- `export type SoundSettings = ...`
-- `export const DEFAULT_SOUND_SETTINGS = ...`
+Sidebar fix'inde sadece `nav-config` linkleri çözmüştük. Ama `cashier-manager.tsx`'te ayrıca bir "Kasa'yı Aç" button vardı, o atlanmıştı:
 
-Bu Next.js build sistemine **runtime hata** veriyor — server actions dosyasından non-function export yapılamaz.
-
-Sonuçlar:
-- Build patlıyor → digest 306480349 production hatası
-- Slider %NaN gösteriyor (DEFAULT_SOUND_SETTINGS düzgün gelmiyordu)
-- Sayfa yenilenince "Application error: a server-side exception"
+```tsx
+<a href="/kasa" target="_blank">  // panel subdomain'de 404
+```
 
 ## ✅ Fix
 
-### 1. Yeni dosya `lib/sound-types.ts`
-Type ve const'lar ayrı dosyaya taşındı:
-```typescript
-export type SoundSettings = { ... };
-export const DEFAULT_SOUND_SETTINGS: SoundSettings = { ... };
+`onClick` ile subdomain kontrolü — panel.* subdomain'indeyse root domain'e yönlendir:
+
+```tsx
+<a
+  href="/kasa"
+  onClick={(e) => {
+    if (window.location.hostname.startsWith('panel.')) {
+      e.preventDefault();
+      const rootHost = window.location.hostname.replace('panel.', '');
+      window.open(`${window.location.protocol}//${rootHost}/kasa`, '_blank');
+    }
+  }}
+  target="_blank"
+>
 ```
 
-### 2. `lib/actions/sound-settings.ts`
-- Type ve const tanımları silindi
-- Bunları `@/lib/sound-types` dosyasından import ediyor
-- Dosya artık tamamen `'use server'` uyumlu (sadece async function export)
-- `revalidatePath` kaldırıldı (cache problemi yaratıyordu)
+Sonuç:
+- `panel.alegstudio.com` → KASA'YI AÇ → ✅ `https://alegstudio.com/kasa` (yeni sekme)
+- `localhost:3000/panel/kasiyerler` → KASA'YI AÇ → ✅ `localhost:3000/kasa` (default href çalışır)
 
-### 3. `app/panel/(shell)/ayarlar/tabs/sounds-tab.tsx`
-- Type/const import'unu `@/lib/sound-types`'tan
-- Action import'u `@/lib/actions/sound-settings`'tan
-- NaN guard eklendi: volume validation
-
-### 4. `app/kasa/kasa-board.tsx`
-- Type/const import'u `@/lib/sound-types`'tan
-- Action import'u sadece function'lar
-
-## 📦 Dosyalar
+## 📦 Dosya
 
 ```
-lib/sound-types.ts                                     (yeni - shared types)
-lib/actions/sound-settings.ts                          (sadece async functions)
-app/panel/(shell)/ayarlar/tabs/sounds-tab.tsx          (import + NaN guard)
-app/kasa/kasa-board.tsx                                (import güncellemesi)
+app/panel/(shell)/kasiyerler/cashier-manager.tsx
 ```
 
 ## 🚀 Push
 
 ```powershell
-git add . && git commit -m "fix(sounds): use server compliance - extract types to separate file" && git push
+git add . && git commit -m "fix(panel): kasiyer-manager kasa link → root domain on subdomain" && git push
 ```
 
 ## 🧪 Test
 
-1. Panel → Ayarlar → **Bildirim Sesleri**
-2. ✅ Sayfa açılır (500/digest hatası yok)
-3. Slider gerçek yüzdeyle gözükür (%NaN değil)
-4. Ses seç → ▶ önizleme çal
-5. **Kaydet** → toast "Ses ayarları kaydedildi"
-6. **Sayfayı yenile (F5)** → ✅ uygulama hatası YOK, ayarlar tekrar yüklenir
-7. Kasayı yenile → telefondan çağrı → seçili ses çalar
+1. Push sonrası **hard refresh** (Ctrl+Shift+R)
+2. `panel.alegstudio.com` → giriş → Kasiyerler
+3. **KASA'YI AÇ ↗** tıkla
+4. ✅ Yeni sekmede `alegstudio.com/kasa` açılır (404 değil)
 
-## 💡 Next.js Bilgi Notu
+## 💡 Mimari Not
 
-`'use server'` dosyalarından **YALNIZCA**:
-- ✅ `export async function ...`
+İleride başka yerlerde de `/kasa` linki olursa aynı pattern uygulanır. Veya `lib/utils/kasa-url.ts` helper yazılabilir:
 
-Yapılamaz:
-- ❌ `export const ...`
-- ❌ `export type ...`
-- ❌ `export default ...` (non-function)
-- ❌ `export class ...`
+```typescript
+export function getKasaUrl(): string {
+  if (typeof window === 'undefined') return '/kasa';
+  if (window.location.hostname.startsWith('panel.')) {
+    return `${window.location.protocol}//${window.location.hostname.replace('panel.', '')}/kasa`;
+  }
+  return '/kasa';
+}
+```
 
-Type ve constants için **ayrı dosya** kullan, hem server hem client'tan import et.
-
-## 🗺️ Durum
-
-| | |
-|---|---|
-| Bildirim sesleri seçimi | ✅ |
-| **Use server fix** | **✅ BU PAKET** |
-| Garson ekranı | 🔜 |
-
-Push → test → çalışırsa **"garson ekranı"** veya başka iş söyle. 🚀
+Şu anki durumda 2 yerde inline kontrol — yeterli. 3. yerde gerekirse helper yazarız.

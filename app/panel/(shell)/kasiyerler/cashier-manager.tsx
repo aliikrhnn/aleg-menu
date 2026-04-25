@@ -139,6 +139,21 @@ export function CashierManager({ initialCashiers, error: initialError }: Props) 
         </div>
         <a
           href="/kasa"
+          onClick={(e) => {
+            // Subdomain'deysek (panel.alegstudio.com) root domain'e yönlendir
+            if (
+              typeof window !== 'undefined' &&
+              window.location.hostname.startsWith('panel.')
+            ) {
+              e.preventDefault();
+              const rootHost = window.location.hostname.replace('panel.', '');
+              window.open(
+                `${window.location.protocol}//${rootHost}/kasa`,
+                '_blank',
+                'noopener'
+              );
+            }
+          }}
           target="_blank"
           rel="noopener"
           className="h-9 px-3 rounded-[8px] text-xs font-semibold flex items-center gap-1.5 transition-all hover:scale-[1.02] flex-shrink-0"
