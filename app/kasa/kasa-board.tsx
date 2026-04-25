@@ -103,8 +103,7 @@ export function KasaBoard({ initialOrders, businessId }: Props) {
   // YENİ SİPARİŞ BİLDİRİMLERİ (orders.source='qr')
   // ============================================================
   // Daha önce ses çaldığımız sipariş ID'leri — tekrar çalmasın
-  const [seenOrderIds, setSeenOrderIds] = useState<Set<string>>(new Set());
-  const [newOrderBump, setNewOrderBump] = useState(0);
+  const seenOrderIdsRef = useRef<Set<string>>(new Set());
 
   // Polling - 5 saniyede bir son 30 saniyenin yeni QR siparişleri
   useEffect(() => {
@@ -120,56 +119,55 @@ export function KasaBoard({ initialOrders, businessId }: Props) {
 
       if (!initialized) {
         // İlk çağrıda mevcut olanları "görüldü" işaretle (ses çalma)
-        setSeenOrderIds(new Set(orders.map((o) => o.id)));
+        seenOrderIdsRef.current = new Set(orders.map((o) => o.id));
         initialized = true;
         return;
       }
 
       // Yeni gelenleri bul
-      setSeenOrderIds((prev) => {
-        const fresh = orders.filter((o) => !prev.has(o.id));
-        if (fresh.length > 0) {
-          if (!mutedRef.current) {
-            playOrderDing();
-          }
-          fresh.forEach((o) => {
-            const tableLabel = o.table_name
-              ? o.table_name.toUpperCase()
-              : 'AL-GÖTÜR';
-            const totalLabel = `₺${Math.round(o.total)}`;
-            toast.info(`🍽 ${tableLabel} · Yeni sipariş · ${totalLabel}`, 6000);
-          });
-          setNewOrderBump((n) => n + 1);
-          // Browser notification (sayfa arka planda ise)
-          if (
-            typeof Notification !== 'undefined' &&
-            Notification.permission === 'granted' &&
-            document.visibilityState === 'hidden'
-          ) {
-            try {
-              const n = new Notification('Yeni sipariş', {
-                body: `${fresh.length} yeni sipariş geldi`,
-                icon: '/icon-192.png',
-                tag: 'aleg-new-order',
-              });
-              setTimeout(() => n.close(), 4500);
-            } catch {
-              // yoksay
-            }
-          }
-          // Refresh tetikle - masa/sipariş listesi güncellensin
-          setRefreshKey((k) => k + 1);
+      const seen = seenOrderIdsRef.current;
+      const fresh = orders.filter((o) => !seen.has(o.id));
+      if (fresh.length > 0) {
+        if (!mutedRef.current) {
+          playOrderDing();
         }
-        // Set'i güncelle — yeni gelenleri ekle
-        const next = new Set(prev);
-        orders.forEach((o) => next.add(o.id));
-        // 100'den fazla birikmesin (eski olanları temizle)
-        if (next.size > 100) {
-          const arr = Array.from(next);
-          return new Set(arr.slice(-50));
+        fresh.forEach((o) => {
+          const tableLabel = o.table_name
+            ? o.table_name.toUpperCase()
+            : 'AL-GÖTÜR';
+          const totalLabel = `₺${Math.round(o.total)}`;
+          toast.info(`🍽 ${tableLabel} · Yeni sipariş · ${totalLabel}`, 6000);
+        });
+        // Browser notification (sayfa arka planda ise)
+        if (
+          typeof Notification !== 'undefined' &&
+          Notification.permission === 'granted' &&
+          document.visibilityState === 'hidden'
+        ) {
+          try {
+            const n = new Notification('Yeni sipariş', {
+              body: `${fresh.length} yeni sipariş geldi`,
+              icon: '/icon-192.png',
+              tag: 'aleg-new-order',
+            });
+            setTimeout(() => n.close(), 4500);
+          } catch {
+            // yoksay
+          }
         }
-        return next;
-      });
+        // Refresh tetikle - masa/sipariş listesi güncellensin
+        setRefreshKey((k) => k + 1);
+      }
+      // Set'i güncelle — yeni gelenleri ekle
+      const next = new Set(seen);
+      orders.forEach((o) => next.add(o.id));
+      // 100'den fazla birikmesin (eski olanları temizle)
+      if (next.size > 100) {
+        const arr = Array.from(next);
+        seenOrderIdsRef.current = new Set(arr.slice(-50));
+      } else {
+        seenOrderIdsRef.current = next;
+      }
     };
 
     // İlk fetch
@@ -202,47 +200,39 @@ export function KasaBoard({ initialOrders, businessId }: Props) {
           // Sadece QR kaynaklılar için bildirim
           if (newOrder.source !== 'qr') return;
 
-          // Görüldü olarak işaretle — polling tekrar çalmasın
-          setSeenOrderIds((prev) => {
-            if (prev.has(newOrder.id)) return prev;
-            const next = new Set(prev);
-            next.add(newOrder.id);
+          // Daha önce görüldüyse atla (polling de yakalamış olabilir)
+          if (seenOrderIdsRef.current.has(newOrder.id)) return;
+          seenOrderIdsRef.current.add(newOrder.id);
 
-            // Masa adını çek
-            (async () => {
-              if (newOrder.table_id) {
-                try {
-                  const sb = createClient();
-                  const { data: tbl } = await sb
-                    .from('tables')
-                    .select('name')
-                    .eq('id', newOrder.table_id)
-                    .maybeSingle();
-                  if (tbl) {
-                    newOrder.table_name = (tbl as { name: string }).name;
-                  }
-                } catch {
-                  // yoksay
-                }
+          // Masa adını çek
+          if (newOrder.table_id) {
+            try {
+              const sb = createClient();
+              const { data: tbl } = await sb
+                .from('tables')
+                .select('name')
+                .eq('id', newOrder.table_id)
+                .maybeSingle();
+              if (tbl) {
+                newOrder.table_name = (tbl as { name: string }).name;
               }
+            } catch {
+              // yoksay
+            }
+          }
 
-              if (!mutedRef.current) {
-                playOrderDing();
-              }
-              const tableLabel = newOrder.table_name
-                ? newOrder.table_name.toUpperCase()
-                : 'AL-GÖTÜR';
-              const totalLabel = `₺${Math.round(newOrder.total)}`;
-              toast.info(
-                `🍽 ${tableLabel} · Yeni sipariş · ${totalLabel}`,
-                6000
-              );
-              setNewOrderBump((n) => n + 1);
-              setRefreshKey((k) => k + 1);
-            })();
-
-            return next;
-          });
+          if (!mutedRef.current) {
+            playOrderDing();
+          }
+          const tableLabel = newOrder.table_name
+            ? newOrder.table_name.toUpperCase()
+            : 'AL-GÖTÜR';
+          const totalLabel = `₺${Math.round(newOrder.total)}`;
+          toast.info(
+            `🍽 ${tableLabel} · Yeni sipariş · ${totalLabel}`,
+            6000
+          );
+          setRefreshKey((k) => k + 1);
         }
       )
       .subscribe();
