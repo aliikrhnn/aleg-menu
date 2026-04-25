@@ -534,33 +534,6 @@ export function KasaBoard({ initialOrders, businessId }: Props) {
     }
   };
 
-  const handleAddItemsFromDetail = () => {
-    if (!tableDetail) return;
-    // "Yeni Sipariş Aç" akışı — mevcut siparişlerden bağımsız
-    setComposerState({
-      mode: { kind: 'table', tableId: tableDetail.tableId, tableName: tableDetail.tableName },
-    });
-    setTableDetail(null);
-  };
-
-  const handleAddItemsToExistingOrder = (orderId: string) => {
-    if (!tableDetail) return;
-    // Mevcut siparişe kalem ekleme
-    setComposerState({
-      mode: {
-        kind: 'addToOrder',
-        orderId,
-        tableName: tableDetail.tableName,
-      },
-    });
-    setTableDetail(null);
-  };
-
-  const handleGoToOrdersFromDetail = () => {
-    setTableDetail(null);
-    setActiveTab('orders');
-  };
-
   if (!cashier) return null;
 
   return (
@@ -870,9 +843,6 @@ export function KasaBoard({ initialOrders, businessId }: Props) {
           tableId={tableDetail.tableId}
           tableName={tableDetail.tableName}
           onClose={() => setTableDetail(null)}
-          onAddItems={handleAddItemsFromDetail}
-          onAddItemsToOrder={handleAddItemsToExistingOrder}
-          onGoToOrders={handleGoToOrdersFromDetail}
         />
       )}
 

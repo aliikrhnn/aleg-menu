@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   getTableOrders,
   makeItemsComplimentary,
@@ -16,23 +16,18 @@ import { useCashierSession } from '@/lib/cashier-session';
 import { toast } from '@/components/ui/toast';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
 import { OrderTakingModal } from '@/components/order/order-taking-modal';
+import { HesapPanel } from '@/components/order/hesap-panel';
 
 type Props = {
   tableId: string;
   tableName: string;
   onClose: () => void;
-  onAddItems: () => void;
-  onAddItemsToOrder: (orderId: string) => void;
-  onGoToOrders: () => void;
 };
 
 export function TableDetailModal({
   tableId,
   tableName,
   onClose,
-  onAddItems,
-  onAddItemsToOrder,
-  onGoToOrders,
 }: Props) {
   const [orders, setOrders] = useState<TableOrderDetail[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,6 +46,10 @@ export function TableDetailModal({
   const [splitOpen, setSplitOpen] = useState(false); // kalem bazlı böl
   // Hızlı ürün ekle modal (menüden direkt ekleme)
   const [quickAddOpen, setQuickAddOpen] = useState(false);
+  // Hesap paneli açık mı (yan panel layout)
+  const [hesapPanelOpen, setHesapPanelOpen] = useState(false);
+  // Kalem seçimi (orderId + itemId set olarak)
+  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const { cashier } = useCashierSession();
 
   const load = () => {
@@ -89,6 +88,78 @@ export function TableDetailModal({
     (s, o) => s + o.complimentary_total,
     0
   );
+
+  // Tüm kalemleri tek flat listede topla (sipariş ayrımı UI'da yok)
+  // Sadece ödenmemiş siparişlerin kalemleri (paid olanlar görünmesin)
+  type FlatItem = {
+    orderId: string;
+    orderNo: string;
+    orderStatus: string;
+    orderPaymentStatus: string;
+    item: TableOrderDetail['items'][number];
+    lineTotal: number;
+  };
+
+  const flatItems: FlatItem[] = useMemo(() => {
+    const result: FlatItem[] = [];
+    orders.forEach((o) => {
+      // Ödenmiş siparişler ayrı altta gösterilebilir, şimdilik aktif olanları topla
+      const isPaid =
+        o.payment_status === 'paid' || o.payment_status === 'refunded';
+      o.items.forEach((it) => {
+        result.push({
+          orderId: o.id,
+          orderNo: o.order_no,
+          orderStatus: o.status,
+          orderPaymentStatus: isPaid ? 'paid' : 'unpaid',
+          item: it,
+          lineTotal: it.is_complimentary ? 0 : it.unit_price * it.quantity,
+        });
+      });
+    });
+    return result;
+  }, [orders]);
+
+  // Sadece ödenmemiş kalemler (selection için)
+  const selectableItems = useMemo(
+    () => flatItems.filter((fi) => fi.orderPaymentStatus === 'unpaid'),
+    [flatItems]
+  );
+
+  const selectedFlatItems = useMemo(
+    () =>
+      selectableItems.filter((fi) =>
+        selectedItems.has(`${fi.orderId}__${fi.item.id}`)
+      ),
+    [selectableItems, selectedItems]
+  );
+
+  const selectedTotal = selectedFlatItems.reduce(
+    (s, fi) => s + fi.lineTotal,
+    0
+  );
+
+  const toggleItem = (orderId: string, itemId: string) => {
+    setSelectedItems((prev) => {
+      const key = `${orderId}__${itemId}`;
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (selectedItems.size === selectableItems.length) {
+      setSelectedItems(new Set());
+    } else {
+      setSelectedItems(
+        new Set(selectableItems.map((fi) => `${fi.orderId}__${fi.item.id}`))
+      );
+    }
+  };
+
+  const clearSelection = () => setSelectedItems(new Set());
 
   return (
     <div
@@ -238,18 +309,95 @@ export function TableDetailModal({
               </p>
             </div>
           ) : (
-            <div className="divide-y" style={{ borderColor: 'var(--line)' }}>
-              {orders.map((order) => (
-                <OrderSection
-                  key={order.id}
-                  order={order}
-                  showPayButton={orders.length > 1}
-                  onPay={() => setPayingOrder(order)}
-                  onGiftItem={(itemId) =>
-                    setGiftItemContext({ orderId: order.id, itemId })
-                  }
-                />
-              ))}
+            <div className="px-5 py-3">
+              {/* Toplu seçim header */}
+              {selectableItems.length > 0 && (
+                <div
+                  className="flex items-center justify-between gap-2 mb-3 pb-3"
+                  style={{ borderBottom: '1px solid var(--line)' }}
+                >
+                  <button
+                    type="button"
+                    onClick={toggleAll}
+                    className="flex items-center gap-2 text-xs"
+                    style={{
+                      fontFamily: 'var(--f-mono)',
+                      fontWeight: 600,
+                      letterSpacing: '0.08em',
+                      color: 'var(--ink-2)',
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    <CheckBoxIndicator
+                      active={
+                        selectedItems.size > 0 &&
+                        selectedItems.size === selectableItems.length
+                      }
+                      partial={
+                        selectedItems.size > 0 &&
+                        selectedItems.size < selectableItems.length
+                      }
+                    />
+                    {selectedItems.size === 0
+                      ? `${selectableItems.length} kalem`
+                      : `${selectedItems.size} seçili`}
+                  </button>
+                  {selectedItems.size > 0 && (
+                    <div
+                      className="flex items-center gap-1.5"
+                      style={{ fontFamily: 'var(--f-mono)' }}
+                    >
+                      <span
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 700,
+                          color: 'var(--accent)',
+                        }}
+                      >
+                        {fmt(selectedTotal)}
+                      </span>
+                      <button
+                        onClick={clearSelection}
+                        style={{
+                          fontSize: 10,
+                          color: 'var(--ink-3)',
+                          letterSpacing: '0.08em',
+                        }}
+                      >
+                        × TEMİZLE
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Flat kalem listesi */}
+              <div className="space-y-1.5">
+                {flatItems.map((fi) => {
+                  const key = `${fi.orderId}__${fi.item.id}`;
+                  const isSelected = selectedItems.has(key);
+                  const isPaid = fi.orderPaymentStatus === 'paid';
+                  const isComplimentary = fi.item.is_complimentary;
+                  return (
+                    <FlatItemRow
+                      key={key}
+                      flatItem={fi}
+                      isSelected={isSelected}
+                      isPaid={isPaid}
+                      isComplimentary={isComplimentary}
+                      onToggle={
+                        isPaid ? undefined : () => toggleItem(fi.orderId, fi.item.id)
+                      }
+                      onGift={() =>
+                        setGiftItemContext({
+                          orderId: fi.orderId,
+                          itemId: fi.item.id,
+                        })
+                      }
+                    />
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
@@ -328,88 +476,136 @@ export function TableDetailModal({
           >
             Kapat
           </button>
-          {orders.length > 0 && (
-            <button
-              onClick={onGoToOrders}
-              className="h-11 px-4 rounded-[10px] text-sm font-semibold transition-all hover:bg-paper-2"
-              style={{
-                background: 'transparent',
-                color: 'var(--ink-2)',
-                border: '1px solid var(--line)',
-                fontFamily: 'var(--f-mono)',
-                letterSpacing: '0.06em',
-                textTransform: 'uppercase',
-              }}
-            >
-              Sipariş Akışı ↗
-            </button>
-          )}
-          {/* Ürün Ekle — her zaman masanın en yeni açık siparişine ekler.
-              Birden fazla sipariş varsa yine da tek butonla, en son oluşturulanı baz alır.
-              Yeni sipariş açmak isteyenler için küçük "Yeni Sipariş" ikinci buton. */}
-          {(() => {
-            const unpaidOrders = orders.filter(
-              (o) => o.payment_status !== 'paid' && o.payment_status !== 'refunded'
-            );
-            // En son oluşturulan (üstteki sipariş — zaten desc sıralı)
-            const primaryOrder = unpaidOrders[0];
-
-            return (
-              <>
-                {primaryOrder ? (
-                  <button
-                    onClick={() => onAddItemsToOrder(primaryOrder.id)}
-                    className="group h-11 px-4 rounded-[10px] font-semibold text-sm flex items-center justify-center gap-1.5 transition-all hover:opacity-95 active:scale-[0.99]"
-                    style={{
-                      background: 'transparent',
-                      color: 'var(--accent)',
-                      border: '1.5px solid var(--accent)',
-                    }}
-                    title="Masaya yeni ürün ekle (aktif siparişe eklenir)"
-                  >
-                    <span>+ Ürün Ekle</span>
-                  </button>
-                ) : (
-                  <button
-                    onClick={onAddItems}
-                    className="group h-11 px-4 rounded-[10px] font-semibold text-sm flex items-center justify-center gap-1.5 transition-all hover:opacity-95 active:scale-[0.99]"
-                    style={{
-                      background: 'transparent',
-                      color: 'var(--accent)',
-                      border: '1.5px solid var(--accent)',
-                    }}
-                    title="Yeni sipariş aç"
-                  >
-                    <span>+ Ürün Ekle</span>
-                  </button>
-                )}
-              </>
-            );
-          })()}
-          {/* Hesap Al (ödeme bekliyorsa) */}
+          {/* Hesap Al / Seçili Öde / İkram / İptal */}
           {hasUnpaid && (
-            <button
-              onClick={() => {
-                // İlk ödenmemiş sipariş
-                const unpaid = orders.find(
-                  (o) => o.payment_status !== 'paid' && o.payment_status !== 'refunded'
-                );
-                if (unpaid) setPayingOrder(unpaid);
-              }}
-              className="group flex-1 h-11 rounded-[10px] font-semibold text-sm flex items-center justify-center gap-2 transition-all hover:opacity-95 active:scale-[0.99]"
-              style={{
-                background: 'var(--accent)',
-                color: '#FAF5EA',
-                boxShadow:
-                  '0 1px 2px rgba(196,85,58,0.2), 0 4px 12px -4px rgba(196,85,58,0.3)',
-                minWidth: 180,
-              }}
-            >
-              <span>₺ Hesap Al</span>
-              <span className="transition-transform group-hover:translate-x-1" style={{ fontSize: 16 }}>
-                →
-              </span>
-            </button>
+            <>
+              {selectedItems.size > 0 ? (
+                <>
+                  <button
+                    onClick={async () => {
+                      // Seçili kalemleri ikram et (orderId bazında grupla)
+                      const grouped = new Map<string, string[]>();
+                      selectedFlatItems.forEach((fi) => {
+                        if (!grouped.has(fi.orderId))
+                          grouped.set(fi.orderId, []);
+                        grouped.get(fi.orderId)!.push(fi.item.id);
+                      });
+                      const ok = await confirmDialog({
+                        title: 'Seçili kalemleri ikram?',
+                        body: `${selectedFlatItems.length} kalem ikram edilecek.`,
+                        confirmLabel: 'İkram Et',
+                        cancelLabel: 'Vazgeç',
+                      });
+                      if (!ok) return;
+                      let allOk = true;
+                      for (const [oid, ids] of grouped.entries()) {
+                        const r = await makeItemsComplimentary({
+                          orderId: oid,
+                          itemIds: ids,
+                          reason: 'Toplu ikram',
+                        });
+                        if (!r.success) {
+                          allOk = false;
+                          toast.error(r.error || 'İkram hatası');
+                        }
+                      }
+                      if (allOk) {
+                        toast.success(
+                          `${selectedFlatItems.length} kalem ikram edildi`
+                        );
+                      }
+                      clearSelection();
+                      load();
+                    }}
+                    className="h-11 px-4 rounded-[10px] text-sm font-semibold transition-all hover:bg-paper-2"
+                    style={{
+                      background: 'transparent',
+                      color: 'var(--gold)',
+                      border: '1.5px solid var(--gold)',
+                      fontFamily: 'var(--f-mono)',
+                      letterSpacing: '0.06em',
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    ★ İkram
+                  </button>
+                  <button
+                    onClick={async () => {
+                      // Önce sipariş ayır, sonra paid yap (parsiyel ödeme)
+                      // splitItemsFromMultipleOrders kullanılır - mevcut backend
+                      const ok = await confirmDialog({
+                        title: 'Seçili kalemleri öde?',
+                        body: `${fmt(selectedTotal)} tutarında ${selectedFlatItems.length} kalem ayrı bir hesap olarak ödenecek.`,
+                        confirmLabel: 'Ayır ve Öde',
+                        cancelLabel: 'Vazgeç',
+                      });
+                      if (!ok || !cashier) return;
+                      const itemIds = selectedFlatItems.map((fi) => fi.item.id);
+                      const r = await splitItemsFromMultipleOrders({
+                        itemIds,
+                        targetTableId: tableId,
+                        cashierId: cashier.id,
+                      });
+                      if (!r.success) {
+                        toast.error(r.error || 'Ayırma başarısız');
+                        return;
+                      }
+                      toast.success('Kalemler ayrıldı, ödeme açılıyor');
+                      clearSelection();
+                      // Yeni siparişi yükle ve ödeme aç
+                      const fresh = await getTableOrders(tableId);
+                      if (fresh.success) {
+                        const orders = fresh.orders || [];
+                        setOrders(orders);
+                        const newOrderId = r.newOrderId;
+                        const target = newOrderId
+                          ? orders.find((o) => o.id === newOrderId)
+                          : orders.find(
+                              (o) =>
+                                o.payment_status !== 'paid' &&
+                                o.payment_status !== 'refunded'
+                            );
+                        if (target) setPayingOrder(target);
+                      }
+                    }}
+                    className="flex-1 h-11 rounded-[10px] font-semibold text-sm flex items-center justify-center gap-2 transition-all hover:opacity-95 active:scale-[0.99]"
+                    style={{
+                      background: 'var(--accent)',
+                      color: '#FAF5EA',
+                      boxShadow:
+                        '0 1px 2px rgba(196,85,58,0.2), 0 4px 12px -4px rgba(196,85,58,0.3)',
+                      minWidth: 200,
+                    }}
+                  >
+                    <span>Seçili Öde · {fmt(selectedTotal)}</span>
+                    <span style={{ fontSize: 14 }}>→</span>
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => {
+                    // Yeni: HesapPanel'i aç (yan panel layout C3)
+                    setHesapPanelOpen(true);
+                  }}
+                  className="flex-1 h-11 rounded-[10px] font-semibold text-sm flex items-center justify-center gap-2 transition-all hover:opacity-95 active:scale-[0.99]"
+                  style={{
+                    background: 'var(--accent)',
+                    color: '#FAF5EA',
+                    boxShadow:
+                      '0 1px 2px rgba(196,85,58,0.2), 0 4px 12px -4px rgba(196,85,58,0.3)',
+                    minWidth: 180,
+                  }}
+                >
+                  <span>₺ Hesap Al · {fmt(totalAmount)}</span>
+                  <span
+                    className="transition-transform"
+                    style={{ fontSize: 16 }}
+                  >
+                    →
+                  </span>
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -503,6 +699,21 @@ export function TableDetailModal({
           />
         );
       })()}
+
+      {/* Hesap Paneli (yan panel C3 layout) */}
+      {hesapPanelOpen && cashier && (
+        <HesapPanel
+          tableId={tableId}
+          tableName={tableName}
+          orders={orders}
+          cashierId={cashier.id}
+          onClose={() => setHesapPanelOpen(false)}
+          onChanged={() => {
+            // Sipariş değişti - listemizi tazele
+            load();
+          }}
+        />
+      )}
 
       {/* Kalem İkram Picker */}
       {giftItemContext && (
@@ -1611,6 +1822,258 @@ function SplitItemsPicker({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ============================================================
+// FLAT ITEM ROW — Masa kaleminin tek satır gösterimi (checkbox'lı)
+// ============================================================
+function FlatItemRow({
+  flatItem,
+  isSelected,
+  isPaid,
+  isComplimentary,
+  onToggle,
+  onGift,
+}: {
+  flatItem: {
+    orderId: string;
+    orderNo: string;
+    orderStatus: string;
+    orderPaymentStatus: string;
+    item: TableOrderDetail['items'][number];
+    lineTotal: number;
+  };
+  isSelected: boolean;
+  isPaid: boolean;
+  isComplimentary: boolean;
+  onToggle?: () => void;
+  onGift: () => void;
+}) {
+  const { item } = flatItem;
+  const fmt = (n: number) =>
+    `₺${Math.round(n).toLocaleString('tr-TR')}`;
+
+  const itemStatusConfig: Record<
+    string,
+    { label: string; color: string }
+  > = {
+    received: { label: 'YENİ', color: 'var(--accent)' },
+    confirmed: { label: 'ONAY', color: 'var(--gold)' },
+    preparing: { label: 'HAZIRLANIYOR', color: 'var(--warn)' },
+    ready: { label: 'HAZIR', color: 'var(--ok)' },
+    delivered: { label: 'TESLİM', color: 'var(--olive)' },
+    cancelled: { label: 'İPTAL', color: 'var(--ink-3)' },
+  };
+  const itemCfg =
+    itemStatusConfig[flatItem.orderStatus] || itemStatusConfig.received;
+
+  return (
+    <div
+      className="flex items-start gap-2.5 p-2.5 rounded-[10px] transition-all"
+      style={{
+        background: isSelected
+          ? 'color-mix(in srgb, var(--accent) 6%, var(--paper))'
+          : isPaid
+            ? 'color-mix(in srgb, var(--ok) 4%, transparent)'
+            : 'var(--paper)',
+        border: `1px solid ${
+          isSelected
+            ? 'color-mix(in srgb, var(--accent) 35%, var(--line))'
+            : 'var(--line)'
+        }`,
+        opacity: isPaid ? 0.6 : 1,
+      }}
+    >
+      {/* Checkbox - sadece ödenmemiş kalemler */}
+      <button
+        type="button"
+        onClick={onToggle}
+        disabled={!onToggle}
+        className="flex-shrink-0 mt-0.5"
+        style={{ cursor: onToggle ? 'pointer' : 'not-allowed' }}
+        aria-label={isSelected ? 'Seçimi kaldır' : 'Seç'}
+      >
+        <CheckBoxIndicator active={isSelected} disabled={!onToggle} />
+      </button>
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-baseline gap-2 flex-wrap">
+          <span
+            className="text-ink"
+            style={{ fontWeight: 600, fontSize: 14, lineHeight: 1.2 }}
+          >
+            {item.quantity}× {item.product_name}
+          </span>
+          <span
+            className="uppercase"
+            style={{
+              fontFamily: 'var(--f-mono)',
+              fontSize: 8,
+              fontWeight: 700,
+              letterSpacing: '0.12em',
+              color: itemCfg.color,
+              padding: '1px 5px',
+              borderRadius: 3,
+              background: `color-mix(in srgb, ${itemCfg.color} 12%, transparent)`,
+            }}
+          >
+            {itemCfg.label}
+          </span>
+          {isPaid && (
+            <span
+              className="uppercase"
+              style={{
+                fontFamily: 'var(--f-mono)',
+                fontSize: 8,
+                fontWeight: 700,
+                letterSpacing: '0.12em',
+                color: 'var(--ok)',
+                padding: '1px 5px',
+                borderRadius: 3,
+                background: 'color-mix(in srgb, var(--ok) 12%, transparent)',
+              }}
+            >
+              ✓ ÖDENDİ
+            </span>
+          )}
+          {isComplimentary && (
+            <span
+              className="uppercase"
+              style={{
+                fontFamily: 'var(--f-mono)',
+                fontSize: 8,
+                fontWeight: 700,
+                letterSpacing: '0.12em',
+                color: 'var(--gold)',
+                padding: '1px 5px',
+                borderRadius: 3,
+                background: 'color-mix(in srgb, var(--gold) 14%, transparent)',
+              }}
+            >
+              ★ İKRAM
+            </span>
+          )}
+        </div>
+
+        {item.note && (
+          <div
+            className="mt-0.5 text-ink-2"
+            style={{
+              fontSize: 11.5,
+              fontStyle: 'italic',
+              lineHeight: 1.35,
+            }}
+          >
+            &ldquo;{item.note}&rdquo;
+          </div>
+        )}
+        {isComplimentary && item.complimentary_reason && (
+          <div
+            className="mt-0.5"
+            style={{
+              fontSize: 10.5,
+              color: 'var(--gold)',
+              fontFamily: 'var(--f-mono)',
+              letterSpacing: '0.04em',
+            }}
+          >
+            ★ {item.complimentary_reason}
+          </div>
+        )}
+      </div>
+
+      <div className="flex-shrink-0 flex flex-col items-end gap-0.5">
+        <span
+          className="text-ink"
+          style={{
+            fontFamily: 'var(--f-mono)',
+            fontSize: 13,
+            fontWeight: 700,
+            textDecoration: isComplimentary ? 'line-through' : 'none',
+            opacity: isComplimentary ? 0.5 : 1,
+          }}
+        >
+          {fmt(item.unit_price * item.quantity)}
+        </span>
+        {!isPaid && !isComplimentary && (
+          <button
+            onClick={onGift}
+            className="text-[10px]"
+            style={{
+              color: 'var(--gold)',
+              fontFamily: 'var(--f-mono)',
+              letterSpacing: '0.06em',
+            }}
+            title="Bu kalemi ikram et"
+          >
+            ★ İKRAM
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// CHECK BOX INDICATOR
+// ============================================================
+function CheckBoxIndicator({
+  active,
+  partial = false,
+  disabled = false,
+}: {
+  active: boolean;
+  partial?: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <div
+      className="grid place-items-center"
+      style={{
+        width: 18,
+        height: 18,
+        borderRadius: 5,
+        background: active
+          ? 'var(--accent)'
+          : disabled
+            ? 'var(--paper-2)'
+            : 'transparent',
+        border: `1.5px solid ${
+          active
+            ? 'var(--accent)'
+            : disabled
+              ? 'var(--line)'
+              : 'var(--ink-3)'
+        }`,
+        opacity: disabled ? 0.5 : 1,
+      }}
+    >
+      {active && !partial && (
+        <svg
+          width="11"
+          height="11"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#FAF5EA"
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M20 6L9 17l-5-5" />
+        </svg>
+      )}
+      {partial && (
+        <div
+          style={{
+            width: 8,
+            height: 2,
+            background: '#FAF5EA',
+            borderRadius: 1,
+          }}
+        />
+      )}
     </div>
   );
 }
