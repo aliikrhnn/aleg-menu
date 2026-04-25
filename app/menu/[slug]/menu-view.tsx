@@ -12,6 +12,7 @@ import type { LocalizedText } from '@/types/database';
 import { CartDrawer } from './cart-drawer';
 import {
   submitWaiterCall,
+  getPublicCallButtons,
   type CallButton,
 } from '@/lib/actions/call-buttons';
 
@@ -131,7 +132,7 @@ export function MenuView({
   products,
   qrTable,
   orderConfig,
-  callButtons = [],
+  callButtons: initialCallButtons = [],
 }: Props) {
   // Hangi modlar aktif? (default: sadece dinein)
   const activeModes = useMemo(() => {
@@ -147,6 +148,24 @@ export function MenuView({
   const [serviceSheetOpen, setServiceSheetOpen] = useState(false);
   const [callingButtonId, setCallingButtonId] = useState<string | null>(null);
   const [callSuccess, setCallSuccess] = useState<{ name: string; ts: number } | null>(null);
+
+  // Çağrı butonları - state olarak tut, sheet açıldığında refresh
+  const [callButtons, setCallButtons] = useState<CallButton[]>(initialCallButtons);
+
+  // Sheet açıldığında en güncel butonları çek (cache bypass)
+  useEffect(() => {
+    if (!serviceSheetOpen) return;
+    let canceled = false;
+    (async () => {
+      const result = await getPublicCallButtons(business.id);
+      if (!canceled && result.success && result.buttons) {
+        setCallButtons(result.buttons);
+      }
+    })();
+    return () => {
+      canceled = true;
+    };
+  }, [serviceSheetOpen, business.id]);
 
   const [lang, setLang] = useState<Lang>('tr');
   const [activeCat, setActiveCat] = useState<string | null>(categories[0]?.id || null);

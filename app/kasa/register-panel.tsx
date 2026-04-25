@@ -228,17 +228,54 @@ function RegisterContent({
   // Yeni gelen çağrı için "yanıp sönme" trigger
   const [callsBump, setCallsBump] = useState(0);
 
-  // İlk yüklemede aktif çağrıları çek
+  // İlk yüklemede + her 5 saniyede bir aktif çağrıları çek (polling fallback)
   useEffect(() => {
     let canceled = false;
-    (async () => {
+    let lastCount = 0;
+
+    const fetchCalls = async () => {
       const result = await getActiveWaiterCalls();
-      if (!canceled && result.success) {
-        setActiveCalls(result.calls || []);
+      if (canceled) return;
+      if (result.success) {
+        const newCalls = result.calls || [];
+        // Yeni çağrı geldi mi kontrol et
+        if (newCalls.length > lastCount && lastCount > 0) {
+          // Yeni gelen çağrıları bul
+          setActiveCalls((prev) => {
+            const prevIds = new Set(prev.map((c) => c.id));
+            const fresh = newCalls.filter((c) => !prevIds.has(c.id));
+            if (fresh.length > 0) {
+              // Ses + toast
+              playCall();
+              fresh.forEach((c) => {
+                const tableLabel = c.table_name
+                  ? c.table_name.toUpperCase()
+                  : 'BİLİNMEYEN MASA';
+                toast.info(
+                  `🔔 ${tableLabel} · ${c.button_name_snapshot || 'Çağrı'}`,
+                  6000
+                );
+              });
+              setCallsBump((n) => n + 1);
+            }
+            return newCalls;
+          });
+        } else {
+          setActiveCalls(newCalls);
+        }
+        lastCount = newCalls.length;
       }
-    })();
+    };
+
+    // İlk fetch
+    fetchCalls();
+
+    // Polling - 5 saniyede bir
+    const interval = setInterval(fetchCalls, 5000);
+
     return () => {
       canceled = true;
+      clearInterval(interval);
     };
   }, []);
 
