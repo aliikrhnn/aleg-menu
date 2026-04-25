@@ -17,6 +17,9 @@ import { confirmDialog } from '@/components/ui/confirm-dialog';
 import { OrderTakingModal } from '@/components/order/order-taking-modal';
 import { HesapPanel } from '@/components/order/hesap-panel';
 
+const fmt = (n: number) =>
+  `₺${Math.round(n).toLocaleString('tr-TR')}`;
+
 type Props = {
   tableId: string;
   tableName: string;
@@ -1605,8 +1608,6 @@ function FlatItemRow({
   onGift: () => void;
 }) {
   const { item } = flatItem;
-  const fmt = (n: number) =>
-    `₺${Math.round(n).toLocaleString('tr-TR')}`;
 
   const itemStatusConfig: Record<
     string,
