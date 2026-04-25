@@ -210,3 +210,206 @@ export function playOrderDing(volume = 0.32) {
     // Sessiz geç
   }
 }
+
+// ============================================================
+// SES KÜTÜPHANESİ — İşletme seçimine göre dispatch
+// ============================================================
+
+export type SoundId = 'bell' | 'chime' | 'pulse' | 'soft' | 'marimba' | 'classic';
+
+export const SOUND_OPTIONS: Array<{
+  id: SoundId;
+  name: string;
+  description: string;
+}> = [
+  {
+    id: 'bell',
+    name: 'Zil',
+    description: '3\'lü tiz ding — acil, dikkat çekici',
+  },
+  {
+    id: 'chime',
+    name: 'Tını',
+    description: '2\'li melodik (E6→A6) — sıcak, davetkar',
+  },
+  {
+    id: 'pulse',
+    name: 'Nabız',
+    description: 'Hızlı 4\'lü atım — alarm hissi',
+  },
+  {
+    id: 'soft',
+    name: 'Yumuşak',
+    description: 'Tek nota fade — sakin',
+  },
+  {
+    id: 'marimba',
+    name: 'Marimba',
+    description: 'Üçlü akor (C-E-G) — ahşap, sıcak',
+  },
+  {
+    id: 'classic',
+    name: 'Klasik',
+    description: 'Tek "ding" — geleneksel',
+  },
+];
+
+/**
+ * Pulse - 4'lü hızlı atım, alarm hissi
+ */
+export function playPulse(volume = 0.32) {
+  if (typeof window === 'undefined') return;
+  try {
+    const AudioCtx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext })
+        .webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+
+    [0, 0.1, 0.2, 0.3].forEach((start) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'square';
+      osc.frequency.value = 880;
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      const t0 = ctx.currentTime + start;
+      gain.gain.setValueAtTime(0, t0);
+      gain.gain.linearRampToValueAtTime(volume * 0.5, t0 + 0.01);
+      gain.gain.linearRampToValueAtTime(0, t0 + 0.07);
+      osc.start(t0);
+      osc.stop(t0 + 0.08);
+    });
+
+    setTimeout(() => ctx.close().catch(() => {}), 800);
+  } catch {
+    // sessiz
+  }
+}
+
+/**
+ * Soft - tek yumuşak nota, fade
+ */
+export function playSoft(volume = 0.3) {
+  if (typeof window === 'undefined') return;
+  try {
+    const AudioCtx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext })
+        .webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = 880; // A5
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    const t0 = ctx.currentTime;
+    gain.gain.setValueAtTime(0, t0);
+    gain.gain.linearRampToValueAtTime(volume, t0 + 0.06);
+    gain.gain.linearRampToValueAtTime(volume * 0.5, t0 + 0.3);
+    gain.gain.linearRampToValueAtTime(0, t0 + 0.6);
+    osc.start(t0);
+    osc.stop(t0 + 0.65);
+
+    setTimeout(() => ctx.close().catch(() => {}), 1200);
+  } catch {
+    // sessiz
+  }
+}
+
+/**
+ * Marimba - C-E-G akor, ahşap sıcak
+ */
+export function playMarimba(volume = 0.3) {
+  if (typeof window === 'undefined') return;
+  try {
+    const AudioCtx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext })
+        .webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+
+    // C5 (523.25), E5 (659.25), G5 (783.99) - majör akor
+    const notes = [
+      { freq: 523.25, start: 0 },
+      { freq: 659.25, start: 0.05 },
+      { freq: 783.99, start: 0.1 },
+    ];
+
+    notes.forEach(({ freq, start }) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.value = freq;
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      const t0 = ctx.currentTime + start;
+      gain.gain.setValueAtTime(0, t0);
+      gain.gain.linearRampToValueAtTime(volume, t0 + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.5);
+      osc.start(t0);
+      osc.stop(t0 + 0.55);
+    });
+
+    setTimeout(() => ctx.close().catch(() => {}), 1200);
+  } catch {
+    // sessiz
+  }
+}
+
+/**
+ * Classic - tek geleneksel ding (otel reception zili)
+ */
+export function playClassic(volume = 0.35) {
+  if (typeof window === 'undefined') return;
+  try {
+    const AudioCtx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext })
+        .webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = 1568; // G6
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    const t0 = ctx.currentTime;
+    gain.gain.setValueAtTime(0, t0);
+    gain.gain.linearRampToValueAtTime(volume, t0 + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.7);
+    osc.start(t0);
+    osc.stop(t0 + 0.75);
+
+    setTimeout(() => ctx.close().catch(() => {}), 1200);
+  } catch {
+    // sessiz
+  }
+}
+
+/**
+ * Dispatch — id'ye göre uygun sesi çalar
+ */
+export function playSound(id: SoundId, volume?: number) {
+  switch (id) {
+    case 'bell':
+      return playCall(volume);
+    case 'chime':
+      return playOrderDing(volume);
+    case 'pulse':
+      return playPulse(volume);
+    case 'soft':
+      return playSoft(volume);
+    case 'marimba':
+      return playMarimba(volume);
+    case 'classic':
+      return playClassic(volume);
+  }
+}

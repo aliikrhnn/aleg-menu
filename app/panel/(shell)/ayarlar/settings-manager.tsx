@@ -16,16 +16,18 @@ import { HoursTab } from './tabs/hours-tab';
 import { OrdersTab } from './tabs/orders-tab';
 import { PreviewTab } from './tabs/preview-tab';
 import { AdminPinTab } from './tabs/admin-pin-tab';
+import { SoundsTab } from './tabs/sounds-tab';
 import { toast } from '@/components/ui/toast';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
 
-type TabId = 'identity' | 'contact' | 'hours' | 'orders' | 'admin-pin' | 'preview';
+type TabId = 'identity' | 'contact' | 'hours' | 'orders' | 'sounds' | 'admin-pin' | 'preview';
 
 const TABS: Array<{ id: TabId; label: string; icon: string }> = [
   { id: 'identity', label: 'Kimlik', icon: 'sparkle' },
   { id: 'contact', label: 'İletişim', icon: 'phone' },
   { id: 'hours', label: 'Çalışma Saatleri', icon: 'clock' },
   { id: 'orders', label: 'Sipariş', icon: 'cart' },
+  { id: 'sounds', label: 'Bildirim Sesleri', icon: 'speaker' },
   { id: 'admin-pin', label: 'Kasa PIN', icon: 'lock' },
   { id: 'preview', label: 'Önizleme', icon: 'eye' },
 ];
@@ -394,6 +396,8 @@ export function SettingsManager({ initialSettings, rootDomain }: Props) {
         )}
 
         {tab === 'admin-pin' && <AdminPinTab />}
+
+        {tab === 'sounds' && <SoundsTab />}
 
         {tab === 'preview' && (
           <PreviewTab settings={settings} />

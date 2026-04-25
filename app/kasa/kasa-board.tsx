@@ -26,7 +26,12 @@ import {
   getRecentNewOrders,
   type NewOrderNotification,
 } from '@/lib/actions/orders-notify';
-import { playCall, playOrderDing } from '@/lib/sounds';
+import {
+  getKasaSoundSettings,
+  type SoundSettings,
+  DEFAULT_SOUND_SETTINGS,
+} from '@/lib/actions/sound-settings';
+import { playSound, type SoundId } from '@/lib/sounds';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from '@/components/ui/toast';
 import type { ActiveOrder } from '@/lib/actions/pos';
@@ -100,6 +105,49 @@ export function KasaBoard({ initialOrders, businessId }: Props) {
   }, [muted]);
 
   // ============================================================
+  // SES AYARLARI - işletmenin seçtiği bildirim sesleri
+  // ============================================================
+  const soundSettingsRef = useRef<SoundSettings>(DEFAULT_SOUND_SETTINGS);
+
+  // Mount'ta ve her 60 saniyede bir ses ayarlarını çek (panel'den değiştirildiğinde yakalansın)
+  useEffect(() => {
+    if (!businessId) return;
+    let canceled = false;
+
+    const fetchSettings = async () => {
+      const r = await getKasaSoundSettings(businessId);
+      if (!canceled && r.success && r.settings) {
+        soundSettingsRef.current = r.settings;
+      }
+    };
+
+    fetchSettings();
+    const interval = setInterval(fetchSettings, 60000);
+
+    return () => {
+      canceled = true;
+      clearInterval(interval);
+    };
+  }, [businessId]);
+
+  // Helper - mute kontrolü ile ses çal
+  const playCallSound = useCallback(() => {
+    if (mutedRef.current) return;
+    playSound(
+      soundSettingsRef.current.call_sound as SoundId,
+      soundSettingsRef.current.volume
+    );
+  }, []);
+
+  const playOrderSound = useCallback(() => {
+    if (mutedRef.current) return;
+    playSound(
+      soundSettingsRef.current.order_sound as SoundId,
+      soundSettingsRef.current.volume
+    );
+  }, []);
+
+  // ============================================================
   // YENİ SİPARİŞ BİLDİRİMLERİ (orders.source='qr')
   // ============================================================
   // Daha önce ses çaldığımız sipariş ID'leri — tekrar çalmasın
@@ -128,9 +176,7 @@ export function KasaBoard({ initialOrders, businessId }: Props) {
       const seen = seenOrderIdsRef.current;
       const fresh = orders.filter((o) => !seen.has(o.id));
       if (fresh.length > 0) {
-        if (!mutedRef.current) {
-          playOrderDing();
-        }
+        playOrderSound();
         fresh.forEach((o) => {
           const tableLabel = o.table_name
             ? o.table_name.toUpperCase()
@@ -221,9 +267,7 @@ export function KasaBoard({ initialOrders, businessId }: Props) {
             }
           }
 
-          if (!mutedRef.current) {
-            playOrderDing();
-          }
+          playOrderSound();
           const tableLabel = newOrder.table_name
             ? newOrder.table_name.toUpperCase()
             : 'AL-GÖTÜR';
@@ -273,7 +317,7 @@ export function KasaBoard({ initialOrders, businessId }: Props) {
         const fresh = newCalls.filter((c) => !lastIds.has(c.id));
         if (fresh.length > 0 && lastIds.size > 0) {
           // İlk fetch DEĞİL, gerçekten yeni çağrı geldi
-          if (!mutedRef.current) playCall();
+          playCallSound();
           fresh.forEach((c) => {
             const tableLabel = c.table_name
               ? c.table_name.toUpperCase()
@@ -339,7 +383,7 @@ export function KasaBoard({ initialOrders, businessId }: Props) {
             return [newCall, ...prev];
           });
           setCallsBump((n) => n + 1);
-          if (!mutedRef.current) playCall();
+          playCallSound();
           const tableLabel = newCall.table_name
             ? newCall.table_name.toUpperCase()
             : 'BİLİNMEYEN MASA';
