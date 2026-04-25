@@ -1,172 +1,130 @@
-# 🔐 AUTH İZOLASYONU + SİPARİŞ TAZELE FİX
+# 🍽 GARSON — TÜM SİPARİŞLER DETAYLI + TÜM MASALAR
 
-İki kritik sorun bir arada:
+Garson sekmesi büyük revizyon. **Eski "Hazır" sekmesi kaldırıldı, yerine "Siparişler" geldi** — tüm aktif siparişleri (yeni/onaylandı/hazırlanıyor/hazır) gösterir, kalemler ve istasyon bilgisiyle birlikte.
 
-1. **Cross-tab Auth Leak** (CRITICAL güvenlik) — Garson login'i kasaya da geçiyordu
-2. **Sipariş teslim sonrası UI değişmiyor** — garson teslim ettiğinde panel POS / kasa görmüyordu
+**2 dosya · Migration yok.**
 
-**5 dosya · Migration yok.**
+## 🎯 Değişiklikler
 
-## 🐛 Sorun 1: Cross-Tab Auth Leak
+### 1. Tab Adları
+| Eski | Yeni |
+|------|------|
+| 🍽 Hazır | 🍽 Siparişler |
+| ◍ Tümü | ◍ Tüm Masalar |
 
-### Belirti
-- Aynı browser'da garsona girince → kasa sekmesi açıldığında otomatik garson hesabıyla giriş yapılıyordu
-- Garsonun kasa yetkilerine erişimi olmamasına rağmen kasa açılıyordu
+### 2. Yeni "Siparişler" Sekmesi
+Eskiden sadece `status='ready'` olan siparişleri gösteriyordu. Şimdi:
+- **Status filtresi:** `received / confirmed / preparing / ready` — son 24 saat
+- **Yeni ready'ye geçen** siparişlerde **ses + toast** çalar (transition tracking)
+- **Mevcut akışlar bozulmaz** — mutfak/POS hâlâ statüleri yönetir
 
-### Sebep
-`lib/cashier-session.tsx` her iki uygulamada (kasa ve garson) aynı `localStorage` anahtarlarını kullanıyordu:
-- `aleg-kasa-session`
-- `aleg-kasa-activity`
-- `aleg-kasa-autolock-minutes`
+### 3. Tıklanabilir Sipariş Kartı
+Her kart **collapsed** başlar, tıklayınca açılır.
 
-İki uygulama tek session paylaşıyordu — biri login olunca diğeri de otomatik açılıyordu.
+**Collapsed (kapalı) hali:**
+- Status indicator (ikon + renk):
+  - 🟠 ◉ **YENİ** (received)
+  - 🟡 ◈ **ONAYLANDI** (confirmed)
+  - 🟧 ◐ **HAZIRLANIYOR** (preparing)
+  - 🟢 ✓ **HAZIR** (ready)
+- Hedef başlığı: **Masa 5** / **Paket** / **Kapıya**
+- Toplam ürün adedi + bekleme süresi
+- Tutar
+- Genişle/daralt ikon (▾)
+- 3dk+ ready için kırmızı uyarı (⚠)
 
-### Çözüm
-`CashierSessionProvider`'a **`appKey`** prop'u eklendi. Storage key'leri uygulama bazında ayrıldı:
+**Expanded (açık) hali:**
+- Her kalem için satır:
+  - **Adet** (örn `2×`)
+  - **Ürün adı**
+  - **İstasyon rozet** (icon + renk + isim) — Mutfak / Bar / Pastane vb. (varsa)
+  - **Müşteri notu** (italic, varsa)
+- `status === 'ready'` ise **✓ Teslim Ettim** butonu görünür
 
-| App | Session Key | Activity Key | AutoLock Key |
-|-----|-------------|--------------|--------------|
-| Kasa | `aleg-kasa-session` | `aleg-kasa-activity` | `aleg-kasa-autolock-minutes` |
-| Garson | `aleg-garson-session` | `aleg-garson-activity` | `aleg-garson-autolock-minutes` |
+### 4. İstasyon Bilgisi
+Backend'de `order_items.product_id → products.station_id → stations` join yapılır. Her kalemin istasyonu otomatik tespit edilir. İstasyon yoksa rozet hiç görünmez.
 
-Layout'larda doğru `appKey` geçilir:
-- `app/kasa/layout.tsx`: `<CashierSessionProvider appKey="kasa">`
-- `app/garson/layout.tsx`: `<CashierSessionProvider appKey="garson">`
-
-İki uygulama **tamamen izole**, aynı browser'da bile cross-contamination yok.
-
-## 🐛 Sorun 2: Garson Teslim Sonrası Değişiklik Yok
-
-### Belirti
-- Garson "✓ Teslim Ettim" basıyor → kart kayboluyor (optimistik update var)
-- Ama panel POS'taki ve kasa orders sayfasındaki sipariş listesinde değişiklik **görünmüyor**
-
-### Sebep
-1. `markOrderDelivered` server action'ında `revalidatePath` çağrısı yoktu → panel SSR cache eski veriyi gösteriyordu
-2. Polling 8sn'de bir tazeliyor ama tarayıcı sekmesi arkaplandayken JS interval pause olabiliyor → kullanıcı kasaya geçtiğinde kaçırılan değişiklik vardı
-
-### Çözüm
-
-**`lib/actions/waiter.ts`** — markOrderDelivered'a revalidate eklendi:
-```typescript
-revalidatePath('/panel/pos');
-revalidatePath('/panel/dashboard');
-revalidatePath('/panel');
-```
-
-**`app/panel/(shell)/pos/orders-board.tsx`** — visibility change listener eklendi:
-```typescript
-const onVisibilityChange = () => {
-  if (document.visibilityState === 'visible') {
-    refreshOrders();
-  }
-};
-document.addEventListener('visibilitychange', onVisibilityChange);
-```
-
-Üçlü tazele kombi:
-- ⚡ **Realtime** (Supabase channel)
-- 🔄 **Polling 8sn** (kopukluklara karşı)
-- 👁️ **Visibility change** (sekme arkaplandayken kaçırılan güncellemeler için)
-
-## 📦 Dosyalar (5)
+## 📦 Dosyalar (2)
 
 ```
-lib/cashier-session.tsx                              (appKey prop sistemi)
-lib/actions/waiter.ts                                (revalidatePath)
-app/kasa/layout.tsx                                  (appKey="kasa")
-app/garson/layout.tsx                                (appKey="garson")
-app/panel/(shell)/pos/orders-board.tsx               (visibility refresh)
+lib/actions/waiter.ts                  (getAllActiveOrders + WaiterOrder/Item types)
+app/garson/waiter-board.tsx            (tab adları + OrdersTab component)
 ```
 
 ## 🚀 Push
 
 ```powershell
 git add .
-git commit -m "fix(auth): kasa/garson session izolasyonu + delivered order refresh"
+git commit -m "feat(garson): tüm aktif siparişler + kalem detay + istasyon rozet"
 git push
 ```
 
-## ⚠️ Deploy Sonrası — Önemli Bilgi
-
-**Garson tarafında kullanıcılar bir kez yeniden giriş yapmak zorunda kalacak.**
-
-Sebep: localStorage key'i değişti (`aleg-kasa-session` → `aleg-garson-session`). Eski oturum yeni key'de bulunmadığı için sayfa açılınca login ekranına düşer.
-
-Bu **bir defalık** bir geçiş, normaldir.
-
 ## 🧪 Test
 
-### A) Auth İzolasyon Testi (CRITICAL)
-1. Browser'da kasa ve garson sekmelerini **kapat** (eski oturumlar temizlensin)
-2. Garson sekmesi aç → garson hesabıyla PIN gir → ✅ board açılır
-3. **Aynı browser'da yeni sekme** → kasa sekmesi aç
-4. ✅ Kasa **PIN ister** (otomatik giriş YOK)
-5. Kasa hesabıyla gir → kasa açılır
-6. Garson sekmesine geç → ✅ hâlâ garson hesabıyla açık
-7. ✅ İki uygulama bağımsız çalışıyor
+### A) Tab Adları
+1. Garson aç → ✅ "🍽 **Siparişler**" ve "◍ **Tüm Masalar**" görünür
 
-### B) Sipariş Teslim Refresh Testi
-1. **3 sekme aç:** Garson, Kasa (orders sekmesi), Panel POS
-2. Bir siparişi mutfak/POS'tan **"Hazır"** yap
-3. Garson sekmesinde 🍽 Hazır sekmesinde sipariş görünür
-4. **"✓ Teslim Ettim"** tıkla
-5. Garson: kart anında kaybolur ✅
-6. Kasa orders sekmesi: 8sn içinde otomatik kaybolur ✅
-7. Panel POS: 8sn içinde otomatik kaybolur ✅
+### B) Sipariş Akışı
+1. Telefondan QR menüden bir sipariş ver (örn 2 ürün, birinde not)
+2. Garson "Siparişler" sekmesi → ✅ kart **YENİ** rozetiyle görünür
+3. **Henüz ses çalmaz** (ready değil)
+4. Mutfak/POS'tan status'u **"Hazırlanıyor"** yap → ✅ kartta **HAZIRLANIYOR** rozet
+5. **"Hazır"** yap → ✅ Garsonda **ses çalar + toast + ✓ Teslim Ettim butonu görünür** (genişletilince)
+6. Karta tıkla → genişler:
+   - Her kalem: adet + ürün adı + istasyon rozet (varsa)
+   - Notlu kalemde italic notu görünür
+7. **✓ Teslim Ettim** → kart kaybolur, status `delivered`, toast "Sipariş teslim edildi"
 
-### C) Background Tab Testi
-1. Garson sekmesi açık, kasa sekmesi açık
-2. Kasa sekmesinden başka sekmeye geç (kasa arkaplanda)
-3. Garson'da bir sipariş teslim et
-4. Kasa sekmesine geri dön
-5. ✅ Sekme görünür olur olmaz refresh tetikler, sipariş kaybolur
+### C) İstasyon Rozet
+1. Bir ürünü Panel → Menü → o ürüne git → istasyon ata (örn "Mutfak")
+2. Bu üründen sipariş ver
+3. Garson Siparişler sekmesi → karta tıkla
+4. ✅ Kalemde "🔪 MUTFAK" rozeti görünür (config'e göre icon ve renk)
+
+### D) 3dk+ Uyarı
+1. Bir ready sipariş 3dk+ beklerse → kırmızı border + ⚠ uyarı
+2. Hâlâ teslim edilmemişse Garson dikkat etmeli
 
 ## 💡 Mimari Notlar
 
-### Storage Key Pattern
+### `getAllActiveOrders` Action
+3 sorgu yapısı:
+1. **Orders** (status filtresi + son 24 saat)
+2. **Order_items** (orderIds için tek sorgu)
+3. **Products + stations** (kalemlerin product_id'leri için)
+4. **Tables** (table_id resolve için)
+
+Tüm joinler **manuel map ile** yapılır — Supabase nested select'inden daha kontrollü ve performanslı.
+
+### Ses Transition Tracking
 ```typescript
-function storageKeys(appKey: AppKey) {
-  return {
-    session: `aleg-${appKey}-session`,
-    activity: `aleg-${appKey}-activity`,
-    autoLock: `aleg-${appKey}-autolock-minutes`,
-  };
-}
+const freshlyReady = newOrders.filter(
+  (o) => o.status === 'ready' && !lastReadyIds.has(o.id)
+);
 ```
 
-İleride `kds`, `mutfak` gibi yeni uygulamalar eklenirse aynı pattern uygulanır.
+Bir sipariş `preparing → ready` geçtiğinde **bir kez** ses çalar. Aynı ready siparişi tekrar polling'de gelirse ses çalmaz (lastReadyIds'a girmiştir).
 
-### Hâlâ Sorun Varsa
-Eğer teslim sonrası hâlâ değişiklik gözükmüyorsa, **Supabase realtime publication** kontrol edilmeli. SQL Editor'da:
-
-```sql
-SELECT * FROM pg_publication_tables WHERE pubname = 'supabase_realtime';
-```
-
-`orders` tablosu listede olmalı. Yoksa:
-
-```sql
-ALTER PUBLICATION supabase_realtime ADD TABLE orders;
-```
-
-(Migration `0007_realtime_orders.sql` bunu zaten yapıyor olmalı.)
+### State Reset
+`firstFetch` flag — ilk yüklemede zaten ready olan siparişlerde ses çalmaz (sadece sayfa açıldı).
 
 ## 🗺️ Durum
 
 | | |
 |---|---|
-| Garson rolü ayrımı + label fix | ✅ |
-| **Auth izolasyon + sipariş refresh** | **✅ BU PAKET** |
+| Auth izolasyon + sipariş refresh | ✅ |
+| **Tüm siparişler + kalem detay** | **✅ BU PAKET** |
+| Garson sipariş alma | 🔜 (sonraki paket) |
 | Süper admin paneli | 🔜 |
-| Modül yönetimi | 🔜 |
 
-## 🔮 Sonra İyileştirmeler
+## 🔮 Sonraki Paket: Garson Sipariş Alma
 
-- **Garson sipariş detay modal** — hazır sekmesinden tıklayınca tüm ürünler/notlar
-- **Masa detay modal** — açık siparişler/ödeme bilgisi
-- **Browser notification** — uygulama arkaplandayken sistem bildirimi
-- **PWA** — telefon ana ekrana ekle
-- **Ödeme sonrası order arşivleme** — eski siparişler ayrı tabloya
+Bu pakette **Tüm Masalar** sekmesi sadece görünüm. Bir sonraki pakette:
+- Masa kartına tıklayınca → POS-benzeri sipariş alma ekranı
+- Ürün seçme + adet + not + masaya gönderme
+- Açık masaya yeni kalem ekleme
+- Kasa register-panel'in sadeleştirilmiş versiyonu
 
-Push → deploy → garsonda yeniden login → test et 🚀
+İstediğinde "**garson sipariş alma**" deyip o paketi başlatırız.
+
+Push → test → çalışırsa garson sipariş almaya geçeriz 🚀

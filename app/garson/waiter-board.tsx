@@ -10,9 +10,9 @@ import {
   type WaiterCall,
 } from '@/lib/actions/call-buttons';
 import {
-  getReadyOrders,
+  getAllActiveOrders,
   markOrderDelivered,
-  type ReadyOrder,
+  type WaiterOrder,
 } from '@/lib/actions/waiter';
 import {
   getTablesWithStatus,
@@ -24,7 +24,7 @@ import { type SoundSettings, DEFAULT_SOUND_SETTINGS } from '@/lib/sound-types';
 import { playSound, type SoundId } from '@/lib/sounds';
 import { createClient } from '@/lib/supabase/client';
 
-type WaiterTab = 'calls' | 'ready' | 'active' | 'all';
+type WaiterTab = 'calls' | 'orders' | 'active' | 'tables';
 
 type Props = {
   businessId: string;
@@ -70,10 +70,10 @@ export function WaiterBoard({ businessId }: Props) {
   const [callsBump, setCallsBump] = useState(0);
 
   // ============================================================
-  // HAZIR SİPARİŞLER
+  // SİPARİŞLER (tüm aktif - received/confirmed/preparing/ready)
   // ============================================================
-  const [readyOrders, setReadyOrders] = useState<ReadyOrder[]>([]);
-  const [readyBump, setReadyBump] = useState(0);
+  const [activeOrders, setActiveOrders] = useState<WaiterOrder[]>([]);
+  const [ordersBump, setOrdersBump] = useState(0);
 
   // ============================================================
   // MASALAR
@@ -174,34 +174,45 @@ export function WaiterBoard({ businessId }: Props) {
   }, [playCallSound]);
 
   // ============================================================
-  // POLLING - HAZIR SİPARİŞLER (5sn)
+  // POLLING - TÜM AKTİF SİPARİŞLER (5sn)
+  // received/confirmed/preparing/ready hepsi
+  // Sadece YENİ ready geldiğinde ses çalar (transition tracking)
   // ============================================================
   useEffect(() => {
     let canceled = false;
-    let lastIds = new Set<string>();
-    const fetchReady = async () => {
-      const r = await getReadyOrders();
+    let lastReadyIds = new Set<string>();
+    let firstFetch = true;
+    const fetchOrders = async () => {
+      const r = await getAllActiveOrders();
       if (canceled) return;
       if (r.success) {
         const newOrders = r.orders || [];
-        const fresh = newOrders.filter((o) => !lastIds.has(o.id));
-        if (fresh.length > 0 && lastIds.size > 0) {
+        const newReadyIds = new Set(
+          newOrders.filter((o) => o.status === 'ready').map((o) => o.id)
+        );
+        // Yeni ready'ye geçen siparişler
+        const freshlyReady = newOrders.filter(
+          (o) => o.status === 'ready' && !lastReadyIds.has(o.id)
+        );
+        if (!firstFetch && freshlyReady.length > 0) {
           playOrderSound();
-          fresh.forEach((o) => {
+          freshlyReady.forEach((o) => {
             const tableLabel = getOrderDestination(o);
+            const itemCount = o.items.reduce((sum, it) => sum + it.quantity, 0);
             toast.info(
-              `🍽 ${tableLabel} · Sipariş hazır · ${o.item_count} ürün`,
+              `🍽 ${tableLabel} · Sipariş hazır · ${itemCount} ürün`,
               6000
             );
           });
-          setReadyBump((n) => n + 1);
+          setOrdersBump((n) => n + 1);
         }
-        setReadyOrders(newOrders);
-        lastIds = new Set(newOrders.map((o) => o.id));
+        setActiveOrders(newOrders);
+        lastReadyIds = newReadyIds;
+        firstFetch = false;
       }
     };
-    fetchReady();
-    const interval = setInterval(fetchReady, 5000);
+    fetchOrders();
+    const interval = setInterval(fetchOrders, 5000);
     return () => {
       canceled = true;
       clearInterval(interval);
@@ -313,12 +324,12 @@ export function WaiterBoard({ businessId }: Props) {
   }, []);
 
   const handleDeliverOrder = useCallback(async (orderId: string) => {
-    setReadyOrders((prev) => prev.filter((o) => o.id !== orderId));
+    setActiveOrders((prev) => prev.filter((o) => o.id !== orderId));
     const r = await markOrderDelivered(orderId);
     if (!r.success) {
       toast.error(r.error || 'İşlem başarısız');
-      const refresh = await getReadyOrders();
-      if (refresh.success) setReadyOrders(refresh.orders || []);
+      const refresh = await getAllActiveOrders();
+      if (refresh.success) setActiveOrders(refresh.orders || []);
     } else {
       toast.success('Sipariş teslim edildi');
     }
@@ -474,13 +485,13 @@ export function WaiterBoard({ businessId }: Props) {
             🔔 Çağrılar
           </TabButton>
           <TabButton
-            active={activeTab === 'ready'}
-            onClick={() => setActiveTab('ready')}
-            badge={readyOrders.length}
-            badgeBump={readyBump}
+            active={activeTab === 'orders'}
+            onClick={() => setActiveTab('orders')}
+            badge={activeOrders.length}
+            badgeBump={ordersBump}
             color="ok"
           >
-            🍽 Hazır
+            🍽 Siparişler
           </TabButton>
           <TabButton
             active={activeTab === 'active'}
@@ -491,11 +502,11 @@ export function WaiterBoard({ businessId }: Props) {
             📋 Açık Masa
           </TabButton>
           <TabButton
-            active={activeTab === 'all'}
-            onClick={() => setActiveTab('all')}
+            active={activeTab === 'tables'}
+            onClick={() => setActiveTab('tables')}
             color="super"
           >
-            ◍ Tümü
+            ◍ Tüm Masalar
           </TabButton>
         </div>
       </nav>
@@ -505,8 +516,8 @@ export function WaiterBoard({ businessId }: Props) {
         {activeTab === 'calls' && (
           <CallsTab calls={activeCalls} onResolve={handleResolveCall} />
         )}
-        {activeTab === 'ready' && (
-          <ReadyTab orders={readyOrders} onDeliver={handleDeliverOrder} />
+        {activeTab === 'orders' && (
+          <OrdersTab orders={activeOrders} onDeliver={handleDeliverOrder} />
         )}
         {activeTab === 'active' && (
           <ActiveTablesTab
@@ -514,7 +525,7 @@ export function WaiterBoard({ businessId }: Props) {
             callsByTable={callsByTable}
           />
         )}
-        {activeTab === 'all' && (
+        {activeTab === 'tables' && (
           <AllTablesTab zones={zones} callsByTable={callsByTable} />
         )}
       </main>
@@ -663,56 +674,145 @@ function CallsTab({
 }
 
 // ============================================================
-// TAB 2: HAZIR SİPARİŞLER
+// TAB 2: SİPARİŞLER (tüm aktif - received/confirmed/preparing/ready)
 // ============================================================
-function ReadyTab({
+
+const STATUS_CONFIG: Record<
+  string,
+  { label: string; color: string; bg: string; icon: string }
+> = {
+  received: {
+    label: 'YENİ',
+    color: 'var(--accent)',
+    bg: 'color-mix(in srgb, var(--accent) 10%, transparent)',
+    icon: '◉',
+  },
+  confirmed: {
+    label: 'ONAYLANDI',
+    color: 'var(--gold)',
+    bg: 'color-mix(in srgb, var(--gold) 10%, transparent)',
+    icon: '◈',
+  },
+  preparing: {
+    label: 'HAZIRLANIYOR',
+    color: 'var(--warn)',
+    bg: 'color-mix(in srgb, var(--warn) 10%, transparent)',
+    icon: '◐',
+  },
+  ready: {
+    label: 'HAZIR',
+    color: 'var(--ok)',
+    bg: 'color-mix(in srgb, var(--ok) 12%, transparent)',
+    icon: '✓',
+  },
+};
+
+function OrdersTab({
   orders,
   onDeliver,
 }: {
-  orders: ReadyOrder[];
+  orders: WaiterOrder[];
   onDeliver: (id: string) => void;
 }) {
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+
+  const toggle = (id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   if (orders.length === 0) {
-    return <EmptyState icon="🍽" title="Hazır sipariş yok" subtitle="Mutfaktan çıkanlar burada görünür." />;
+    return (
+      <EmptyState
+        icon="🍽"
+        title="Aktif sipariş yok"
+        subtitle="Yeni sipariş geldiğinde burada görünür."
+      />
+    );
   }
   return (
     <div className="space-y-2.5">
       {orders.map((order) => {
-        const elapsed = order.ready_at
-          ? Math.max(0, Math.floor((Date.now() - new Date(order.ready_at).getTime()) / 1000))
-          : 0;
+        const expanded = expandedIds.has(order.id);
+        const isReady = order.status === 'ready';
+        const statusCfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.received;
+
+        // Bekleme süresi - ready'de ready_at, diğerlerinde created_at
+        const refTime = isReady && order.ready_at ? order.ready_at : order.created_at;
+        const elapsed = Math.max(
+          0,
+          Math.floor((Date.now() - new Date(refTime).getTime()) / 1000)
+        );
         const elapsedLabel =
           elapsed < 60 ? `${elapsed} sn` : `${Math.floor(elapsed / 60)} dk`;
-        const isUrgent = elapsed > 180; // 3 dakikadan eski → kırmızı
+        const isUrgent = isReady && elapsed > 180;
+
+        const itemCount = order.items.reduce((s, it) => s + it.quantity, 0);
+
         return (
           <div
             key={order.id}
-            className="p-4 rounded-[14px] border"
+            className="rounded-[14px] border overflow-hidden"
             style={{
               background: 'var(--card)',
               borderColor: isUrgent
                 ? 'color-mix(in srgb, var(--danger) 35%, var(--line))'
-                : 'var(--line)',
+                : isReady
+                  ? 'color-mix(in srgb, var(--ok) 25%, var(--line))'
+                  : 'var(--line)',
               animation: 'callItemIn 320ms cubic-bezier(0.34, 1.56, 0.64, 1)',
             }}
           >
-            <div className="flex items-start gap-3 mb-3">
+            {/* COLLAPSED HEAD - tıklanabilir */}
+            <button
+              type="button"
+              onClick={() => toggle(order.id)}
+              className="w-full p-4 flex items-start gap-3 text-left transition-colors active:bg-paper-2"
+            >
+              {/* Status indicator */}
               <div
-                className="w-12 h-12 rounded-[12px] grid place-items-center flex-shrink-0"
+                className="w-11 h-11 rounded-[10px] grid place-items-center flex-shrink-0"
                 style={{
-                  background: 'color-mix(in srgb, var(--ok) 14%, transparent)',
-                  color: 'var(--ok)',
-                  fontSize: 22,
+                  background: statusCfg.bg,
+                  color: statusCfg.color,
+                  fontSize: 18,
+                  fontWeight: 700,
                 }}
               >
-                🍽
+                {statusCfg.icon}
               </div>
+
               <div className="flex-1 min-w-0">
-                <div className="text-ink" style={{ fontWeight: 600, fontSize: 16 }}>
+                {/* Status badge mini */}
+                <div
+                  className="inline-flex items-center mb-1"
+                  style={{
+                    fontFamily: 'var(--f-mono)',
+                    fontSize: 9,
+                    fontWeight: 700,
+                    letterSpacing: '0.16em',
+                    color: statusCfg.color,
+                  }}
+                >
+                  {statusCfg.label}
+                </div>
+
+                <div
+                  className="text-ink"
+                  style={{ fontWeight: 600, fontSize: 16, lineHeight: 1.2 }}
+                >
                   {getOrderDestinationDisplay(order)}
                 </div>
-                <div className="mt-0.5 flex items-center gap-2" style={{ fontSize: 13 }}>
-                  <span className="text-ink-2">{order.item_count} ürün</span>
+
+                <div
+                  className="mt-1 flex items-center gap-2 flex-wrap"
+                  style={{ fontSize: 12 }}
+                >
+                  <span className="text-ink-2">{itemCount} ürün</span>
                   <span style={{ color: 'var(--ink-3)' }}>·</span>
                   <span
                     style={{
@@ -722,34 +822,166 @@ function ReadyTab({
                     }}
                   >
                     {isUrgent ? '⚠ ' : ''}
-                    {elapsedLabel} bekliyor
+                    {elapsedLabel}
+                    {isReady ? ' bekliyor' : ''}
                   </span>
                 </div>
               </div>
-              <div
-                className="text-ink-2 flex-shrink-0"
-                style={{
-                  fontFamily: 'var(--f-mono)',
-                  fontSize: 14,
-                  fontWeight: 700,
-                }}
-              >
-                ₺{Math.round(order.total)}
+
+              <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                <div
+                  className="text-ink"
+                  style={{
+                    fontFamily: 'var(--f-mono)',
+                    fontSize: 14,
+                    fontWeight: 700,
+                  }}
+                >
+                  ₺{Math.round(order.total)}
+                </div>
+                {/* Genişle/daralt ikonu */}
+                <div
+                  className="grid place-items-center"
+                  style={{
+                    width: 22,
+                    height: 22,
+                    borderRadius: 11,
+                    background: 'var(--paper-2)',
+                    color: 'var(--ink-3)',
+                    fontSize: 11,
+                    transition: 'transform 0.2s ease',
+                    transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                  }}
+                >
+                  ▾
+                </div>
               </div>
-            </div>
-            <button
-              onClick={() => onDeliver(order.id)}
-              className="w-full h-11 rounded-[10px] text-sm font-semibold transition-all active:scale-[0.98]"
-              style={{
-                background: 'var(--accent)',
-                color: '#FAF5EA',
-                fontFamily: 'var(--f-mono)',
-                letterSpacing: '0.06em',
-                textTransform: 'uppercase',
-              }}
-            >
-              ✓ Teslim Ettim
             </button>
+
+            {/* EXPANDED - kalem detayları */}
+            {expanded && (
+              <div
+                className="px-4 pb-4 border-t"
+                style={{ borderColor: 'var(--line)' }}
+              >
+                {order.items.length === 0 ? (
+                  <div
+                    className="py-3 text-ink-3 text-sm text-center"
+                    style={{ fontStyle: 'italic' }}
+                  >
+                    Kalem yok
+                  </div>
+                ) : (
+                  <div className="space-y-2 pt-3">
+                    {order.items.map((item) => (
+                      <div
+                        key={item.id}
+                        className="p-2.5 rounded-[10px]"
+                        style={{
+                          background: 'var(--paper-2)',
+                          border: '1px solid var(--line)',
+                        }}
+                      >
+                        <div className="flex items-start gap-2">
+                          {/* Adet */}
+                          <div
+                            className="flex-shrink-0 grid place-items-center rounded-[6px]"
+                            style={{
+                              width: 28,
+                              height: 28,
+                              background:
+                                'color-mix(in srgb, var(--accent) 14%, transparent)',
+                              color: 'var(--accent)',
+                              fontFamily: 'var(--f-mono)',
+                              fontSize: 12,
+                              fontWeight: 700,
+                            }}
+                          >
+                            {item.quantity}×
+                          </div>
+
+                          {/* Ürün + istasyon + not */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start gap-1.5 flex-wrap">
+                              <span
+                                className="text-ink"
+                                style={{
+                                  fontWeight: 600,
+                                  fontSize: 14,
+                                  lineHeight: 1.3,
+                                }}
+                              >
+                                {item.product_name}
+                              </span>
+
+                              {/* İstasyon rozet */}
+                              {item.station_name && (
+                                <span
+                                  className="inline-flex items-center gap-0.5"
+                                  style={{
+                                    fontFamily: 'var(--f-mono)',
+                                    fontSize: 9,
+                                    fontWeight: 700,
+                                    letterSpacing: '0.1em',
+                                    padding: '2px 6px',
+                                    borderRadius: 5,
+                                    background: `color-mix(in srgb, ${item.station_color || 'var(--accent)'} 14%, transparent)`,
+                                    color: item.station_color || 'var(--accent)',
+                                    border: `1px solid color-mix(in srgb, ${item.station_color || 'var(--accent)'} 30%, transparent)`,
+                                    textTransform: 'uppercase',
+                                  }}
+                                >
+                                  {item.station_icon && (
+                                    <span style={{ fontSize: 10 }}>
+                                      {item.station_icon}
+                                    </span>
+                                  )}
+                                  <span>{item.station_name}</span>
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Müşteri notu */}
+                            {item.note && (
+                              <div
+                                className="mt-1 text-ink-2"
+                                style={{
+                                  fontSize: 12,
+                                  fontStyle: 'italic',
+                                  lineHeight: 1.4,
+                                }}
+                              >
+                                &ldquo;{item.note}&rdquo;
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Ready'de teslim et butonu */}
+                {isReady && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeliver(order.id);
+                    }}
+                    className="mt-3 w-full h-11 rounded-[10px] text-sm font-semibold transition-all active:scale-[0.98]"
+                    style={{
+                      background: 'var(--accent)',
+                      color: '#FAF5EA',
+                      fontFamily: 'var(--f-mono)',
+                      letterSpacing: '0.06em',
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    ✓ Teslim Ettim
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         );
       })}
