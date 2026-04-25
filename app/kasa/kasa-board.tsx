@@ -28,9 +28,11 @@ import {
 } from '@/lib/actions/orders-notify';
 import {
   getKasaSoundSettings,
+} from '@/lib/actions/sound-settings';
+import {
   type SoundSettings,
   DEFAULT_SOUND_SETTINGS,
-} from '@/lib/actions/sound-settings';
+} from '@/lib/sound-types';
 import { playSound, type SoundId } from '@/lib/sounds';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from '@/components/ui/toast';

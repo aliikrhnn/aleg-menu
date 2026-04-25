@@ -4,9 +4,11 @@ import { useEffect, useState, useTransition } from 'react';
 import {
   getSoundSettings,
   updateSoundSettings,
+} from '@/lib/actions/sound-settings';
+import {
   type SoundSettings,
   DEFAULT_SOUND_SETTINGS,
-} from '@/lib/actions/sound-settings';
+} from '@/lib/sound-types';
 import { SOUND_OPTIONS, playSound, type SoundId } from '@/lib/sounds';
 import { toast } from '@/components/ui/toast';
 
@@ -18,22 +20,36 @@ export function SoundsTab() {
   const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
+    let mounted = true;
     (async () => {
       try {
         const r = await getSoundSettings();
-        if (r.success && r.settings) {
-          setSettings(r.settings);
+        if (!mounted) return;
+        if (r && r.success && r.settings) {
+          // Volume validity kontrol — NaN/undefined olmasın
+          const safe: SoundSettings = {
+            call_sound: r.settings.call_sound || DEFAULT_SOUND_SETTINGS.call_sound,
+            order_sound: r.settings.order_sound || DEFAULT_SOUND_SETTINGS.order_sound,
+            volume:
+              typeof r.settings.volume === 'number' && !isNaN(r.settings.volume)
+                ? r.settings.volume
+                : DEFAULT_SOUND_SETTINGS.volume,
+          };
+          setSettings(safe);
           setLoadError(null);
         } else {
-          // Yüklemede hata - default'larla devam et
-          setLoadError(r.error || 'Ayarlar yüklenemedi');
+          setLoadError(r?.error || 'Ayarlar yüklenemedi');
         }
       } catch (err) {
+        if (!mounted) return;
         setLoadError(err instanceof Error ? err.message : 'Bilinmeyen hata');
       } finally {
-        setLoading(false);
+        if (mounted) setLoading(false);
       }
     })();
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const handleSelect = (

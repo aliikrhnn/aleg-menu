@@ -2,19 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { revalidatePath } from 'next/cache';
-
-export type SoundSettings = {
-  call_sound: string;
-  order_sound: string;
-  volume: number;
-};
-
-export const DEFAULT_SOUND_SETTINGS: SoundSettings = {
-  call_sound: 'bell',
-  order_sound: 'chime',
-  volume: 0.35,
-};
+import { DEFAULT_SOUND_SETTINGS, type SoundSettings } from '@/lib/sound-types';
 
 // ============================================================
 async function requireBusinessAccess() {
@@ -139,7 +127,6 @@ export async function updateSoundSettings(
 
     if (error) return { success: false, error: error.message };
 
-    revalidatePath('/panel/ayarlar');
     return { success: true };
   } catch (err) {
     return {
