@@ -19,7 +19,7 @@ import {
   type TableWithStatus,
   type TableZoneWithTables,
 } from '@/lib/actions/tables-status';
-import { OrderTakingModal } from './order-taking-modal';
+import { OrderTakingModal } from '@/components/order/order-taking-modal';
 import {
   TablesFullView,
   type ZoneFilterId,

@@ -1,187 +1,174 @@
-# 🎨 PAYLAŞILAN MASA TASARIMI
+# 🛒 KASA — HIZLI ÜRÜN EKLE
 
-Garson ve kasa uygulamasında ortak, editorial, status-aware masa kartı sistemi. Tek bir paylaşılan component üzerinden tüm masa görünümleri tutarlı.
+Kasiyer hesap alırken müşteri ekstra bir şey isteyince — bardağı su, bir tatlı, vs. — modalı kapatmadan menü açıp anında ekleme.
 
 **3 dosya · Migration yok.**
 
-## 📐 Tasarım
+## 🐛 Eski Akış
 
 ```
-┌────────────────────────────────────────────────────────────────────┐
-│ [Tümü 43] [Bahçe 13] [Bar 12] [Teras 8]      ● Yeni ● Dolu ● ...  │  ← Filter + Legend
-├────────────────────────────────────────────────────────────────────┤
-│ ▌ Bahçe   4/8 DOLU · ₺1.855 AÇIK            ━━━━━━━─────         │  ← Zone başlığı
-│ ┌────────┐  ┌────────┐  ┌────────┐  ┌────────┐                    │
-│ │YENİ 3× │  │BOŞ  4p │  │DOLU 7× │  │HESAP   │                    │
-│ │ B1     │  │ B2     │  │ B3     │  │ B5     │                    │
-│ │  ₺220  │  │        │  │  ₺485  │  │  ₺840  │                    │
-│ └────────┘  └────────┘  └────────┘  └────────┘
+Masaya tıkla → TableDetailModal açıldı
+   ↓
+Müşteri "1 su daha"
+   ↓
+Modal kapat → Sipariş Akışı tab'a geç → composer aç → ürün seç
+   ↓
+Geri dön → masaya tekrar tıkla → modal aç → hesap al
 ```
 
-### Kart Anatomisi
-- **Üst rozet**: Status (YENİ/DOLU/BOŞ/HESAP/REZERVE/TEMİZLİK) + sağda adet (3×) veya kapasite (4p) + süre (18 dk)
-- **Orta**: Masa adı (büyük serif italic) + tutar (mono italic)
-- **Alt** *(opsiyonel)*: Garson adı + son sipariş kategori — `waiterName` ve `lastCategory` props ile (paket 2'de backend enrichment)
+Yavaş, dikkat dağıtan, müşteri bekliyor.
 
-### Status Renkleri
-| Status | Renk | Kullanım |
-|--------|------|----------|
-| BOŞ | ink-3 | Müşteri yok |
-| DOLU | gold | Aktif sipariş var |
-| YENİ | accent | Mutfağa yollanmamış kalem |
-| HAZIR | ok | Teslim edilmemiş hazır var |
-| HESAP | super | Ödeme bekliyor |
-| REZERVE | olive | Rezervasyon |
-| TEMİZLİK | ink-3 | Temizlik gerekli |
+## ✅ Yeni Akış
 
-### Filter Bar
-- **Tümü** + her zone bir chip (renk + sayı)
-- Aktif olan dolu, pasif olanlar zone rengiyle nokta + isim + sayı
-- Yatay scroll (mobile-first)
-
-### Legend
-- Sağ üstte küçük renk legend'ı
-- ● Yeni ● Dolu ● Hesap ● Rezerve ● Temizlik
-
-### Zone Header
-- Renk noktası + zone adı (italic serif)
-- "4/8 DOLU · ₺1.855 AÇIK" özet
-- Alt bar: doluluk progress (zone rengiyle)
-
-## 📦 Bileşenler
-
-`components/tables/table-card.tsx` 5 export sağlar:
-
-### `TableCard`
-Tek bir masa kartı. Standalone kullanılabilir.
-```tsx
-<TableCard
-  table={tableWithStatus}
-  callCount={3}
-  onClick={(t) => openModal(t)}
-  waiterName="Ayşe"      // opsiyonel
-  lastCategory="İçecek"  // opsiyonel
-/>
+```
+Masaya tıkla → TableDetailModal
+   ↓
+Header'da "+ Ürün Ekle" (turuncu accent buton)
+   ↓
+Tıkla → OrderTakingModal üstte açılır (HIZLI EKLE başlık)
+   ↓
+Ürün seç (varyant + option + not destekli)
+   ↓
+✓ Mutfağa Gönder → modal kapanır → siparişler refresh
+   ↓
+Hesap Al butonu güncel tutarla çalışır
 ```
 
-### `TableFilterBar`
-Tümü + zone chip'leri. Yatay scroll.
+## ✨ Özellikler
 
-### `TableLegend`
-Status renk legend'ı.
+### Akıllı Mod Seçimi (Onaylanmış Plan B)
+- **Açık (ödenmemiş) sipariş varsa** → `mode='addToOrder'` → mevcut hesaba eklenir
+- **Açık sipariş yoksa** → `mode='new'` → yeni sipariş açar (otomatik fallback)
 
-### `TableZoneSection`
-Bir zone başlık + alt bar + grid.
+Sonuç: kasiyer her durumda **tek hesap** alır, kalemleri ayrı modal trafiği yapmaz.
 
-### `TablesFullView` ⭐ (En çok kullanılan)
-Hepsi bir arada: filter bar + legend üstte + zone section'ları.
-```tsx
-const [filter, setFilter] = useState<ZoneFilterId>('all');
+### Modal Üstünde Modal
+- TableDetailModal z-index 90, OrderTakingModal z-index 100
+- Hesap alma akışı kesintiye uğramaz, sadece üstüne modal açılır
+- Kapat → TableDetailModal güncel kalemlerle devam eder
 
-<TablesFullView
-  zones={zones}
-  activeFilter={filter}
-  onFilterChange={setFilter}
-  callsByTable={callsByTable}
-  onSelectTable={(t) => openModal(t)}
-/>
-```
+### Header Subtitle Dinamik
+- Mevcut siparişe ekleme: **"HIZLI EKLE"**
+- Yeni sipariş: **"YENİ SİPARİŞ"**
+- (Garson tarafında her zaman: **"YENİ SİPARİŞ"**)
 
-## 🔧 Kullanım Yerleri
-
-### 1. Garson `app/garson/waiter-board.tsx`
-- **"Açık Masa"** tab → `ActiveTablesView` (sadece dolu olanları filtreler) → `TablesFullView`
-- **"Tüm Masalar"** tab → `TablesFullView` direkt
-- Eski `ActiveTablesTab` + `AllTablesTab` + local `TableCard` silindi (~210 satır azaldı)
-
-### 2. Kasa `app/kasa/tables-grid.tsx`
-- Eski filter (Tümü/Boş/Dolu/Hesap) + custom card → `TablesFullView`
-- Eski helper component'ler (`FilterPill`, `TableCard`, `ZoneHeader`) silindi (~440 satır azaldı)
-- Mevcut `onTableClick` ve `callsByTable` props korundu
+### Paylaşılan Component
+`OrderTakingModal` artık `app/garson/` değil `components/order/` altında — hem garson hem kasa kullanır:
+- Tek codebase, tek varyant flow, tek option preset
+- Bug fix bir yerden, herkes etkilenir
+- Bakımı kolay
 
 ## 📦 Dosyalar (3)
 
 ```
-components/tables/table-card.tsx         (yeni - 470 satır, paylaşılan)
-app/garson/waiter-board.tsx              (TablesFullView entegrasyonu, eski component'ler silindi)
-app/kasa/tables-grid.tsx                 (TablesFullView entegrasyonu, ~440 satır azaldı)
+components/order/order-taking-modal.tsx     (yeni paylaşılan, mode + targetOrderId props)
+app/garson/waiter-board.tsx                 (import path güncellendi)
+app/kasa/table-detail-modal.tsx             (+ Ürün Ekle butonu + render)
 ```
+
+`app/garson/order-taking-modal.tsx` (eski) **silindi** — yeni paylaşılan path kullanılıyor.
+
+## 🔧 OrderTakingModal API
+
+```tsx
+<OrderTakingModal
+  table={tableObj}              // TableWithStatus
+  cashierId={cashier.id}
+  mode="addToOrder"             // 'new' | 'addToOrder'
+  targetOrderId={openOrder.id}  // mode='addToOrder' için
+  subtitle="HIZLI EKLE"         // header subtitle override
+  onClose={() => setOpen(false)}
+  onSuccess={() => refresh()}
+/>
+```
+
+Backend mantığı:
+- `mode='new'` → `createManualOrder({ tableId, items, sendToKitchen: true })`
+- `mode='addToOrder'` → `addItemsToOrder({ orderId: targetOrderId, items, sendToKitchen: true })`
 
 ## 🚀 Push
 
 ```powershell
 git add .
-git commit -m "feat(design): paylaşılan masa kartı tasarımı (garson + kasa)"
+git commit -m "feat(kasa): hızlı ürün ekle - modal üstünde modal akışı"
 git push
 ```
 
 ## 🧪 Test
 
-### A) Garson — Açık Masa
-1. Garson → **📋 Açık Masa** tab
-2. ✅ Üstte filter chip'leri (Tümü + zone'lar) + sağda legend
-3. ✅ Zone başlıkları: "Bahçe 4/8 DOLU · ₺1.855 AÇIK" + alt bar
-4. ✅ Sadece dolu/yeni/hazır/hesap masalar görünür
-5. ✅ Kart üst: status rozet + adet/kapasite + süre
-6. ✅ Kart orta: masa adı (italic) + tutar
-7. Bir masaya tıkla → ✅ sipariş alma modalı açılır
+### A) Kasa - Açık Masada Ekleme
+1. Kasa → Masalar → bir **dolu** masaya tıkla
+2. TableDetailModal açılır → ✅ header'da turuncu **"+ Ürün Ekle"** butonu
+3. Tıkla → OrderTakingModal açılır → ✅ subtitle: **"HIZLI EKLE"**
+4. Bir ürün seç (varyantlı bir kahve örnek)
+5. Boyut "Orta" + Şeker "Az" seç
+6. **+ Sepete Ekle** → sepete eklendi
+7. **✓ Mutfağa Gönder** → toast: `Masa X · masaya eklendi`
+8. ✅ Modal kapanır
+9. ✅ TableDetailModal'daki kalem listesi yenilendi, yeni ürün görünür
+10. Tutar güncellenmiş ✅
+11. Hesap Al → PaymentModal güncel tutarla açılır ✅
 
-### B) Garson — Tüm Masalar
-1. **◍ Tüm Masalar** tab
-2. ✅ Boş masalar da dahil hepsi görünür
-3. **Bahçe** chip'ine tıkla → sadece Bahçe zone'u
-4. **Tümü** → tüm zone'lar geri gelir
+### B) Garson - Hâlâ Çalışıyor mu?
+1. Garson → Tüm Masalar → masaya tıkla
+2. ✅ OrderTakingModal açılır → subtitle: **"YENİ SİPARİŞ"**
+3. Sepet + Mutfağa Gönder → toast: `Masa X · sipariş gönderildi`
+4. Garson "Siparişler" sekmesinde yeni sipariş görünür ✅
 
-### C) Kasa — Masalar Tab
-1. Kasa → **Masalar** tab (varsa)
-2. ✅ Aynı tasarım: filter + legend + zone'lar
-3. ✅ Çağrı rozeti masalarda görünür (kırmızı 🔔)
-4. Masaya tıkla → ✅ mevcut akış (açık siparişler + ödeme)
+### C) Edge Case - Tüm Siparişler Ödenmiş
+1. Hesap alındıktan sonra modal hâlâ açıkken **+ Ürün Ekle**
+2. ✅ Açık sipariş yok → `mode='new'` → subtitle: **"YENİ SİPARİŞ"**
+3. Yeni bir sipariş açılır (mevcut paid olanlara dokunulmaz)
 
-### D) Responsive
-1. Telefon: 2 sütun grid
-2. Tablet: 3 sütun
-3. Desktop: 4-6 sütun
-4. Filter bar yatay scroll
-
-### E) Boş Durumlar
-1. Hiç masa yoksa → "Henüz masa tanımlı değil" + masa ayarlarına git
-2. Filter aktifken eşleşen yoksa → "Bu bölgede masa yok"
-3. Hata → kırmızı hata kutusu
+### D) Mutfak Tarafı
+1. Hızlı eklenen ürün mutfak ekranında görünür ✅
+2. Mevcut sipariş'e eklenen kalem ayrı satır gibi görünür (eklenme zamanıyla)
 
 ## 💡 Mimari
 
-### Single Source of Truth
-`TableCard` ve `TablesFullView` tek dosyada. Kasada veya garsonda görünüm değişmek istendiğinde **bir yerden** güncellenir.
-
-### Forward Compatibility
-`TableCard` props'ları `waiterName` ve `lastCategory` opsiyonel — şu an tetiklenmez (data yok). Paket 2'de backend `getTablesWithStatus`'a bu alanlar eklendiğinde direkt görünmeye başlar.
-
-### Çağrı Rozeti
-`callsByTable: Map<string, number>` — masa ID → çağrı sayısı. Kart sağ üstte 🔔 rozet, animated pulse.
-
-### Filter ID Tipi
-```typescript
-export type ZoneFilterId = string | 'all';
+### Tek Paylaşılan Modal
+```
+┌─────────────────────────────────────┐
+│   components/order/                 │
+│     order-taking-modal.tsx          │
+│   ↑              ↑                  │
+│   import         import             │
+│   from kasa      from garson        │
+└─────────────────────────────────────┘
 ```
 
-`'all'` veya zone UUID'si. State management dışarıda, prop ile geçilir.
+İleride mutfak/admin tarafında "ürün ekle" gerekirse aynı modal kullanılır — tek koddan üç+ ekran.
 
-## 🔮 Sonra (Paket 2: Backend Enrichment)
+### Backend Mantığı
+| Mode | Action | Sonuç |
+|------|--------|-------|
+| `new` | `createManualOrder` | Yeni order kaydı, status='confirmed' |
+| `addToOrder` | `addItemsToOrder` | Mevcut order'a kalem eklenir, status korunur |
 
-`getTablesWithStatus` action'a eklenebilir:
-- `assigned_waiter_name` — siparişi alan kasiyer/garson adı (orders join)
-- `last_item_category` — son siparişin son kalemi (order_items + categories join)
+İkisi de `sendToKitchen: true` → mutfağa basılır.
 
-Ekran görüntüsündeki "Ayşe" ve "İçecek" alt satırları o zaman görünür hale gelir. Kart kodu **zaten hazır**, sadece backend dönmeye başlayacak.
+### Modal Stack Z-Index
+- Backdrop overlay: 50
+- Layout sticky header: 30
+- TableDetailModal: 90
+- OrderTakingModal: 100
+- ProductOptionsPicker (modal içi): 110
+- Toast: 200+
 
 ## 🗺️ Durum
 
 | | |
 |---|---|
-| Garson varyantlar | ✅ |
-| **Paylaşılan masa tasarımı** | **✅ BU PAKET** |
-| Backend enrichment (waiter+category) | 🔜 Paket 2 |
+| Paylaşılan masa tasarımı | ✅ |
+| **Kasa hızlı ürün ekle** | **✅ BU PAKET** |
+| Backend enrichment (waiter+category) | 🔜 |
 | Süper admin paneli | 🔜 |
 
-Push → test → çalışırsa "**masa enrichment**" veya "**süper admin paneli**" söyle 🚀
+## 🔮 Sonra
+
+- **Açık masaya garson tarafından da ekleme** — şu an garson her zaman yeni sipariş açar; kasa pattern'i garsona da getirilebilir
+- **Ürün ekleme + ödeme tek akışta** — eklenen kalemler direkt seçili payment'a yansır
+- **Geçmiş hızlı ekleme** — son 5 hızlı ekleme öneri olarak
+- **Backend enrichment** — masa kartlarında garson + son kategori
+
+Push → test → çalışırsa "**masa enrichment**" veya **"süper admin paneli"** söyle 🚀

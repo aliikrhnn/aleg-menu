@@ -8,12 +8,14 @@ import {
   splitItemsFromMultipleOrders,
   listTablesForMove,
   type TableOrderDetail,
+  type TableWithStatus,
 } from '@/lib/actions/tables-status';
 import { PaymentModal } from '@/app/panel/(shell)/pos/payment-modal';
 import { PrintButton } from '@/components/panel/print-button';
 import { useCashierSession } from '@/lib/cashier-session';
 import { toast } from '@/components/ui/toast';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
+import { OrderTakingModal } from '@/components/order/order-taking-modal';
 
 type Props = {
   tableId: string;
@@ -47,6 +49,8 @@ export function TableDetailModal({
   // Masa aksiyon modalları
   const [changeTableOpen, setChangeTableOpen] = useState(false); // tüm masalara taşı (boş veya dolu)
   const [splitOpen, setSplitOpen] = useState(false); // kalem bazlı böl
+  // Hızlı ürün ekle modal (menüden direkt ekleme)
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
   const { cashier } = useCashierSession();
 
   const load = () => {
@@ -144,6 +148,22 @@ export function TableDetailModal({
             )}
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
+            {/* Hızlı Ürün Ekle - menüden direkt ekleme */}
+            <button
+              onClick={() => setQuickAddOpen(true)}
+              className="h-9 px-3 rounded-[8px] text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95"
+              style={{
+                background: 'var(--accent)',
+                color: '#FAF5EA',
+                fontFamily: 'var(--f-mono)',
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+              }}
+              title="Menüden hızlı ürün ekle"
+            >
+              <span style={{ fontSize: 14 }}>+</span>
+              <span>Ürün Ekle</span>
+            </button>
             {/* Masa Aksiyonları */}
             <button
               onClick={() => setTableActionsOpen(true)}
@@ -444,6 +464,45 @@ export function TableDetailModal({
           }}
         />
       )}
+
+      {/* Hızlı Ürün Ekle Modal (menüden direkt) */}
+      {quickAddOpen && cashier && (() => {
+        // En eski açık (ödenmemiş) siparişi bul
+        const openOrder = orders.find(
+          (o) =>
+            o.payment_status !== 'paid' && o.payment_status !== 'refunded'
+        );
+        // OrderTakingModal için minimal table objesi
+        const tableObj: TableWithStatus = {
+          id: tableId,
+          name: tableName,
+          capacity: 0,
+          zone_id: null,
+          shape: 'square',
+          db_status: 'occupied',
+          live_status: 'active',
+          active_order_count: orders.length,
+          total_amount: totalAmount,
+          oldest_order_at: null,
+          has_unpaid: hasUnpaid,
+          has_new_items: false,
+          has_ready_items: false,
+        };
+        return (
+          <OrderTakingModal
+            table={tableObj}
+            cashierId={cashier.id}
+            mode={openOrder ? 'addToOrder' : 'new'}
+            targetOrderId={openOrder?.id}
+            subtitle={openOrder ? 'HIZLI EKLE' : 'YENİ SİPARİŞ'}
+            onClose={() => setQuickAddOpen(false)}
+            onSuccess={() => {
+              load(); // siparişleri tazele
+              setQuickAddOpen(false);
+            }}
+          />
+        );
+      })()}
 
       {/* Kalem İkram Picker */}
       {giftItemContext && (
