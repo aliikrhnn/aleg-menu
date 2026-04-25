@@ -281,39 +281,13 @@ export function MenuPicker({
         </div>
       </div>
 
-      {/* KATEGORİ CHIPS */}
+      {/* KATEGORİ DROPDOWN */}
       {!search && categories.length > 0 && (
-        <div
-          className="px-4 py-2 flex items-center gap-1.5 overflow-x-auto flex-shrink-0"
-          style={{
-            scrollbarWidth: 'none',
-            borderBottom: '1px solid var(--line)',
-          }}
-        >
-          {categories.map((c) => {
-            const active = activeCategoryId === c.id;
-            return (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => setActiveCategoryId(c.id)}
-                className="flex-shrink-0 h-8 px-3 rounded-full transition-all active:scale-95"
-                style={{
-                  background: active ? 'var(--ink)' : 'var(--paper)',
-                  color: active ? 'var(--paper)' : 'var(--ink-2)',
-                  border: `1px solid ${active ? 'var(--ink)' : 'var(--line)'}`,
-                  fontFamily: 'var(--f-sans)',
-                  fontSize: 12,
-                  fontWeight: active ? 600 : 500,
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {c.hero_icon && <span style={{ marginRight: 4 }}>{c.hero_icon}</span>}
-                {c.name}
-              </button>
-            );
-          })}
-        </div>
+        <CategoryDropdown
+          categories={categories}
+          activeCategoryId={activeCategoryId}
+          onChange={setActiveCategoryId}
+        />
       )}
 
       {/* ÜRÜN GRID */}
@@ -968,6 +942,141 @@ function CheckMark({ active }: { active: boolean }) {
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#FAF5EA" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
           <path d="M20 6L9 17l-5-5" />
         </svg>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// CATEGORY DROPDOWN — Kompakt + tüm kategorileri popover ile gösterir
+// ============================================================
+function CategoryDropdown({
+  categories,
+  activeCategoryId,
+  onChange,
+}: {
+  categories: CategoryForPos[];
+  activeCategoryId: string | null;
+  onChange: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const active = categories.find((c) => c.id === activeCategoryId);
+
+  // Açıldığında dış tıklamada kapat
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-cat-dropdown]')) setOpen(false);
+    };
+    setTimeout(() => window.addEventListener('click', handler), 50);
+    return () => window.removeEventListener('click', handler);
+  }, [open]);
+
+  return (
+    <div
+      data-cat-dropdown
+      className="relative px-3 py-2 flex-shrink-0"
+      style={{ borderBottom: '1px solid var(--line)' }}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full h-9 px-3 rounded-[8px] flex items-center justify-between gap-2 transition-all active:scale-[0.98]"
+        style={{
+          background: open ? 'var(--paper-2)' : 'var(--paper)',
+          border: `1px solid ${open ? 'var(--accent)' : 'var(--line)'}`,
+          color: 'var(--ink)',
+        }}
+      >
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          {active?.hero_icon && (
+            <span style={{ fontSize: 14 }}>{active.hero_icon}</span>
+          )}
+          <span
+            className="truncate"
+            style={{
+              fontFamily: 'var(--f-sans)',
+              fontSize: 12,
+              fontWeight: 600,
+              textAlign: 'left',
+            }}
+          >
+            {active?.name || 'Kategori seç'}
+          </span>
+        </div>
+        <span
+          style={{
+            fontSize: 10,
+            color: 'var(--ink-3)',
+            transform: open ? 'rotate(180deg)' : 'rotate(0)',
+            transition: 'transform 150ms',
+          }}
+        >
+          ▼
+        </span>
+      </button>
+
+      {open && (
+        <div
+          className="absolute left-3 right-3 mt-1 rounded-[10px] overflow-hidden z-10"
+          style={{
+            background: 'var(--paper)',
+            border: '1px solid var(--line)',
+            boxShadow: '0 8px 24px -6px rgba(42,31,24,0.18)',
+            maxHeight: 280,
+            overflowY: 'auto',
+          }}
+        >
+          {categories.map((c) => {
+            const isActive = activeCategoryId === c.id;
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => {
+                  onChange(c.id);
+                  setOpen(false);
+                }}
+                className="w-full h-10 px-3 flex items-center gap-2 text-left transition-colors"
+                style={{
+                  background: isActive
+                    ? 'color-mix(in srgb, var(--accent) 8%, transparent)'
+                    : 'transparent',
+                  color: isActive ? 'var(--accent)' : 'var(--ink)',
+                  borderBottom: '1px solid var(--line)',
+                }}
+              >
+                {c.hero_icon && (
+                  <span style={{ fontSize: 14 }}>{c.hero_icon}</span>
+                )}
+                <span
+                  className="flex-1 truncate"
+                  style={{
+                    fontFamily: 'var(--f-sans)',
+                    fontSize: 12,
+                    fontWeight: isActive ? 700 : 500,
+                  }}
+                >
+                  {c.name}
+                </span>
+                {isActive && (
+                  <span
+                    style={{
+                      fontFamily: 'var(--f-mono)',
+                      fontSize: 9,
+                      fontWeight: 700,
+                      letterSpacing: '0.1em',
+                      color: 'var(--accent)',
+                    }}
+                  >
+                    ●
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
       )}
     </div>
   );

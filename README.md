@@ -1,233 +1,125 @@
-# 🎯 HESAP PANEL B — TAM ÖZELLİKLİ
+# 🔧 HESAP PANELİ — İYİLEŞTİRMELER
 
-Yan panel C3 layout — tüm istenen özellikler tek pakette.
+İki sorunu birden çözer.
 
-**3 dosya · Backend'e 2 yeni action eklendi · Migration yok.**
+**3 dosya · Migration yok.**
 
-## 🎨 Layout
+## 🐛 Sorun 1: Ödenen Kalem Kayboluyordu
 
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│ HESAP AL · Masa B5                              MASA TOPLAM ₺630 [✕]│
-├────────────────────────┬─────────────────────┬──────────────────────┤
-│ KALEMLER               │ ÖDEME              │ + ÜRÜN EKLE          │
-│ (sol esnek)            │ (orta 340px)       │ (sağ 380px)          │
-│                        │                    │                      │
-│ ☐ 6 kalem  × TEMİZLE  │ TÜM MASA          │ [search]             │
-│                        │                    │                      │
-│ ☐ 1× Flat White ₺105  │ ARA TOP. ₺630    │ [Kahveler] [Yemekler] │
-│ ☐ 1× Flat White ₺105  │ İNDİRİM −₺63 [✕] │                      │
-│ ☐ 1× Matcha     ₺115  │ ─────             │ ┌────┐ ┌────┐         │
-│ ...                    │ ₺567              │ │Ürün│ │Ürün│         │
-│                        │                    │ └────┘ └────┘         │
-│                        │ YÖNTEM             │                      │
-│                        │ [💵 Nakit]         │                      │
-│                        │ [💳 Kart]          │                      │
-│                        │ [📒 Açık Hes.]    │                      │
-│                        │                    │                      │
-│                        │ [🏷 İndirim]       │ SEPET 2 ürün ₺85    │
-│                        │ [💸 Parçalı]       │ + Masaya Ekle        │
-│                        │                    │                      │
-│ [★ İkram] [🚫 İptal]  │ [TÜM MASAYI ÖDE]   │                      │
-└────────────────────────┴─────────────────────┴──────────────────────┘
+### Eski Davranış
+1. 2 kalem seç → **Seçili Öde** → ödendi ✅
+2. Hesap paneli yenileniyor → ödenen kalemler **görünmüyor** ❌
+
+### Sebep
+`getTableOrders` query'si sadece **aktif** veya **delivered+unpaid** siparişleri alıyordu. Ödenmiş (`status='delivered' + payment_status='paid'`) siparişler filtreden düşüyordu → kalemleri masa detayında görünmez.
+
+### Çözüm
+Üçüncü bir query eklendi: **Yakın zamanda ödenenler**
+
+```typescript
+// Son 4 saatte ödenmiş siparişleri de getir
+.eq('payment_status', 'paid')
+.gte('created_at', son_4_saat)
 ```
 
-**Mobile (<1024px):** Tab bazlı `[Kalemler] [Ödeme] [+ Ürün]` alt sticky bar.
+### Sonuç
+- ✅ Ödenen kalemler **grileşmiş**, "✓ ÖDENDİ" rozetiyle listede kalır
+- ✅ Opacity 0.55, accent kutu yerine ok (yeşil) tinted bg
+- ✅ Checkbox disabled (tekrar seçilemez)
+- ✅ Header'da **iki tutar**: "MASA TOPLAM ₺630" + altında "Kalan: ₺315" (sadece ödenmemiş)
 
-## ✨ Tüm Özellikler
+## 🐛 Sorun 2: Kategoriler Yarım Görünüyordu
 
-### 1. ✅ Yeni Ödeme Yöntemleri
-- 💵 **Nakit**
-- 💳 **Kart**
-- 📒 **Açık Hesap (Cari)** — Havale + Online kaldırıldı
-- ❌ Eski Havale, Online silindi
+### Eski Davranış
+Sağ menü dar (380px) → kategori chip'leri yatay scroll → kullanıcı kategoriyi göremiyor, scrollu fark etmiyor.
 
-### 2. ✅ Açık Hesap Akışı
-- "📒 Açık Hes." seç → "Açık Hesap Olarak Kapat" butonu (mor renk - super)
-- Tıklayınca modal: müşteri notu (opsiyonel)
-- Sipariş `payment_status='paid'` + `payment_method='other'` + note olarak "Açık hesap: Ahmet Bey..."
-- Backend: yeni `closeOrderOnAccount` action
-- Parsiyel modda da çalışır (kalemleri ayır, sonra cariye aktar)
+### Çözüm: Modern Dropdown
+```
+┌─────────────────────────────┐
+│ [☕] Kahveler          ▼    │  ← seçili kategori, tıklanır
+└─────────────────────────────┘
+   ↓ (tıkla)
+┌─────────────────────────────┐
+│ ☕ Kahveler              ●  │  ← aktif accent
+│ 🍵 Çaylar                   │
+│ 🥐 Atıştırmalıklar          │
+│ 🍰 Tatlılar                 │
+│ 🥤 Soğuk İçecekler          │
+│ 🍔 Ana Yemekler             │
+│ 🥗 Salatalar                │
+└─────────────────────────────┘
+```
 
-### 3. ✅ İndirim
-- 🏷 **İndirim** butonu → modal:
-  - **Yüzde** veya **Sabit Tutar** seçimi
-  - Hızlı yüzdeler: %5, %10, %15, %20, %25
-  - Sebep alanı (sadakat, personel...)
-  - Canlı önizleme: yeni toplam
-- Uygulanınca ödeme paneli üstünde gösterilir:
-  ```
-  ARA TOPLAM    ₺630 (line-through)
-  İNDİRİM       −₺63 [✕]
-  ─────
-  ₺567
-  ```
-- `takePayment`'a `discountAmount` + `discountReason` geçer
-- Çoklu sipariş varsa orantısal dağıtılır
-
-### 4. ✅ Parçalı Ödeme
-- 💸 **Parçalı** butonu → mini panel
-- "YARI YARI" hızlı buton → ½ Nakit + ½ Kart otomatik
-- "½" "⅓" hızlı tutar girişi
-- Manuel: yöntem seç + tutar gir + EKLE
-- Eklenen parçalar listesi ([×] ile kaldır)
-- KALAN: ₺X gerçek zamanlı
-- Tamamlanmadan ödeme alınamaz (KALAN > 0)
-- Backend: `splitItemsFromMultipleOrders` ile yeni sipariş yarat → her parça için ayrı `takePayment`
-
-### 5. ✅ İptal
-- 🚫 **İptal** butonu (sol footer, kalem seçili olunca)
-- Modal: sebep seçimi
-  - Hızlı seçenekler: "Yanlış sipariş", "Müşteri vazgeçti", "Stokta yok", "Diğer"
-  - veya manuel yaz
-- Backend: yeni `cancelOrderItems(itemIds, reason)` action
-- Kalem `status='cancelled'`, sipariş total güncellenir
-- Görsel: line-through + opacity düşük + İPTAL rozeti
-
-### 6. ✅ Sağ Menü (Embedded MenuPicker)
-- Search + kategori chip'leri yatay scroll
-- 2 sütun ürün grid (compact)
-- Varyant/option olan ürünlerde **mini picker modal** (radio + checkbox + not)
-- Sticky sepet (alt):
-  - Her kalem: − adet + × kaldır
-  - Toplam + "+ Masaya Ekle"
-- Eklenirken otomatik:
-  - Açık sipariş varsa → `addItemsToOrder` (mevcut hesaba ekle)
-  - Yoksa → `createManualOrder` (yeni sipariş)
-
-### 7. ✅ Mobile Responsive
-- `<1024px` breakpoint
-- Alt sticky tab bar:
-  - **Kalemler** + sayı badge
-  - **Ödeme** + tutar badge
-  - **+ Ürün**
-- Tek tab görünür, diğerleri hidden
-- Aktif tab accent renk + üstte border
-
-### 8. ✅ Korunmuş Özellikler
-- Kalem seçim (checkbox)
-- Toplu ikram
-- Toplu seçim header (× TEMİZLE)
-- Tüm masa / Seçili öde mod ayrımı
-- Ödeme sonrası 600ms delay → otomatik kapanış
-- Tüm masa ödenince butonun "Tüm Masa Ödendi ✓"
+- **Compact**: tek satır, kategori adı + ▼ ok
+- **Açılır**: modal değil dropdown (max 280px yükseklik, içeride scroll)
+- **Akıllı kapatma**: dışarı tıklayınca kapanır
+- **Aktif gösterim**: seçili kategoride accent renk + ● dot
+- Tüm kategoriler ikon + isim ile rahat görünür
 
 ## 📦 Dosyalar (3)
 
 ```
-components/order/menu-picker.tsx           (yeni - embedded ürün ekle paneli)
-components/order/hesap-panel.tsx           (tamamen yeniden yazıldı)
-lib/actions/tables-status.ts               (cancelOrderItems + closeOrderOnAccount eklendi)
+lib/actions/tables-status.ts         (getTableOrders - 3. query: recently paid)
+components/order/menu-picker.tsx     (CategoryDropdown component)
+components/order/hesap-panel.tsx     (header - Kalan tutar gösterimi)
 ```
 
 ## 🚀 Push
 
 ```powershell
 git add .
-git commit -m "feat(kasa): hesap paneli B - menü/iptal/indirim/parçalı/açık hesap"
+git commit -m "fix(hesap-panel): ödenen kalem grileşsin + kategori dropdown"
 git push
 ```
 
-## 🧪 Test Senaryoları
+## 🧪 Test
 
-### A) Yeni Yöntemler
-1. Hesap Al → ödeme paneli
-2. ✅ 3 yöntem: Nakit, Kart, Açık Hesap
-3. ❌ Havale, Online yok
+### A) Ödenen Kalem Görünümü
+1. Masa B5'te 6 kalem var
+2. 2 kalem seç → **Seçili Öde** → onayla → ödendi
+3. ✅ Hesap paneli yenilenince **ödenen 2 kalem grileşmiş** olarak listede görünür
+4. ✅ "✓ ÖDENDİ" rozeti, line-through fiyat
+5. ✅ Header: "MASA TOPLAM ₺630" + altında "Kalan: ₺315"
+6. ✅ Checkbox tıklanmıyor (disabled, opacity düşük)
+7. Kalan 4 kalem hâlâ seçilebilir, ödenebilir
 
-### B) Açık Hesap (tüm masa)
-1. **📒 Açık Hes.** seç
-2. Buton "Açık Hesap Olarak Kapat" olur (mor)
-3. Tıkla → modal: "Ahmet Bey, sonra ödeyecek"
-4. Kaydet → toast "Açık hesap kaydedildi"
-5. Masa kapanır (modal kapanır)
-6. Sipariş `paid` durumunda görünür ama not kısmında "Açık hesap: ..." yazıyor
+### B) Kategori Dropdown
+1. Sağ menü açık
+2. ✅ Üstte: "[☕] Kahveler ▼" tek satırlık dropdown
+3. Tıkla → ✅ tüm kategoriler aşağı açılır
+4. Bir kategori tıkla → ✅ dropdown kapanır, ürünler değişir
+5. Dropdown açıkken dışarı tıkla → ✅ kapanır
+6. Çok fazla kategori varsa → ✅ dropdown içinde scroll çalışır (max 280px)
+7. Aktif kategori → ✅ accent renk + ● dot
 
-### C) Açık Hesap (parsiyel)
-1. 2 kalem seç → 📒 Açık Hes. → Kaydet
-2. ✅ Kalemler ayrılır + cariye aktarılır
-3. Diğer kalemler bağımsız kalır
+### C) Edge Case
+- Tüm masa ödendi → "Kalan: ₺0" görünür mü? **Hayır, gizli** (`unpaidTotal !== tableTotal` kontrolü)
+- 4 saatten eski ödemeler → görünmez (eski kalmasın, performans)
 
-### D) İndirim
-1. 🏷 İndirim → modal
-2. %10 hızlı seç → "Sadakat" sebep yaz
-3. Uygula → ödeme paneli güncellenir:
-   ```
-   ARA TOPLAM ₺630 (line-through)
-   İNDİRİM −₺63 [✕]
-   ₺567
-   ```
-4. Tüm Masayı Öde → toast "₺567 ödendi"
-5. ✅ İndirim sipariş kaydında görünür
+## 💡 Mimari
 
-### E) Parçalı Ödeme
-1. 💸 Parçalı → modal
-2. **YARI YARI** bas → 2 parça otomatik (₺315 nakit + ₺315 kart)
-3. veya manuel: Nakit ₺200 EKLE, Kart ₺430 EKLE
-4. KALAN: ₺0 → buton aktif
-5. **Ödemeyi Al** → her parça ayrı `takePayment` kaydı
-6. ✅ Toast "Parçalı ödeme tamamlandı"
+### `getTableOrders` Yeni Query
+3. query: `payment_status='paid' AND created_at > 4saat önce`
 
-### F) İptal
-1. 2 kalem seç → 🚫 İptal
-2. Modal: "Yanlış sipariş" hızlı seç → İptal Et
-3. ✅ Kalemler `cancelled`, line-through, "İPTAL" rozeti
-4. Toplam tutar düşer (iptal edilen tutar çıkarılır)
+**Neden 4 saat?** 
+- Tipik bir oturum 1-3 saat
+- 4 saat içinde ödenen kalemler hâlâ ekranda kalır
+- Daha eski → silinmez ama listeye düşmez (performans + temizlik)
 
-### G) Sağ Menü
-1. **+ Ürün Ekle** sütunu (sağda)
-2. Search "kahve" → ürünler filtrelenir
-3. Bir ürüne tıkla → varyant varsa picker, yoksa direkt sepete
-4. Sepette − + × kontrolleri
-5. **+ Masaya Ekle** → kalem listesi (sol) anında güncellenir
+İstersen bu süreyi `12h` veya `1 gün` yapabiliriz.
 
-### H) Mobile
-1. Tarayıcıyı 800px genişlikte aç
-2. ✅ 3 sütun yerine alt tab bar görünür
-3. Tab'lara tıkla → görünürlük değişir
-4. Tüm fonksiyonlar çalışır
-
-## 💡 Backend Yeni Action'lar
-
-### `cancelOrderItems`
-```typescript
-cancelOrderItems({
-  itemIds: string[],
-  reason?: string,
-}): Promise<{ success, cancelledCount?, error? }>
-```
-- Kalem `status='cancelled'`
-- Ödenmiş kalemler iptal edilemez
-- Sipariş subtotal/total/complimentary_total güncellenir
-- Multi-order destekli
-
-### `closeOrderOnAccount`
-```typescript
-closeOrderOnAccount({
-  orderId: string,
-  cashierId: string,
-  customerNote?: string,
-}): Promise<{ success, error? }>
-```
-- `payment_logs`'a 'other' method ile kayıt
-- Sipariş `payment_status='paid'`, `payment_method='other'`
-- Note: "Açık hesap: {customerNote}"
-
-## ⚠️ Sınırlamalar
-
-- **Yetki sistemi yok** — herkes iptal/ikram/indirim yapabilir (sonra eklenebilir)
-- **Açık hesap raporu yok** — sonra "cari hesap" sayfası eklenmeli
-- **Atomik değil** — bazı çoklu işlemler frontend loop (yarıda kalsa tutarsızlık riski)
-- **Stok geri iadesi yok** — iptal sadece order_items.status değiştirir
+### CategoryDropdown
+- Native popover (extra dep yok)
+- `setTimeout` ile dış tıklama yakalama (ilk açılış event'ini engellemek için)
+- max-height 280px + scroll → çok kategoriye uyumlu
+- Accent border açıkken (focus state)
 
 ## 🗺️ Durum
 
 | | |
 |---|---|
-| Hesap Panel A (iskelet) | ✅ |
-| **Hesap Panel B (tam özellik)** | **✅ BU PAKET** |
-| Yetki sistemi | 🔜 |
-| Açık hesap raporu | 🔜 |
+| Hesap Panel B (tam özellik) | ✅ |
+| **Ödenen kalem + kategori dropdown** | **✅ BU PAKET** |
 | Süper admin paneli | 🔜 |
 
 Push → test → çalışırsa **"süper admin paneli"** veya başka iş söyle 🚀

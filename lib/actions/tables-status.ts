@@ -682,7 +682,7 @@ export async function getTableOrders(tableId: string): Promise<{
       subtotal, total, complimentary_total
     `;
 
-    const [inProcessResp, deliveredUnpaidResp] = await Promise.all([
+    const [inProcessResp, deliveredUnpaidResp, recentlyPaidResp] = await Promise.all([
       admin
         .from('orders')
         .select(orderSelect)
@@ -698,16 +698,33 @@ export async function getTableOrders(tableId: string): Promise<{
         .eq('status', 'delivered')
         .not('payment_status', 'in', '(paid,refunded)')
         .gte('created_at', yesterdayIso),
+      // Yakın zamanda ödenmiş siparişler — UI'da "ÖDENDİ" rozeti ile gösterilir
+      // (4 saat içinde ödenenler)
+      admin
+        .from('orders')
+        .select(orderSelect)
+        .eq('business_id', businessId)
+        .eq('table_id', tableId)
+        .eq('payment_status', 'paid')
+        .gte('created_at', new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString()),
     ]);
 
-    if (inProcessResp.error || deliveredUnpaidResp.error) {
-      return { success: false, error: (inProcessResp.error || deliveredUnpaidResp.error)!.message };
+    if (inProcessResp.error || deliveredUnpaidResp.error || recentlyPaidResp.error) {
+      return {
+        success: false,
+        error: (
+          inProcessResp.error ||
+          deliveredUnpaidResp.error ||
+          recentlyPaidResp.error
+        )!.message,
+      };
     }
 
     // Birleştir + dedup + ters kronolojik (en yeni önde)
     const ordersMap = new Map<string, NonNullable<typeof inProcessResp.data>[number]>();
     (inProcessResp.data || []).forEach((o) => ordersMap.set(o.id, o));
     (deliveredUnpaidResp.data || []).forEach((o) => ordersMap.set(o.id, o));
+    (recentlyPaidResp.data || []).forEach((o) => ordersMap.set(o.id, o));
     const orders = Array.from(ordersMap.values()).sort(
       (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );

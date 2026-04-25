@@ -690,6 +690,19 @@ export function HesapPanel({
               >
                 {fmt(tableTotal)}
               </div>
+              {unpaidTotal !== tableTotal && (
+                <div
+                  style={{
+                    fontFamily: 'var(--f-mono)',
+                    fontSize: 10,
+                    fontWeight: 600,
+                    color: 'var(--accent)',
+                    marginTop: 2,
+                  }}
+                >
+                  Kalan: {fmt(unpaidTotal)}
+                </div>
+              )}
             </div>
             <button
               onClick={onClose}
