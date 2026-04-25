@@ -27,7 +27,7 @@ export default function KasaLayout({ children }: { children: React.ReactNode }) 
       className="min-h-screen"
       style={{ background: 'var(--paper)' }}
     >
-      <CashierSessionProvider>{children}</CashierSessionProvider>
+      <CashierSessionProvider appKey="kasa">{children}</CashierSessionProvider>
     </div>
   );
 }

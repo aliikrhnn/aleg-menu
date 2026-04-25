@@ -26,7 +26,7 @@ export default function GarsonLayout({ children }: { children: React.ReactNode }
       className="min-h-screen"
       style={{ background: 'var(--paper)' }}
     >
-      <CashierSessionProvider>{children}</CashierSessionProvider>
+      <CashierSessionProvider appKey="garson">{children}</CashierSessionProvider>
     </div>
   );
 }

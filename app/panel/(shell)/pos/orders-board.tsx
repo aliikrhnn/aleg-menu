@@ -141,9 +141,18 @@ export function OrdersBoard({ initialOrders, businessId }: OrdersBoardProps) {
       refreshOrders();
     }, 8000);
 
+    // Sekme görünür olduğunda hemen tazele (arkaplandayken kaçırılmış güncellemeler için)
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshOrders();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
     return () => {
       supabase.removeChannel(channel);
       clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [businessId]);

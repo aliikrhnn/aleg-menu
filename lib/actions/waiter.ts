@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { revalidatePath } from 'next/cache';
 
 export type ReadyOrder = {
   id: string;
@@ -157,6 +158,11 @@ export async function markOrderDelivered(orderId: string): Promise<{
       .eq('id', orderId);
 
     if (error) return { success: false, error: error.message };
+
+    // Panel POS ve dashboard'lar değişikliği görsün
+    revalidatePath('/panel/pos');
+    revalidatePath('/panel/dashboard');
+    revalidatePath('/panel');
 
     return { success: true };
   } catch (err) {

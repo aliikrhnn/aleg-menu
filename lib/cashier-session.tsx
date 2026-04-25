@@ -16,23 +16,30 @@ export type CashierSession = {
   emoji: string;
   can_close_day: boolean;
   can_refund: boolean;
+  role?: 'cashier' | 'waiter' | 'both';
   signed_in_at: number; // epoch ms
 };
 
-const STORAGE_KEY = 'aleg-kasa-session';
-const ACTIVITY_KEY = 'aleg-kasa-activity';
-const AUTO_LOCK_PREFS_KEY = 'aleg-kasa-autolock-minutes';
-// Varsayılan 15 dakika. localStorage'da 'aleg-kasa-autolock-minutes' varsa onu kullan.
-// Min 5, max 120 dakika. 0 yazarsa hiç kilitlenmez.
+// App key — kasa ve garson uygulamaları farklı session storage kullansın
+type AppKey = 'kasa' | 'garson';
+
+function storageKeys(appKey: AppKey) {
+  return {
+    session: `aleg-${appKey}-session`,
+    activity: `aleg-${appKey}-activity`,
+    autoLock: `aleg-${appKey}-autolock-minutes`,
+  };
+}
+
 const DEFAULT_AUTO_LOCK_MINUTES = 15;
 
-function getAutoLockMinutes(): number {
+function getAutoLockMinutes(autoLockKey: string): number {
   try {
-    const raw = window.localStorage.getItem(AUTO_LOCK_PREFS_KEY);
+    const raw = window.localStorage.getItem(autoLockKey);
     if (!raw) return DEFAULT_AUTO_LOCK_MINUTES;
     const n = Number(raw);
     if (!Number.isFinite(n)) return DEFAULT_AUTO_LOCK_MINUTES;
-    if (n === 0) return 0; // kilitleme kapalı
+    if (n === 0) return 0;
     return Math.max(5, Math.min(120, n));
   } catch {
     return DEFAULT_AUTO_LOCK_MINUTES;
@@ -54,7 +61,18 @@ type Ctx = {
 
 const CashierContext = createContext<Ctx | null>(null);
 
-export function CashierSessionProvider({ children }: { children: ReactNode }) {
+export function CashierSessionProvider({
+  children,
+  appKey = 'kasa',
+}: {
+  children: ReactNode;
+  appKey?: AppKey;
+}) {
+  const keys = storageKeys(appKey);
+  const STORAGE_KEY = keys.session;
+  const ACTIVITY_KEY = keys.activity;
+  const AUTO_LOCK_PREFS_KEY = keys.autoLock;
+
   const [cashier, setCashier] = useState<CashierSession | null>(null);
   const [isLocked, setIsLocked] = useState(false);
   const [locking, setLocking] = useState(false);
@@ -71,7 +89,7 @@ export function CashierSessionProvider({ children }: { children: ReactNode }) {
     } catch {
       /* ignore */
     }
-  }, []);
+  }, [STORAGE_KEY]);
 
   // Aktivite takibi (auto-lock için)
   const updateActivity = useCallback(() => {
@@ -80,14 +98,14 @@ export function CashierSessionProvider({ children }: { children: ReactNode }) {
     } catch {
       /* ignore */
     }
-  }, []);
+  }, [ACTIVITY_KEY]);
 
   // Auto-lock: belirlenen süre hareketsizse kilitle (varsayılan 15dk, özelleştirilebilir)
   useEffect(() => {
     if (!cashier || isLocked) return;
 
     // 0 ise auto-lock kapalı
-    const lockMinutes = getAutoLockMinutes();
+    const lockMinutes = getAutoLockMinutes(AUTO_LOCK_PREFS_KEY);
     if (lockMinutes === 0) return;
 
     let interval: number | null = null;
@@ -101,7 +119,7 @@ export function CashierSessionProvider({ children }: { children: ReactNode }) {
         const last = Number(raw);
         const diff = Date.now() - last;
         // Her çağrıda tazele — kullanıcı console'dan değiştirirse hemen yansısın
-        const currentLockMs = getAutoLockMinutes() * 60 * 1000;
+        const currentLockMs = getAutoLockMinutes(AUTO_LOCK_PREFS_KEY) * 60 * 1000;
         if (currentLockMs > 0 && diff > currentLockMs) {
           setIsLocked(true);
         }
@@ -128,7 +146,7 @@ export function CashierSessionProvider({ children }: { children: ReactNode }) {
         window.removeEventListener(e, updateActivity);
       });
     };
-  }, [cashier, isLocked, updateActivity]);
+  }, [cashier, isLocked, updateActivity, ACTIVITY_KEY, AUTO_LOCK_PREFS_KEY]);
 
   const signIn = useCallback((c: Omit<CashierSession, 'signed_in_at'>) => {
     const full: CashierSession = { ...c, signed_in_at: Date.now() };
@@ -140,7 +158,7 @@ export function CashierSessionProvider({ children }: { children: ReactNode }) {
     } catch {
       /* ignore */
     }
-  }, []);
+  }, [STORAGE_KEY, ACTIVITY_KEY]);
 
   const signOut = useCallback(() => {
     setCashier(null);
@@ -151,7 +169,7 @@ export function CashierSessionProvider({ children }: { children: ReactNode }) {
     } catch {
       /* ignore */
     }
-  }, []);
+  }, [STORAGE_KEY, ACTIVITY_KEY]);
 
   const lock = useCallback(() => {
     setLocking(true);
@@ -171,7 +189,7 @@ export function CashierSessionProvider({ children }: { children: ReactNode }) {
     } catch {
       /* ignore */
     }
-  }, []);
+  }, [STORAGE_KEY, ACTIVITY_KEY]);
 
   return (
     <CashierContext.Provider

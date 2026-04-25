@@ -1,182 +1,172 @@
-# 👥 GARSON ROL AYRIMI + FIX'LER
+# 🔐 AUTH İZOLASYONU + SİPARİŞ TAZELE FİX
 
-Üç düzeltme bir arada:
-1. **Garson rolü ayrımı** — kasiyer ≠ garson, panelden hem kasiyer hem garson hesabı oluşturulur
-2. **"✓ Çözüldüm" → "✓ Çözüldü"** dil tutarlılığı
-3. **Hazır siparişlerde doğru başlık** — "Al-Götür" yerine `order_type`'a göre Masa / Paket / Kapıya
+İki kritik sorun bir arada:
 
-**7 dosya · 1 yeni migration.**
+1. **Cross-tab Auth Leak** (CRITICAL güvenlik) — Garson login'i kasaya da geçiyordu
+2. **Sipariş teslim sonrası UI değişmiyor** — garson teslim ettiğinde panel POS / kasa görmüyordu
 
-## 🎯 Konsept
+**5 dosya · Migration yok.**
 
-```
-PANEL → Kasiyerler & Garson Hesapları
-   ↓
-+ Yeni Hesap → Form'da rol seçimi:
-   ┌─────────────────────────────┐
-   │  ₺ Kasiyer     ⌬ Garson     │
-   │  ◆ Her İkisi                │
-   └─────────────────────────────┘
-   ↓
-Kayıt edilir, PIN tanımlanır
-   ↓
-   ├─→ /kasa: cashier + both olanları listeler
-   └─→ /garson: waiter + both olanları listeler
-```
+## 🐛 Sorun 1: Cross-Tab Auth Leak
 
-Aynı PIN'le hem kasada hem garsonda giriş yapabilir (eğer rol "Her İkisi" ise).
+### Belirti
+- Aynı browser'da garsona girince → kasa sekmesi açıldığında otomatik garson hesabıyla giriş yapılıyordu
+- Garsonun kasa yetkilerine erişimi olmamasına rağmen kasa açılıyordu
 
-## ✅ Yapılanlar
+### Sebep
+`lib/cashier-session.tsx` her iki uygulamada (kasa ve garson) aynı `localStorage` anahtarlarını kullanıyordu:
+- `aleg-kasa-session`
+- `aleg-kasa-activity`
+- `aleg-kasa-autolock-minutes`
 
-### 1. Migration `0029_cashier_role.sql`
-- `cashier_accounts.role` kolonu eklendi (`cashier` / `waiter` / `both`)
-- Default: `'cashier'` (mevcut tüm kayıtlar otomatik kasiyer rolünde kalır)
-- Constraint + index
+İki uygulama tek session paylaşıyordu — biri login olunca diğeri de otomatik açılıyordu.
 
-### 2. `lib/actions/cashiers.ts`
-- `CashierRole` type export
-- `Cashier` type'a `role` alanı
-- `listCashiers()` artık role'ü de döner
-- **`listActiveCashiers(filterRole?: 'cashier' | 'waiter')`** — opsiyonel filtre
-  - `'cashier'` → role IN (cashier, both)
-  - `'waiter'` → role IN (waiter, both)
-  - Yoksa → hepsi
-- `createCashier`/`updateCashier`'a `role` parametresi
-- "Bu isimde aktif bir **kasiyer**" → "...aktif bir **kayıt**"
+### Çözüm
+`CashierSessionProvider`'a **`appKey`** prop'u eklendi. Storage key'leri uygulama bazında ayrıldı:
 
-### 3. `app/kasa/page.tsx` & `app/garson/page.tsx`
-- Kasa: `listActiveCashiers('cashier')`
-- Garson: `listActiveCashiers('waiter')`
+| App | Session Key | Activity Key | AutoLock Key |
+|-----|-------------|--------------|--------------|
+| Kasa | `aleg-kasa-session` | `aleg-kasa-activity` | `aleg-kasa-autolock-minutes` |
+| Garson | `aleg-garson-session` | `aleg-garson-activity` | `aleg-garson-autolock-minutes` |
 
-### 4. `app/panel/(shell)/kasiyerler/cashier-manager.tsx`
-- Sayfa başlığı: "Kasiyer & Garson hesapları"
-- "+ Yeni Kasiyer" → "+ Yeni Hesap"
-- Modal başlık: "Yeni Hesap" / "İsim · Düzenle"
-- **Form'a 3 segmented control rol seçimi**:
-  - ₺ Kasiyer (Sadece kasa)
-  - ⌬ Garson (Sadece servis)
-  - ◆ Her İkisi (Kasa + servis)
-- Card'larda **rol badge** her zaman gösterilir (KASİYER/GARSON/HER İKİSİ)
+Layout'larda doğru `appKey` geçilir:
+- `app/kasa/layout.tsx`: `<CashierSessionProvider appKey="kasa">`
+- `app/garson/layout.tsx`: `<CashierSessionProvider appKey="garson">`
 
-### 5. `lib/actions/waiter.ts`
-- `ReadyOrder` type'a `order_type` eklendi
-- SELECT'te de çekilir
+İki uygulama **tamamen izole**, aynı browser'da bile cross-contamination yok.
 
-### 6. `app/garson/waiter-board.tsx`
-- **`getOrderDestination(order)`** helper — toast başlığı için (CAPS)
-  - dinein → masa adı (örn "MASA 5")
-  - pickup → "PAKET"
-  - delivery → "KAPIYA"
-- **`getOrderDestinationDisplay(order)`** helper — kart UI için (Title case)
-  - dinein → masa adı (örn "Masa 5")
-  - pickup → "Paket"
-  - delivery → "Kapıya"
-- "✓ Çözüldüm" → "✓ Çözüldü"
-- ReadyTab kartı: artık order_type'a göre doğru başlık gösteriyor
+## 🐛 Sorun 2: Garson Teslim Sonrası Değişiklik Yok
 
-## 📦 Dosyalar (7)
+### Belirti
+- Garson "✓ Teslim Ettim" basıyor → kart kayboluyor (optimistik update var)
+- Ama panel POS'taki ve kasa orders sayfasındaki sipariş listesinde değişiklik **görünmüyor**
 
-```
-supabase/migrations/0029_cashier_role.sql               (yeni - role kolonu)
-lib/actions/cashiers.ts                                 (CashierRole + filter)
-lib/actions/waiter.ts                                   (order_type eklendi)
-app/kasa/page.tsx                                       (filter: cashier)
-app/garson/page.tsx                                     (filter: waiter)
-app/panel/(shell)/kasiyerler/cashier-manager.tsx        (rol UI + badge)
-app/garson/waiter-board.tsx                             (Çözüldü + destination)
+### Sebep
+1. `markOrderDelivered` server action'ında `revalidatePath` çağrısı yoktu → panel SSR cache eski veriyi gösteriyordu
+2. Polling 8sn'de bir tazeliyor ama tarayıcı sekmesi arkaplandayken JS interval pause olabiliyor → kullanıcı kasaya geçtiğinde kaçırılan değişiklik vardı
+
+### Çözüm
+
+**`lib/actions/waiter.ts`** — markOrderDelivered'a revalidate eklendi:
+```typescript
+revalidatePath('/panel/pos');
+revalidatePath('/panel/dashboard');
+revalidatePath('/panel');
 ```
 
-## 🚀 Kurulum
+**`app/panel/(shell)/pos/orders-board.tsx`** — visibility change listener eklendi:
+```typescript
+const onVisibilityChange = () => {
+  if (document.visibilityState === 'visible') {
+    refreshOrders();
+  }
+};
+document.addEventListener('visibilitychange', onVisibilityChange);
+```
 
-### 1. Migration çalıştır (zorunlu)
+Üçlü tazele kombi:
+- ⚡ **Realtime** (Supabase channel)
+- 🔄 **Polling 8sn** (kopukluklara karşı)
+- 👁️ **Visibility change** (sekme arkaplandayken kaçırılan güncellemeler için)
 
-Supabase Dashboard → SQL Editor → `0029_cashier_role.sql` içeriğini yapıştır → **Run**.
+## 📦 Dosyalar (5)
 
-Mevcut tüm kayıtlar otomatik `role='cashier'` olur.
+```
+lib/cashier-session.tsx                              (appKey prop sistemi)
+lib/actions/waiter.ts                                (revalidatePath)
+app/kasa/layout.tsx                                  (appKey="kasa")
+app/garson/layout.tsx                                (appKey="garson")
+app/panel/(shell)/pos/orders-board.tsx               (visibility refresh)
+```
 
-### 2. Push
+## 🚀 Push
 
 ```powershell
 git add .
-git commit -m "feat: kasiyer/garson rol ayrımı + ready order labels + UI tutarlılığı"
+git commit -m "fix(auth): kasa/garson session izolasyonu + delivered order refresh"
 git push
 ```
 
+## ⚠️ Deploy Sonrası — Önemli Bilgi
+
+**Garson tarafında kullanıcılar bir kez yeniden giriş yapmak zorunda kalacak.**
+
+Sebep: localStorage key'i değişti (`aleg-kasa-session` → `aleg-garson-session`). Eski oturum yeni key'de bulunmadığı için sayfa açılınca login ekranına düşer.
+
+Bu **bir defalık** bir geçiş, normaldir.
+
 ## 🧪 Test
 
-### A) Mevcut Kayıtlar
-1. Migration sonrası → Panel → Kasiyerler
-2. ✅ Tüm mevcut kayıtlar **KASİYER** badge'iyle görünür (default)
-3. `/kasa` → tüm mevcut kayıtlar görünür ✅
-4. `/garson` → ✅ "Henüz hesap yok" (çünkü hiçbiri waiter rolünde değil)
+### A) Auth İzolasyon Testi (CRITICAL)
+1. Browser'da kasa ve garson sekmelerini **kapat** (eski oturumlar temizlensin)
+2. Garson sekmesi aç → garson hesabıyla PIN gir → ✅ board açılır
+3. **Aynı browser'da yeni sekme** → kasa sekmesi aç
+4. ✅ Kasa **PIN ister** (otomatik giriş YOK)
+5. Kasa hesabıyla gir → kasa açılır
+6. Garson sekmesine geç → ✅ hâlâ garson hesabıyla açık
+7. ✅ İki uygulama bağımsız çalışıyor
 
-### B) Yeni Garson Hesabı
-1. Panel → Kasiyerler → **+ Yeni Hesap**
-2. Form aç:
-   - İsim: "Mehmet" (örn)
-   - Renk + Emoji
-   - **Rol: Garson** seç (3 kart arasından ortadaki)
-   - PIN: 1234
-3. Oluştur → ✅ liste'de "Mehmet" + **GARSON** badge ile görünür
-4. `/kasa` → Mehmet **görünmez** ✅
-5. `/garson` → Mehmet **görünür** ✅
+### B) Sipariş Teslim Refresh Testi
+1. **3 sekme aç:** Garson, Kasa (orders sekmesi), Panel POS
+2. Bir siparişi mutfak/POS'tan **"Hazır"** yap
+3. Garson sekmesinde 🍽 Hazır sekmesinde sipariş görünür
+4. **"✓ Teslim Ettim"** tıkla
+5. Garson: kart anında kaybolur ✅
+6. Kasa orders sekmesi: 8sn içinde otomatik kaybolur ✅
+7. Panel POS: 8sn içinde otomatik kaybolur ✅
 
-### C) Her İkisi Rolü
-1. Panel → Mevcut bir kasiyeri düzenle → Rol "Her İkisi" yap
-2. Kayıtta artık **HER İKİSİ** badge'i (accent renk)
-3. `/kasa` → ✅ görünür
-4. `/garson` → ✅ görünür
-5. Aynı PIN ile her iki ekrana giriş yapabilir
+### C) Background Tab Testi
+1. Garson sekmesi açık, kasa sekmesi açık
+2. Kasa sekmesinden başka sekmeye geç (kasa arkaplanda)
+3. Garson'da bir sipariş teslim et
+4. Kasa sekmesine geri dön
+5. ✅ Sekme görünür olur olmaz refresh tetikler, sipariş kaybolur
 
-### D) Garson Ekranı Düzeltmeleri
-1. Garson ekranında **🔔 Çağrılar** sekmesi
-2. Çağrı kartında "**✓ Çözüldü**" yazıyor (Çözüldüm değil) ✅
-3. **🍽 Hazır** sekmesinde:
-   - **Masa siparişi** → kart başlığı "Masa 5" gibi ✅
-   - **Paket siparişi** → kart başlığı "Paket" ✅
-   - **Delivery siparişi** → kart başlığı "Kapıya" ✅
+## 💡 Mimari Notlar
 
-### E) Toast'larda Doğru Başlık
-1. Telefondan masa-1'den sipariş ver → toast: "🍽 MASA 1 · Sipariş hazır..."
-2. Pickup siparişi (eğer modes.pickup açıksa) → toast: "🍽 PAKET · Sipariş hazır..."
-
-## 💡 Mimari
-
-### Geriye Uyumluluk
-- Migration default `'cashier'` — eski sistemler etkilenmez
-- `listActiveCashiers()` parametresiz çağrı hâlâ çalışır (hepsi)
-
-### Ortak PIN Sistemi
-- Tek `cashier_accounts` tablosu, tek `CashierLogin` component
-- Aynı kişi birden fazla rolde olabilir (`role = 'both'`)
-- Lock/unlock akışı paylaşılır
-
-### Order Destination Logic
+### Storage Key Pattern
 ```typescript
-function getOrderDestination(o) {
-  if (o.order_type === 'pickup') return 'PAKET';
-  if (o.order_type === 'delivery') return 'KAPIYA';
-  return o.table_name?.toUpperCase() || 'MASA';
+function storageKeys(appKey: AppKey) {
+  return {
+    session: `aleg-${appKey}-session`,
+    activity: `aleg-${appKey}-activity`,
+    autoLock: `aleg-${appKey}-autolock-minutes`,
+  };
 }
 ```
 
-`order_type` undefined ise → varsayılan dinein olarak ele alınır (`'MASA'` veya masa adı).
+İleride `kds`, `mutfak` gibi yeni uygulamalar eklenirse aynı pattern uygulanır.
+
+### Hâlâ Sorun Varsa
+Eğer teslim sonrası hâlâ değişiklik gözükmüyorsa, **Supabase realtime publication** kontrol edilmeli. SQL Editor'da:
+
+```sql
+SELECT * FROM pg_publication_tables WHERE pubname = 'supabase_realtime';
+```
+
+`orders` tablosu listede olmalı. Yoksa:
+
+```sql
+ALTER PUBLICATION supabase_realtime ADD TABLE orders;
+```
+
+(Migration `0007_realtime_orders.sql` bunu zaten yapıyor olmalı.)
 
 ## 🗺️ Durum
 
 | | |
 |---|---|
-| Garson ekranı v1 | ✅ |
-| **Rol ayrımı + label fix'leri** | **✅ BU PAKET** |
-| Garson sipariş detay modal | 🔜 |
-| Süper admin panel | 🔜 |
+| Garson rolü ayrımı + label fix | ✅ |
+| **Auth izolasyon + sipariş refresh** | **✅ BU PAKET** |
+| Süper admin paneli | 🔜 |
+| Modül yönetimi | 🔜 |
 
 ## 🔮 Sonra İyileştirmeler
 
-- Sipariş detayı modal (hazır sekmesinden tıklayınca tüm ürünler)
-- Masa detay modal (açık siparişler/ödeme)
-- Garson özel yetkileri (sipariş alma vs sadece teslim)
-- Vardiya/shift takibi
-- Performans metrikleri (kim kaç çağrıya cevap verdi)
+- **Garson sipariş detay modal** — hazır sekmesinden tıklayınca tüm ürünler/notlar
+- **Masa detay modal** — açık siparişler/ödeme bilgisi
+- **Browser notification** — uygulama arkaplandayken sistem bildirimi
+- **PWA** — telefon ana ekrana ekle
+- **Ödeme sonrası order arşivleme** — eski siparişler ayrı tabloya
 
-Push → migration → test → çalışırsa "**süper admin paneli**" veya başka iş söyle 🚀
+Push → deploy → garsonda yeniden login → test et 🚀
