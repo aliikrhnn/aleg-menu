@@ -134,19 +134,12 @@ export function RegisterPanel({ businessId }: Props) {
   }
 
   // Kasa kapatıldığında RegisterContent'den çağrılır → PIN ekranına dön
-  return (
-    <RegisterContent
-      businessId={businessId}
-      onLockRequest={() => setUnlocked(false)}
-    />
-  );
+  return <RegisterContent onLockRequest={() => setUnlocked(false)} />;
 }
 
 function RegisterContent({
-  businessId,
   onLockRequest,
 }: {
-  businessId: string;
   onLockRequest: () => void;
 }) {
   const { status, simulating, toggleSimulate } = useOnlineStatus();
