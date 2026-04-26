@@ -30,6 +30,7 @@ import {
 } from '@/lib/actions/tables-status';
 import { takePayment } from '@/lib/actions/payments';
 import { MenuPicker } from './menu-picker';
+import { CustomerPicker } from './customer-picker';
 
 const fmt = (n: number) => `₺${Math.round(n).toLocaleString('tr-TR')}`;
 
@@ -387,7 +388,7 @@ export function HesapPanel({
   // AÇIK HESAP
   // ============================================================
   const handleOnAccount = useCallback(
-    async (note: string) => {
+    async (customer: { id: string; name: string }, note: string) => {
       setSubmitting(true);
       let allOk = true;
       const failures: string[] = [];
@@ -410,6 +411,7 @@ export function HesapPanel({
         const r = await closeOrderOnAccount({
           orderId: splitR.newOrderId,
           cashierId,
+          customerId: customer.id,
           customerNote: note,
         });
         if (!r.success) {
@@ -421,6 +423,7 @@ export function HesapPanel({
           const r = await closeOrderOnAccount({
             orderId: o.id,
             cashierId,
+            customerId: customer.id,
             customerNote: note,
           });
           if (!r.success) {
@@ -438,7 +441,7 @@ export function HesapPanel({
         onChanged();
         return;
       }
-      toast.success('Açık hesap olarak kapatıldı');
+      toast.success(`${customer.name} hesabına yazıldı`);
       clearSelection();
       onChanged();
       if (!isPartialMode) {
@@ -1154,11 +1157,11 @@ export function HesapPanel({
       )}
 
       {onAccountModalOpen && (
-        <OnAccountModal
+        <CustomerPicker
           amount={payableAmount}
           isPartial={isPartialMode}
           onClose={() => setOnAccountModalOpen(false)}
-          onConfirm={handleOnAccount}
+          onSelect={(customer, note) => handleOnAccount(customer, note)}
         />
       )}
     </div>
@@ -2201,139 +2204,3 @@ function CancelReasonModal({
   );
 }
 
-// ============================================================
-// AÇIK HESAP MODAL
-// ============================================================
-function OnAccountModal({
-  amount,
-  isPartial,
-  onClose,
-  onConfirm,
-}: {
-  amount: number;
-  isPartial: boolean;
-  onClose: () => void;
-  onConfirm: (note: string) => void;
-}) {
-  const [note, setNote] = useState('');
-
-  return (
-    <div
-      className="fixed inset-0 z-[105] flex items-center justify-center p-4"
-      style={{ background: 'rgba(42, 31, 24, 0.7)' }}
-      onClick={onClose}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-[420px] rounded-[14px] flex flex-col overflow-hidden"
-        style={{ background: 'var(--paper)' }}
-      >
-        <div
-          className="px-5 py-4"
-          style={{ borderBottom: '1px solid var(--line)' }}
-        >
-          <div
-            className="uppercase mb-1"
-            style={{
-              fontFamily: 'var(--f-mono)',
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: '0.16em',
-              color: 'var(--super)',
-            }}
-          >
-            AÇIK HESAP
-          </div>
-          <div
-            style={{
-              fontFamily: 'var(--f-serif)',
-              fontStyle: 'italic',
-              fontSize: 22,
-              color: 'var(--ink)',
-            }}
-          >
-            {fmt(amount)}{' '}
-            {isPartial ? 'cariye aktarılacak' : 'açık hesaba kaydedilecek'}
-          </div>
-        </div>
-
-        <div className="px-5 py-4 space-y-3">
-          <div>
-            <div
-              className="uppercase mb-2"
-              style={{
-                fontFamily: 'var(--f-mono)',
-                fontSize: 10,
-                fontWeight: 700,
-                letterSpacing: '0.14em',
-                color: 'var(--ink-2)',
-              }}
-            >
-              MÜŞTERİ NOTU (opsiyonel)
-            </div>
-            <input
-              type="text"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="örn: Ahmet Bey, sonra ödeyecek..."
-              className="w-full h-10 px-3 rounded-[8px] text-sm"
-              autoFocus
-              style={{
-                background: 'var(--card)',
-                border: '1px solid var(--line)',
-                color: 'var(--ink)',
-                outline: 'none',
-              }}
-            />
-          </div>
-          <div
-            className="rounded-[10px] p-3 text-xs"
-            style={{
-              background: 'color-mix(in srgb, var(--super) 6%, transparent)',
-              border:
-                '1px solid color-mix(in srgb, var(--super) 25%, var(--line))',
-              color: 'var(--ink-2)',
-              lineHeight: 1.5,
-            }}
-          >
-            ℹ️ Sipariş ödenmiş olarak işaretlenecek. Müşteri ödemeyi sonra
-            yapacak. Açıklama notunda detayları belirt.
-          </div>
-        </div>
-
-        <div
-          className="px-5 py-4 flex gap-2"
-          style={{
-            borderTop: '1px solid var(--line)',
-            background: 'var(--paper-2)',
-          }}
-        >
-          <button
-            onClick={onClose}
-            className="flex-1 h-11 rounded-[8px] text-sm font-semibold"
-            style={{
-              background: 'transparent',
-              border: '1px solid var(--line)',
-              color: 'var(--ink-2)',
-            }}
-          >
-            Vazgeç
-          </button>
-          <button
-            onClick={() => onConfirm(note)}
-            className="flex-1 h-11 rounded-[8px] text-sm font-semibold"
-            style={{
-              background: 'var(--super)',
-              color: '#FAF5EA',
-              fontFamily: 'var(--f-mono)',
-              letterSpacing: '0.08em',
-              textTransform: 'uppercase',
-            }}
-          >
-            📒 Kaydet
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}

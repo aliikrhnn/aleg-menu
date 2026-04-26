@@ -1768,18 +1768,20 @@ export async function cancelOrderItems(input: {
 export async function closeOrderOnAccount(input: {
   orderId: string;
   cashierId: string;
+  customerId: string; // ZORUNLU - kayıtlı cari kullanıcı
   customerNote?: string;
 }): Promise<{
   success: boolean;
   error?: string;
 }> {
   try {
-    const { businessId } = await requireBusinessAccess();
+    const { businessId, memberId } = await requireBusinessAccess();
     const admin = createAdminClient();
 
+    // Sipariş güvenliği
     const { data: order } = await admin
       .from('orders')
-      .select('id, business_id, payment_status, total')
+      .select('id, business_id, payment_status, total, order_no')
       .eq('id', input.orderId)
       .maybeSingle();
 
@@ -1790,30 +1792,93 @@ export async function closeOrderOnAccount(input: {
       return { success: false, error: 'Sipariş zaten ödenmiş' };
     }
 
-    // Açık hesap olarak işaretle - payment_logs'a açıklayıcı kayıt + orders.payment_status
-    const noteText = input.customerNote?.trim()
-      ? `Açık hesap: ${input.customerNote.trim()}`
-      : 'Açık hesap (cari)';
+    // Cari kullanıcı güvenliği
+    const { data: customer } = await admin
+      .from('customers')
+      .select('id, business_id, name, is_active')
+      .eq('id', input.customerId)
+      .maybeSingle();
 
+    if (!customer || customer.business_id !== businessId) {
+      return { success: false, error: 'Kullanıcı bulunamadı' };
+    }
+    if (!customer.is_active) {
+      return { success: false, error: 'Kullanıcı pasif' };
+    }
+
+    const totalAmount = Number(order.total);
+    const noteText = input.customerNote?.trim()
+      ? `Açık hesap (${customer.name}): ${input.customerNote.trim()}`
+      : `Açık hesap (${customer.name})`;
+
+    // payment_logs'a kayıt — ciro takip için
+    // Not: 'other' method kullanılıyor çünkü gerçek nakit/kart girişi YOK,
+    // sadece sipariş kaydedildi. Asıl ödeme cari sayfasından alınacak.
     await admin.from('payment_logs').insert({
       business_id: businessId,
       order_id: input.orderId,
       cashier_id: input.cashierId,
-      amount: Number(order.total),
+      action: 'payment',
+      amount: totalAmount,
       payment_method: 'other',
       note: noteText,
     });
 
-    // Siparişi 'paid' olarak işaretle (cari hesap kabul edildi)
-    // Note alanı içine 'on_account' bilgisi eklenir
+    // Sipariş'i bağla + paid olarak işaretle
     await admin
       .from('orders')
       .update({
         payment_status: 'paid',
         payment_method: 'other',
         note: noteText,
+        customer_id: input.customerId,
       })
       .eq('id', input.orderId);
+
+    // customer_transactions'a 'charge' kaydı (kullanıcıya borç eklendi)
+    await admin.from('customer_transactions').insert({
+      business_id: businessId,
+      customer_id: input.customerId,
+      type: 'charge',
+      amount: totalAmount,
+      order_id: input.orderId,
+      cashier_id: input.cashierId,
+      member_id: memberId,
+      note: input.customerNote?.trim() || null,
+    });
+
+    // customers.balance + counters'ı yeniden hesapla
+    const { data: allTxs } = await admin
+      .from('customer_transactions')
+      .select('type, amount, created_at')
+      .eq('customer_id', input.customerId);
+
+    let balance = 0;
+    let totalCharged = 0;
+    let totalPaid = 0;
+    let lastAt: string | null = null;
+    (allTxs || []).forEach((t) => {
+      const amt = Number(t.amount);
+      if (t.type === 'charge' || t.type === 'manual_charge') {
+        balance -= amt;
+        totalCharged += amt;
+      } else {
+        balance += amt;
+        totalPaid += amt;
+      }
+      if (!lastAt || t.created_at > lastAt) lastAt = t.created_at;
+    });
+
+    await admin
+      .from('customers')
+      .update({
+        balance,
+        total_charged: totalCharged,
+        total_paid: totalPaid,
+        transaction_count: allTxs?.length || 0,
+        last_transaction_at: lastAt,
+      })
+      .eq('id', input.customerId);
 
     return { success: true };
   } catch (e) {
