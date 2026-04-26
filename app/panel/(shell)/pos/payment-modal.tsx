@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useRef, useTransition } from 'react';
-import { useEscapeKey } from '@/lib/hooks/use-escape-key';
 import { type PaymentMethod } from '@/lib/actions/payments';
 import { makeItemsComplimentary } from '@/lib/actions/tables-status';
 import { useOfflineActions } from '@/lib/offline/use-offline-actions';
@@ -82,8 +81,15 @@ export function PaymentModal({
     }
   }, [open, order.total]);
 
-  // ESC ile kapat (split modal açıkken veya işlem sırasında değil)
-  useEscapeKey(onClose, open && !splitOpen && !isPending);
+  // ESC ile kapat
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
 
   // Tip/discount değiştiğinde cashReceived'ı yeni total ile senkronize et
   // (Kullanıcı manuel değiştirmişse dokunmayalım — auto-fill sadece boş ya da

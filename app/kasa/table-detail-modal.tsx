@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { useEscapeKey } from '@/lib/hooks/use-escape-key';
 import {
   getTableOrders,
   makeItemsComplimentary,
@@ -11,12 +12,14 @@ import {
   type TableWithStatus,
 } from '@/lib/actions/tables-status';
 import { PaymentModal } from '@/app/panel/(shell)/pos/payment-modal';
-import { PrintButton } from '@/components/panel/print-button';
 import { useCashierSession } from '@/lib/cashier-session';
 import { toast } from '@/components/ui/toast';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
 import { OrderTakingModal } from '@/components/order/order-taking-modal';
 import { HesapPanel } from '@/components/order/hesap-panel';
+
+const fmt = (n: number) =>
+  `₺${Math.round(n).toLocaleString('tr-TR')}`;
 
 type Props = {
   tableId: string;
@@ -52,6 +55,17 @@ export function TableDetailModal({
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const { cashier } = useCashierSession();
 
+  // ESC ile kapama - iç modal'lar açıkken devre dışı
+  const escEnabled =
+    !payingOrder &&
+    !giftItemContext &&
+    !tableActionsOpen &&
+    !changeTableOpen &&
+    !splitOpen &&
+    !quickAddOpen &&
+    !hesapPanelOpen;
+  useEscapeKey(onClose, escEnabled);
+
   const load = () => {
     getTableOrders(tableId).then((r) => {
       if (!r.success) {
@@ -77,6 +91,12 @@ export function TableDetailModal({
   }, [onClose]);
 
   const totalAmount = orders.reduce((s, o) => s + o.total, 0);
+  // Sadece ödenmemiş siparişlerin toplamı (gerçekten ödenecek tutar)
+  const unpaidTotal = orders
+    .filter(
+      (o) => o.payment_status !== 'paid' && o.payment_status !== 'refunded'
+    )
+    .reduce((s, o) => s + o.total, 0);
   const totalItems = orders.reduce(
     (s, o) => s + o.items.reduce((si, it) => si + it.quantity, 0),
     0
@@ -419,6 +439,27 @@ export function TableDetailModal({
                 </span>
               </div>
             )}
+            {/* Masa toplam (sadece ödenmemiş varsa ödendi/kalan ayrımı göster) */}
+            {unpaidTotal !== totalAmount && (
+              <div
+                className="flex items-center justify-between text-xs mb-1"
+                style={{ color: 'var(--ink-3)' }}
+              >
+                <span
+                  className="uppercase"
+                  style={{
+                    fontFamily: 'var(--f-mono)',
+                    letterSpacing: '0.12em',
+                    fontWeight: 600,
+                  }}
+                >
+                  MASA TOPLAM
+                </span>
+                <span style={{ fontFamily: 'var(--f-mono)', fontWeight: 600 }}>
+                  {fmt(totalAmount)}
+                </span>
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <span
                 className="uppercase"
@@ -427,10 +468,10 @@ export function TableDetailModal({
                   fontSize: 11,
                   fontWeight: 700,
                   letterSpacing: '0.14em',
-                  color: 'var(--ink-2)',
+                  color: hasUnpaid ? 'var(--accent)' : 'var(--ink-2)',
                 }}
               >
-                TOPLAM
+                {hasUnpaid ? 'KALAN' : 'TOPLAM'}
               </span>
               <span
                 style={{
@@ -438,11 +479,11 @@ export function TableDetailModal({
                   fontStyle: 'italic',
                   fontSize: 28,
                   fontWeight: 500,
-                  color: 'var(--ink)',
+                  color: hasUnpaid ? 'var(--accent)' : 'var(--ink)',
                   letterSpacing: '-0.02em',
                 }}
               >
-                {fmt(totalAmount)}
+                {fmt(hasUnpaid ? unpaidTotal : totalAmount)}
               </span>
             </div>
             {hasUnpaid && (
@@ -596,7 +637,7 @@ export function TableDetailModal({
                     minWidth: 180,
                   }}
                 >
-                  <span>₺ Hesap Al · {fmt(totalAmount)}</span>
+                  <span>₺ Hesap Al · {fmt(unpaidTotal)}</span>
                   <span
                     className="transition-transform"
                     style={{ fontSize: 16 }}
@@ -1606,8 +1647,6 @@ function FlatItemRow({
   onGift: () => void;
 }) {
   const { item } = flatItem;
-  const fmt = (n: number) =>
-    `₺${Math.round(n).toLocaleString('tr-TR')}`;
 
   const itemStatusConfig: Record<
     string,
@@ -1625,7 +1664,20 @@ function FlatItemRow({
 
   return (
     <div
-      className="flex items-start gap-2.5 p-2.5 rounded-[10px] transition-all"
+      role={onToggle ? 'button' : undefined}
+      tabIndex={onToggle ? 0 : undefined}
+      onClick={onToggle}
+      onKeyDown={
+        onToggle
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onToggle();
+              }
+            }
+          : undefined
+      }
+      className="flex items-start gap-2.5 p-2.5 rounded-[10px] transition-all select-none"
       style={{
         background: isSelected
           ? 'color-mix(in srgb, var(--accent) 6%, var(--paper))'
@@ -1638,19 +1690,16 @@ function FlatItemRow({
             : 'var(--line)'
         }`,
         opacity: isPaid ? 0.6 : 1,
+        cursor: onToggle ? 'pointer' : 'default',
       }}
     >
-      {/* Checkbox - sadece ödenmemiş kalemler */}
-      <button
-        type="button"
-        onClick={onToggle}
-        disabled={!onToggle}
+      {/* Checkbox göstergesi - sadece görsel, click parent'tan geliyor */}
+      <div
         className="flex-shrink-0 mt-0.5"
-        style={{ cursor: onToggle ? 'pointer' : 'not-allowed' }}
-        aria-label={isSelected ? 'Seçimi kaldır' : 'Seç'}
+        aria-hidden="true"
       >
         <CheckBoxIndicator active={isSelected} disabled={!onToggle} />
-      </button>
+      </div>
 
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline gap-2 flex-wrap">
@@ -1753,7 +1802,10 @@ function FlatItemRow({
         </span>
         {!isPaid && !isComplimentary && (
           <button
-            onClick={onGift}
+            onClick={(e) => {
+              e.stopPropagation();
+              onGift();
+            }}
             className="text-[10px]"
             style={{
               color: 'var(--gold)',
