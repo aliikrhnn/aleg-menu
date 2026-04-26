@@ -9,6 +9,7 @@ import {
   addManualCharge,
   addManualCredit,
   recordCustomerPayment,
+  getCustomerTransactions,
   type Customer,
   type CustomerTransaction,
 } from '@/lib/actions/customers';
@@ -58,6 +59,21 @@ type Props = {
 
 type ActionMode = null | 'payment' | 'manual_charge' | 'manual_credit';
 
+type DateFilter = 'all' | 'week' | 'month' | 'year';
+
+function computeDateRange(
+  filter: DateFilter
+): { from?: string; to?: string } {
+  if (filter === 'all') return {};
+  const now = new Date();
+  const to = now.toISOString();
+  const from = new Date(now);
+  if (filter === 'week') from.setDate(now.getDate() - 7);
+  else if (filter === 'month') from.setMonth(now.getMonth() - 1);
+  else if (filter === 'year') from.setFullYear(now.getFullYear() - 1);
+  return { from: from.toISOString(), to };
+}
+
 export function CustomerDetailModal({
   customerId,
   onClose,
@@ -68,6 +84,8 @@ export function CustomerDetailModal({
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [transactions, setTransactions] = useState<CustomerTransaction[]>([]);
   const [actionMode, setActionMode] = useState<ActionMode>(null);
+  const [dateFilter, setDateFilter] = useState<DateFilter>('all');
+  const [filterLoading, setFilterLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -82,9 +100,37 @@ export function CustomerDetailModal({
     setTransactions(r.recentTransactions || []);
   }, [customerId, onClose]);
 
+  // Tarih filtresi değişince hareketleri yeniden yükle
+  const reloadTransactions = useCallback(
+    async (filter: DateFilter) => {
+      setFilterLoading(true);
+      const range = computeDateRange(filter);
+      const r = await getCustomerTransactions({
+        customerId,
+        limit: 200,
+        fromDate: range.from,
+        toDate: range.to,
+      });
+      setFilterLoading(false);
+      if (!r.success) {
+        toast.error(r.error || 'Hareketler alınamadı');
+        return;
+      }
+      setTransactions(r.transactions || []);
+    },
+    [customerId]
+  );
+
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Filter değişimi
+  useEffect(() => {
+    if (loading) return; // ilk yükleme bittikten sonra
+    void reloadTransactions(dateFilter);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateFilter]);
 
   const handleDelete = async () => {
     const ok = await confirmDialog({
@@ -331,19 +377,65 @@ export function CustomerDetailModal({
 
         {/* TRANSACTIONS LIST */}
         <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0">
-          <div
-            className="uppercase mb-3"
-            style={{
-              fontFamily: 'var(--f-mono)',
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: '0.14em',
-              color: 'var(--ink-2)',
-            }}
-          >
-            HAREKETLER
+          <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+            <div
+              className="uppercase"
+              style={{
+                fontFamily: 'var(--f-mono)',
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: '0.14em',
+                color: 'var(--ink-2)',
+              }}
+            >
+              HAREKETLER ({transactions.length})
+            </div>
+            <button
+              onClick={() => downloadCsv(customer, transactions)}
+              disabled={transactions.length === 0}
+              className="text-xs px-2 py-1 rounded disabled:opacity-40"
+              style={{
+                fontFamily: 'var(--f-mono)',
+                fontWeight: 600,
+                letterSpacing: '0.08em',
+                color: 'var(--ink-2)',
+                textTransform: 'uppercase',
+              }}
+              title="Hareketleri CSV olarak indir"
+            >
+              📥 CSV İndir
+            </button>
           </div>
-          {transactions.length === 0 ? (
+
+          {/* Tarih filter chips */}
+          <div className="flex gap-1.5 mb-3 flex-wrap">
+            {(['all', 'week', 'month', 'year'] as DateFilter[]).map((f) => (
+              <button
+                key={f}
+                onClick={() => setDateFilter(f)}
+                className="h-7 px-3 rounded-full text-xs transition-all active:scale-[0.97]"
+                style={{
+                  background: dateFilter === f ? 'var(--ink)' : 'var(--card)',
+                  color: dateFilter === f ? 'var(--paper)' : 'var(--ink-2)',
+                  border: `1px solid ${dateFilter === f ? 'var(--ink)' : 'var(--line)'}`,
+                  fontFamily: 'var(--f-mono)',
+                  fontWeight: 600,
+                  letterSpacing: '0.06em',
+                  textTransform: 'uppercase',
+                }}
+              >
+                {f === 'all'
+                  ? 'Tümü'
+                  : f === 'week'
+                    ? 'Son 7 Gün'
+                    : f === 'month'
+                      ? 'Son 30 Gün'
+                      : 'Son 1 Yıl'}
+              </button>
+            ))}
+          </div>
+
+          {filterLoading ? (
             <div
               className="text-center py-12"
               style={{
@@ -352,7 +444,20 @@ export function CustomerDetailModal({
                 color: 'var(--ink-3)',
               }}
             >
-              Henüz hareket yok
+              Filtreleniyor…
+            </div>
+          ) : transactions.length === 0 ? (
+            <div
+              className="text-center py-12"
+              style={{
+                fontFamily: 'var(--f-serif)',
+                fontStyle: 'italic',
+                color: 'var(--ink-3)',
+              }}
+            >
+              {dateFilter === 'all'
+                ? 'Henüz hareket yok'
+                : 'Bu aralıkta hareket yok'}
             </div>
           ) : (
             <div className="space-y-2">
@@ -581,6 +686,106 @@ function TransactionRow({ tx }: { tx: CustomerTransaction }) {
       </div>
     </div>
   );
+}
+
+// ============================================================
+// CSV DOWNLOAD
+// ============================================================
+function downloadCsv(
+  customer: Customer | null,
+  transactions: CustomerTransaction[]
+) {
+  if (!customer || transactions.length === 0) return;
+
+  const escapeCsv = (val: string | number | null | undefined): string => {
+    if (val === null || val === undefined) return '';
+    const s = String(val);
+    if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+      return `"${s.replace(/"/g, '""')}"`;
+    }
+    return s;
+  };
+
+  const headers = [
+    'Tarih',
+    'Saat',
+    'Tip',
+    'Tutar',
+    'Yon',
+    'Yontem',
+    'Siparis No',
+    'Masa',
+    'Urunler',
+    'Kasiyer',
+    'Not',
+  ];
+
+  const rows = transactions.map((tx) => {
+    const d = new Date(tx.created_at);
+    const date = d.toLocaleDateString('tr-TR');
+    const time = d.toLocaleTimeString('tr-TR', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    const isCharge = tx.type === 'charge' || tx.type === 'manual_charge';
+    let tipLabel = '';
+    switch (tx.type) {
+      case 'charge':
+        tipLabel = 'Siparis';
+        break;
+      case 'payment':
+        tipLabel = 'Odeme';
+        break;
+      case 'manual_charge':
+        tipLabel = 'Manuel Borc';
+        break;
+      case 'manual_credit':
+        tipLabel = 'Manuel Alacak';
+        break;
+    }
+    const items = tx.order_info?.items
+      ? tx.order_info.items
+          .map((it) => `${it.quantity}x ${it.product_name}`)
+          .join('; ')
+      : '';
+    return [
+      date,
+      time,
+      tipLabel,
+      tx.amount.toFixed(2),
+      isCharge ? '+' : '-',
+      tx.payment_method
+        ? tx.payment_method === 'cash'
+          ? 'Nakit'
+          : tx.payment_method === 'card'
+            ? 'Kart'
+            : tx.payment_method === 'transfer'
+              ? 'Havale'
+              : tx.payment_method
+        : '',
+      tx.order_info?.order_no || '',
+      tx.order_info?.table_name || '',
+      items,
+      tx.cashier_name || '',
+      tx.note || '',
+    ]
+      .map(escapeCsv)
+      .join(',');
+  });
+
+  // BOM + Headers + Rows
+  const csv = '\uFEFF' + [headers.join(','), ...rows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  const safeName = customer.name.replace(/[^a-zA-Z0-9]/g, '_');
+  const today = new Date().toISOString().slice(0, 10);
+  link.download = `cari_${safeName}_${today}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 }
 
 function methodLabel(m: string | null): string {

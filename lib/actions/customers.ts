@@ -403,6 +403,8 @@ export async function getCustomerTransactions(input: {
   limit?: number;
   offset?: number;
   type?: 'charge' | 'payment' | 'manual_charge' | 'manual_credit' | 'all';
+  fromDate?: string; // ISO date
+  toDate?: string;   // ISO date
 }): Promise<{
   success: boolean;
   transactions?: CustomerTransaction[];
@@ -425,6 +427,12 @@ export async function getCustomerTransactions(input: {
     if (input.type && input.type !== 'all') {
       q = q.eq('type', input.type);
     }
+    if (input.fromDate) {
+      q = q.gte('created_at', input.fromDate);
+    }
+    if (input.toDate) {
+      q = q.lte('created_at', input.toDate);
+    }
 
     const { data, count, error } = await q
       .order('created_at', { ascending: false })
@@ -432,12 +440,99 @@ export async function getCustomerTransactions(input: {
 
     if (error) return { success: false, error: error.message };
 
+    const txsRaw = (data || []) as Array<{
+      id: string;
+      amount: number | string;
+      order_id: string | null;
+      cashier_id: string | null;
+      [key: string]: unknown;
+    }>;
+
+    // Order detayları
+    const orderIds = txsRaw.map((t) => t.order_id).filter(Boolean) as string[];
+    const ordersMap = new Map<
+      string,
+      {
+        order_no: string;
+        table_name: string | null;
+        items: Array<{
+          product_name: string;
+          quantity: number;
+          unit_price: number;
+        }>;
+      }
+    >();
+
+    if (orderIds.length > 0) {
+      const { data: orders } = await admin
+        .from('orders')
+        .select('id, order_no, tables(name)')
+        .in('id', orderIds);
+
+      const { data: items } = await admin
+        .from('order_items')
+        .select('order_id, product_name, quantity, unit_price')
+        .in('order_id', orderIds)
+        .neq('status', 'cancelled');
+
+      const itemsByOrder = new Map<
+        string,
+        Array<{ product_name: string; quantity: number; unit_price: number }>
+      >();
+      (items || []).forEach((it) => {
+        const arr = itemsByOrder.get(it.order_id) || [];
+        arr.push({
+          product_name: it.product_name,
+          quantity: it.quantity,
+          unit_price: Number(it.unit_price),
+        });
+        itemsByOrder.set(it.order_id, arr);
+      });
+
+      (orders || []).forEach((o) => {
+        const tableNameRaw = (o as { tables?: unknown }).tables;
+        let tableName: string | null = null;
+        if (Array.isArray(tableNameRaw) && tableNameRaw[0]) {
+          tableName = (tableNameRaw[0] as { name?: string }).name || null;
+        } else if (
+          tableNameRaw &&
+          typeof tableNameRaw === 'object' &&
+          'name' in tableNameRaw
+        ) {
+          tableName =
+            (tableNameRaw as { name?: string }).name || null;
+        }
+        ordersMap.set(o.id, {
+          order_no: (o as { order_no: string }).order_no,
+          table_name: tableName,
+          items: itemsByOrder.get(o.id) || [],
+        });
+      });
+    }
+
+    // Cashier isimleri
+    const cashierIds = txsRaw
+      .map((t) => t.cashier_id)
+      .filter(Boolean) as string[];
+    const cashierMap = new Map<string, string>();
+    if (cashierIds.length > 0) {
+      const { data: cashiers } = await admin
+        .from('cashier_accounts')
+        .select('id, name')
+        .in('id', cashierIds);
+      (cashiers || []).forEach((c) => cashierMap.set(c.id, c.name));
+    }
+
     return {
       success: true,
-      transactions: (data || []).map((t) => ({
-        ...t,
+      transactions: txsRaw.map((t) => ({
+        ...(t as unknown as CustomerTransaction),
         amount: Number(t.amount),
-      })) as CustomerTransaction[],
+        order_info: t.order_id ? ordersMap.get(t.order_id) || null : null,
+        cashier_name: t.cashier_id
+          ? cashierMap.get(t.cashier_id) || null
+          : null,
+      })),
       totalCount: count || 0,
     };
   } catch (e) {

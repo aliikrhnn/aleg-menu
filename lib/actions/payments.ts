@@ -1180,6 +1180,25 @@ export type ZReport = {
     orders: number;
     revenue: number;
   }>;
+  // Cari hesap özeti (Açık Hesap işlemleri)
+  on_account_summary: {
+    new_charges_count: number;
+    new_charges_amount: number;
+    payments_received_count: number;
+    payments_received_amount: number;
+    net_change: number; // payments - new_charges (pozitif = bugün borç tahsil edildi)
+    new_charges: Array<{
+      customer_name: string;
+      amount: number;
+      time: string; // HH:MM
+    }>;
+    payments_received: Array<{
+      customer_name: string;
+      amount: number;
+      method: string; // 'cash' | 'card' | 'transfer'
+      time: string;
+    }>;
+  };
 };
 
 export type DaySummaryRange =
@@ -1818,6 +1837,78 @@ export async function getZReport(
 
     log('done, returning');
 
+    // ============================================================
+    // CARİ HESAP ÖZETİ (Açık Hesap)
+    // ============================================================
+    // Bu raporun aralığında:
+    //   - Yeni açık hesap borçlanmaları (charge): orders + customer_id ile
+    //   - Cari ödemeler (payment): customer_transactions type='payment'
+    //   - Net etki = tahsilat - yeni borçlanma
+    const { data: chargesInRange } = await admin
+      .from('customer_transactions')
+      .select(
+        'id, amount, customer_id, order_id, created_at, customers(name)'
+      )
+      .eq('business_id', businessId)
+      .eq('type', 'charge')
+      .gte('created_at', start.toISOString())
+      .lte('created_at', end.toISOString());
+
+    const { data: paymentsInRange } = await admin
+      .from('customer_transactions')
+      .select(
+        'id, amount, customer_id, payment_method, created_at, customers(name)'
+      )
+      .eq('business_id', businessId)
+      .eq('type', 'payment')
+      .gte('created_at', start.toISOString())
+      .lte('created_at', end.toISOString());
+
+    const newChargesAmount = (chargesInRange || []).reduce(
+      (s, t) => s + Number(t.amount),
+      0
+    );
+    const paymentsReceivedAmount = (paymentsInRange || []).reduce(
+      (s, t) => s + Number(t.amount),
+      0
+    );
+
+    type CustomerJoin = { name?: string } | { name?: string }[] | null;
+    const extractName = (cj: CustomerJoin): string => {
+      if (Array.isArray(cj)) return cj[0]?.name || '—';
+      if (cj && typeof cj === 'object' && 'name' in cj) return cj.name || '—';
+      return '—';
+    };
+
+    const newCharges = (chargesInRange || []).map((t) => ({
+      customer_name: extractName(t.customers as CustomerJoin),
+      amount: Number(t.amount),
+      time: new Date(t.created_at).toLocaleTimeString('tr-TR', {
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+    }));
+
+    const paymentsReceived = (paymentsInRange || []).map((t) => ({
+      customer_name: extractName(t.customers as CustomerJoin),
+      amount: Number(t.amount),
+      method: (t.payment_method as string) || 'cash',
+      time: new Date(t.created_at).toLocaleTimeString('tr-TR', {
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+    }));
+
+    const onAccountSummary = {
+      new_charges_count: chargesInRange?.length || 0,
+      new_charges_amount: newChargesAmount,
+      payments_received_count: paymentsInRange?.length || 0,
+      payments_received_amount: paymentsReceivedAmount,
+      net_change: paymentsReceivedAmount - newChargesAmount,
+      new_charges: newCharges,
+      payments_received: paymentsReceived,
+    };
+
     return {
       success: true,
       report: {
@@ -1876,6 +1967,7 @@ export async function getZReport(
           cash_variance: cashVariance,
           card_variance: cardVariance,
         },
+        on_account_summary: onAccountSummary,
         // PAKET C EKLENTİLERİ
         avg_prep_minutes: avgPrepMinutes,
         peak_hours: peakHours,

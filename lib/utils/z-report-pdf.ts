@@ -297,6 +297,17 @@ export async function generateZReportPdf(
       card_variance: null,
     };
   }
+  if (!r.on_account_summary) {
+    r.on_account_summary = {
+      new_charges_count: 0,
+      new_charges_amount: 0,
+      payments_received_count: 0,
+      payments_received_amount: 0,
+      net_change: 0,
+      new_charges: [],
+      payments_received: [],
+    };
+  }
 
   // Arkaplan paper tonuna boyayalım
   setFill(pdf, COLORS.paper);
@@ -784,6 +795,166 @@ export async function generateZReportPdf(
       yy += 8;
     }
     y += methodEntries.length * 8 + 4 + 8;
+  }
+
+  // ============================================================
+  // AÇIK HESAP (CARİ) — yeni borçlanma + tahsilat + net
+  // ============================================================
+  if (
+    report.on_account_summary &&
+    (report.on_account_summary.new_charges_count > 0 ||
+      report.on_account_summary.payments_received_count > 0)
+  ) {
+    const oas = report.on_account_summary;
+    const detailRowsCount =
+      oas.new_charges.length + oas.payments_received.length;
+    const detailH = detailRowsCount > 0 ? Math.min(detailRowsCount, 12) * 5 + 6 : 0;
+    const neededH = 10 + 28 + detailH + 6;
+
+    if (y + neededH > 270) {
+      pdf.addPage();
+      setFill(pdf, COLORS.paper);
+      pdf.rect(0, 0, PAGE_W, 297, 'F');
+      y = MARGIN;
+    }
+
+    drawSectionLabel(pdf, MARGIN, y, 'ACIK HESAP (CARI)');
+
+    // Net göstergesi sağda
+    const netPositive = oas.net_change > 0;
+    const netZero = oas.net_change === 0;
+    const netColor = netZero
+      ? COLORS.ink3
+      : netPositive
+        ? COLORS.ok
+        : COLORS.accent;
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(8);
+    setText(pdf, netColor);
+    const netLabel = `NET: ${netPositive ? '+' : netZero ? '' : '-'}${money(Math.abs(oas.net_change))}`;
+    pdf.text(netLabel, PAGE_W - MARGIN, y + 3, { align: 'right' });
+    y += 6;
+
+    // Üç satırlık özet kartı
+    setFill(pdf, COLORS.paper2);
+    setDraw(pdf, COLORS.line);
+    pdf.setLineWidth(0.3);
+    pdf.roundedRect(MARGIN, y, CONTENT_W, 26, 2, 2, 'FD');
+
+    // Yeni borçlanma
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(9);
+    setText(pdf, COLORS.ink);
+    pdf.text(
+      `+ Yeni borclanma (${oas.new_charges_count} siparis)`,
+      MARGIN + 4,
+      y + 6
+    );
+    setText(pdf, COLORS.accent);
+    pdf.text(money(oas.new_charges_amount), PAGE_W - MARGIN - 4, y + 6, {
+      align: 'right',
+    });
+
+    // Tahsilat
+    setText(pdf, COLORS.ink);
+    pdf.text(
+      `- Tahsilat (${oas.payments_received_count} odeme)`,
+      MARGIN + 4,
+      y + 14
+    );
+    setText(pdf, COLORS.ok);
+    pdf.text(money(oas.payments_received_amount), PAGE_W - MARGIN - 4, y + 14, {
+      align: 'right',
+    });
+
+    // Ayraç + Net
+    setDraw(pdf, COLORS.line);
+    pdf.setLineDashPattern([1, 1], 0);
+    pdf.line(MARGIN + 4, y + 18, PAGE_W - MARGIN - 4, y + 18);
+    pdf.setLineDashPattern([], 0);
+
+    setText(pdf, COLORS.ink2);
+    pdf.text('Net Degisim', MARGIN + 4, y + 23);
+    setText(pdf, netColor);
+    pdf.setFontSize(10);
+    pdf.text(
+      `${netPositive ? '+' : netZero ? '' : '-'}${money(Math.abs(oas.net_change))}`,
+      PAGE_W - MARGIN - 4,
+      y + 23,
+      { align: 'right' }
+    );
+    pdf.setFontSize(9);
+
+    y += 30;
+
+    // Detaylar (max 12 satır gösterilir)
+    if (detailRowsCount > 0) {
+      const allItems: Array<{
+        time: string;
+        name: string;
+        amount: number;
+        isCharge: boolean;
+        method?: string;
+      }> = [];
+      oas.new_charges.forEach((c) =>
+        allItems.push({
+          time: c.time,
+          name: c.customer_name,
+          amount: c.amount,
+          isCharge: true,
+        })
+      );
+      oas.payments_received.forEach((p) =>
+        allItems.push({
+          time: p.time,
+          name: p.customer_name,
+          amount: p.amount,
+          isCharge: false,
+          method: p.method,
+        })
+      );
+      // Saate göre sırala
+      allItems.sort((a, b) => a.time.localeCompare(b.time));
+
+      const showCount = Math.min(12, allItems.length);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(7);
+      for (let i = 0; i < showCount; i++) {
+        const it = allItems[i];
+        if (y > 270) {
+          pdf.addPage();
+          setFill(pdf, COLORS.paper);
+          pdf.rect(0, 0, PAGE_W, 297, 'F');
+          y = MARGIN;
+        }
+        setText(pdf, COLORS.ink3);
+        pdf.text(it.time, MARGIN + 2, y);
+        setText(pdf, COLORS.ink2);
+        const labelTxt = it.isCharge
+          ? asciify(it.name)
+          : `${asciify(it.name)} (${it.method === 'cash' ? 'Nakit' : it.method === 'card' ? 'Kart' : it.method === 'transfer' ? 'Havale' : it.method})`;
+        pdf.text(labelTxt.substring(0, 50), MARGIN + 14, y);
+        setText(pdf, it.isCharge ? COLORS.accent : COLORS.ok);
+        pdf.text(
+          `${it.isCharge ? '+' : '-'}${money(it.amount)}`,
+          PAGE_W - MARGIN - 2,
+          y,
+          { align: 'right' }
+        );
+        y += 4.2;
+      }
+      if (allItems.length > 12) {
+        setText(pdf, COLORS.ink3);
+        pdf.setFont('helvetica', 'italic');
+        pdf.text(
+          `+${allItems.length - 12} hareket daha`,
+          MARGIN + 2,
+          y + 2
+        );
+        y += 6;
+      }
+    }
+    y += 6;
   }
 
   // ============================================================
