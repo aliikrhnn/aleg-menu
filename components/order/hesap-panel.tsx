@@ -314,7 +314,6 @@ export function HesapPanel({
     onChanged();
   }, [
     selectedFlatItems,
-    selectedTotal,
     payableAmount,
     discountAmount,
     discount,

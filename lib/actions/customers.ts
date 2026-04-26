@@ -175,7 +175,7 @@ export async function getCustomer(
       .map((t) => t.order_id)
       .filter(Boolean) as string[];
 
-    let ordersMap = new Map<
+    const ordersMap = new Map<
       string,
       {
         order_no: string;
@@ -240,7 +240,7 @@ export async function getCustomer(
     const cashierIds = (txs || [])
       .map((t) => t.cashier_id)
       .filter(Boolean) as string[];
-    let cashierMap = new Map<string, string>();
+    const cashierMap = new Map<string, string>();
     if (cashierIds.length > 0) {
       const { data: cashiers } = await admin
         .from('cashier_accounts')
