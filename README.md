@@ -1,39 +1,55 @@
-# 🔧 LINT FIX — Cari + HesapPanel
+# 🔧 TS FIX — Cari Build Hatası
 
-Push'u engelleyen 2 error + 1 bonus warning fix.
+TypeScript build hatası — Supabase'den dönen `txs` tipi kısıtlı geliyor (sadece `id`).
 
-**2 dosya.**
+**1 dosya.**
 
-## ✅ Düzeltmeler
+## 🐛 Hata
 
-### `lib/actions/customers.ts` (Error)
 ```
-178:9  Error: 'ordersMap' is never reassigned. Use 'const' instead.
-243:9  Error: 'cashierMap' is never reassigned. Use 'const' instead.
+./lib/actions/customers.ts:252:11
+Type error: Type '{ amount: number; order_info: ... }[]' is not assignable
+to type 'CustomerTransaction[]'.
+  ...is missing the following properties from type 'CustomerTransaction':
+  business_id, customer_id, type, order_id, and 7 more.
 ```
-- `let ordersMap` → `const ordersMap`
-- `let cashierMap` → `const cashierMap`
 
-(Map'in kendisi const, içine `.set()` ile eklemek const'a aykırı değil)
+## ✅ Düzeltme
 
-### `components/order/hesap-panel.tsx` (Warning)
+Supabase JS client'ın schema infer'ı bazen kolonları doğru çıkaramıyor.
+Type assertion ile force cast:
+
+```typescript
+const recentTransactions: CustomerTransaction[] = ((txs || []) as Array<
+  Record<string, unknown> & {
+    id: string;
+    amount: number | string;
+    order_id: string | null;
+    cashier_id: string | null;
+  }
+>).map((t) => ({
+  ...(t as unknown as CustomerTransaction),
+  amount: Number(t.amount),
+  order_info: t.order_id ? ordersMap.get(t.order_id) || null : null,
+  cashier_name: t.cashier_id ? cashierMap.get(t.cashier_id) || null : null,
+}));
 ```
-315:6  Warning: useCallback has an unnecessary dependency: 'selectedTotal'
-```
-- `selectedTotal` dep kaldırıldı (zaten `selectedFlatItems`'tan türetilen değer)
+
+`txs`'yi önce minimum gerekli alanlarla typed array'e cast ediyoruz, sonra
+`...t` spread'ini `unknown as CustomerTransaction` ile zorluyoruz.
 
 ## 🚀 Push
 
 ```powershell
-git add . && git commit -m "fix(lint): cari const + hesap-panel dep" && git push
+git add . && git commit -m "fix(ts): cari customer_transactions tip cast" && git push
 ```
 
-## ℹ️ Diğer Warning'ler
+## 💡 Bonus
 
-Bu paket kapsamında olmayanlar (eski uyarılar, push'u engellemez):
-- `kasa-board.tsx` — playOrderSound/playCallSound deps (eskiden var)
-- `receipt-preview.tsx` — `<img>` → `<Image>` (eskiden var)
-- `advanced-tab.tsx` — loadData dep (eskiden var)
-- `toast.tsx` — timersRef cleanup (eskiden var)
+Diğer warning'ler (push'u engellemiyor):
+- `kasa-board.tsx` deps
+- `receipt-preview.tsx` `<img>`
+- `advanced-tab.tsx` deps
+- `toast.tsx` ref cleanup
 
-Bunlar warning, push'u engellemez. İstersen sonra ayrı paket halledebiliriz.
+Bunlar warning, sonra ayrı paketle.

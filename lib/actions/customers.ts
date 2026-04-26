@@ -249,8 +249,15 @@ export async function getCustomer(
       (cashiers || []).forEach((c) => cashierMap.set(c.id, c.name));
     }
 
-    const recentTransactions: CustomerTransaction[] = (txs || []).map((t) => ({
-      ...t,
+    const recentTransactions: CustomerTransaction[] = ((txs || []) as Array<
+      Record<string, unknown> & {
+        id: string;
+        amount: number | string;
+        order_id: string | null;
+        cashier_id: string | null;
+      }
+    >).map((t) => ({
+      ...(t as unknown as CustomerTransaction),
       amount: Number(t.amount),
       order_info: t.order_id ? ordersMap.get(t.order_id) || null : null,
       cashier_name: t.cashier_id ? cashierMap.get(t.cashier_id) || null : null,
