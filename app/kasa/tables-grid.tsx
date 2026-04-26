@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   getTablesWithStatus,
   type TableWithStatus,
@@ -45,16 +46,18 @@ export function TablesGrid({ onTableClick, callsByTable }: Props) {
 
   if (loading && zones.length === 0) {
     return (
-      <div className="py-20 text-center" style={{ color: 'var(--ink-3)' }}>
-        <div
-          style={{
-            fontFamily: 'var(--f-serif)',
-            fontStyle: 'italic',
-            fontSize: 20,
-          }}
-        >
-          Masalar yükleniyor…
-        </div>
+      <div className="space-y-4">
+        {/* Bölge başlıkları + masa grid iskeleti */}
+        {Array.from({ length: 2 }).map((_, zi) => (
+          <div key={zi}>
+            <Skeleton.Box width={140} height={14} className="mb-3" />
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <Skeleton.Box key={i} height={84} rounded="lg" />
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
     );
   }

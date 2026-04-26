@@ -19,6 +19,7 @@
  */
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useEscapeKey } from '@/lib/hooks/use-escape-key';
 import { toast } from '@/components/ui/toast';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
 import {
@@ -97,6 +98,15 @@ export function HesapPanel({
   // Mobile tab
   const [mobileTab, setMobileTab] = useState<MobileTab>('items');
   const [isMobile, setIsMobile] = useState(false);
+
+  // ESC ile kapama - iç modal'lar veya submitting sırasında devre dışı
+  const escEnabled =
+    !discountModalOpen &&
+    !partialModalOpen &&
+    !cancelModalOpen &&
+    !onAccountModalOpen &&
+    !submitting;
+  useEscapeKey(onClose, escEnabled);
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 1024);
     check();
@@ -1461,6 +1471,9 @@ function DiscountModal({
   );
   const [reason, setReason] = useState(initial?.reason || '');
 
+  // ESC ile kapama
+  useEscapeKey(onClose);
+
   const value = parseFloat(valueStr) || 0;
   const calc = useMemo(() => {
     if (type === 'percent') {
@@ -1736,6 +1749,9 @@ function PartialPaymentModal({
   const [entries, setEntries] = useState<PartialEntry[]>([]);
   const [draftMethod, setDraftMethod] = useState<'cash' | 'card'>('cash');
   const [draftAmount, setDraftAmount] = useState('');
+
+  // ESC ile kapama
+  useEscapeKey(onClose);
 
   const totalAdded = entries.reduce((s, e) => s + e.amount, 0);
   const remaining = Math.max(0, totalDue - totalAdded);
@@ -2076,6 +2092,9 @@ function CancelReasonModal({
 }) {
   const [reason, setReason] = useState('');
   const presets = ['Yanlış sipariş', 'Müşteri vazgeçti', 'Stokta yok', 'Diğer'];
+
+  // ESC ile kapama
+  useEscapeKey(onClose);
 
   return (
     <div

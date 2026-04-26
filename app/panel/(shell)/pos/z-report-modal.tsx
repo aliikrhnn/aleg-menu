@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useEscapeKey } from '@/lib/hooks/use-escape-key';
 import { getZReport, type ZReport } from '@/lib/actions/payments';
 import { generateZReportPdf } from '@/lib/utils/z-report-pdf';
 import { toast } from '@/components/ui/toast';
@@ -56,14 +57,8 @@ export function ZReportModal({
     });
   }, [open, date]);
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  // ESC ile kapama
+  useEscapeKey(onClose, open);
 
   async function handleDownloadPdf() {
     if (!report) return;

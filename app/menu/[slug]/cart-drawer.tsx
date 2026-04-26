@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { submitOrder } from '@/lib/actions/orders';
+import { useEscapeKey } from '@/lib/hooks/use-escape-key';
 
 type Lang = 'tr' | 'en';
 
@@ -91,6 +92,9 @@ export function CartDrawer({
 
   // Başarı ekranı
   const [successOrderNo, setSuccessOrderNo] = useState<string | null>(null);
+
+  // ESC ile kapama (submit veya başarı ekranı sırasında değil)
+  useEscapeKey(onClose, open && !submitting && !successOrderNo);
 
   if (!open) return null;
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useTransition, useEffect } from 'react';
+import { useEscapeKey } from '@/lib/hooks/use-escape-key';
 import { type CashSession } from '@/lib/actions/payments';
 import { useOfflineActions } from '@/lib/offline/use-offline-actions';
 
@@ -33,13 +34,8 @@ export function CashSessionModal({
   } | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  // ESC ile kapama (işlem sırasında değil)
+  useEscapeKey(onClose, !isPending);
 
   const handleSubmit = () => {
     const num = Number(amount);

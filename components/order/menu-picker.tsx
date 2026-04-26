@@ -9,6 +9,7 @@
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { toast } from '@/components/ui/toast';
+import { useEscapeKey } from '@/lib/hooks/use-escape-key';
 import {
   getPosMenu,
   createManualOrder,
@@ -683,6 +684,9 @@ function ProductOptionsPicker({
     }
   );
   const [note, setNote] = useState('');
+
+  // ESC ile kapama
+  useEscapeKey(onClose);
 
   const isValid = useMemo(() => {
     return sortedPresets.every((p) => {

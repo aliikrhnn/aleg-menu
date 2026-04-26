@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { toast } from '@/components/ui/toast';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   listCustomers,
   createCustomer,
@@ -263,16 +264,7 @@ export function CustomersManager({
 
       {/* LIST */}
       {loading ? (
-        <div
-          className="text-center py-12"
-          style={{
-            fontFamily: 'var(--f-serif)',
-            fontStyle: 'italic',
-            color: 'var(--ink-3)',
-          }}
-        >
-          Yükleniyor…
-        </div>
+        <Skeleton.List rows={5} />
       ) : customers.length === 0 ? (
         <EmptyState
           search={search}

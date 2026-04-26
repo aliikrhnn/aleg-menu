@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { useEscapeKey } from '@/lib/hooks/use-escape-key';
 import {
   getTableOrders,
   makeItemsComplimentary,
@@ -53,6 +54,17 @@ export function TableDetailModal({
   // Kalem seçimi (orderId + itemId set olarak)
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const { cashier } = useCashierSession();
+
+  // ESC ile kapama - iç modal'lar açıkken devre dışı
+  const escEnabled =
+    !payingOrder &&
+    !giftItemContext &&
+    !tableActionsOpen &&
+    !changeTableOpen &&
+    !splitOpen &&
+    !quickAddOpen &&
+    !hesapPanelOpen;
+  useEscapeKey(onClose, escEnabled);
 
   const load = () => {
     getTableOrders(tableId).then((r) => {

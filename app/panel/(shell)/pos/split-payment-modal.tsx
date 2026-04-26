@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useTransition, useCallback } from 'react';
+import { useEscapeKey } from '@/lib/hooks/use-escape-key';
 import { takePartialPayment, getPartialPayments, type PaymentMethod } from '@/lib/actions/payments';
 import { playSuccess, playDing } from '@/lib/sounds';
 import { cn } from '@/lib/utils';
@@ -78,13 +79,8 @@ export function SplitPaymentModal({
     loadPayments();
   }, [loadPayments]);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !isPending) onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose, isPending]);
+  // ESC ile kapat (işlem sırasında değil)
+  useEscapeKey(onClose, !isPending);
 
   const totalPaid = payments.reduce((s, p) => s + p.amount, 0);
   const remaining = Math.max(0, netTotal - totalPaid);
