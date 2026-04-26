@@ -1,48 +1,55 @@
-# 🔧 LINT FIX 3 — z-report-modal Props
+# 🔧 LINT FIX 4 — tables-status.ts Eksik Export
 
 ## 🐛 Hata
+```
+Type error: Module '"@/lib/actions/tables-status"' has no exported member 'cancelOrderItems'.
+> 28 |   cancelOrderItems,
+```
 
-```
-Type error: Property 'businessName' does not exist on type 'Props'.
-  32 |   open,
-  33 |   onClose,
-> 34 |   businessName: _businessName,
-```
+## 🔍 Sebep
+
+`hesap-panel.tsx`, `cancelOrderItems` ve `closeOrderOnAccount` fonksiyonlarını
+import ediyor ama **lokal `tables-status.ts` dosyanda bu fonksiyonlar yok**.
+
+Bunlar geçmiş Cari/Kasa paketlerinde eklenmişti ama sanırım o paketler push
+edilmemiş veya farklı bir branch'tan kalmış.
 
 ## ✅ Çözüm
 
-`z-report-modal.tsx` dosyasındaki kullanılmayan props (`businessName`,
-`businessAddress`, `businessLogoUrl`) `Props` type'ında yoktu, ama
-component destructure ediyordu → TS hatası.
+Bu pakette **güncel** `tables-status.ts` (1890 satır, 14 export'lu) var:
 
-Bu paket'te **temizlenmiş** versiyon var:
-
-```typescript
-export function ZReportModal({
-  open,
-  onClose,
-}: Props) {
-```
+- ✅ `getTablesWithStatus`
+- ✅ `getPosMenu`
+- ✅ `createManualOrder`
+- ✅ `getTableOrders`
+- ✅ `addItemsToOrder`
+- ✅ `makeItemsComplimentary`
+- ✅ `getOrderForPayment`
+- ✅ `changeOrderTable`
+- ✅ `mergeTables`
+- ✅ `splitOrderItems`
+- ✅ `listTablesForMove`
+- ✅ `splitItemsFromMultipleOrders`
+- ✅ **`cancelOrderItems`** ← Eksik olan
+- ✅ **`closeOrderOnAccount`** ← Eksik olan (cari Paket 2'den, customerId zorunlu)
 
 ## 🚀 Push
 
 ```powershell
-# Windows PowerShell - Force overwrite
-Expand-Archive -Path lint-fix-3.zip -DestinationPath . -Force
+# -Force ile lokal dosyayı tam değiştir
+Expand-Archive -Path lint-fix-4.zip -DestinationPath . -Force
 
-git add . && git commit -m "fix(ts): clean unused props in z-report-modal" && git push
+git add . && git commit -m "fix: restore missing exports in tables-status (cancelOrderItems, closeOrderOnAccount)" && git push
 ```
 
-## 💡 Hızlı Manuel Fix Alternatifi
+## ⚠️ Önemli Not
 
-Paket'siz, daha hızlı:
+Bu **kaybolma** dosya birkaç kez tekrar oldu — `Expand-Archive` `-Force`
+flag'i kullanmadan paketleri çıkardığında **mevcut dosyalar üzerine yazılmadı**.
 
-1. `app/panel/(shell)/pos/z-report-modal.tsx` aç
-2. Satır 34-36 civarı:
-   ```typescript
-   businessName: _businessName,
-   businessAddress: _businessAddress,
-   businessLogoUrl: _businessLogoUrl,
-   ```
-   Bu 3 satırı **sil**
-3. Push
+Bundan sonra mutlaka:
+```powershell
+Expand-Archive -Path PAKET.zip -DestinationPath . -Force
+```
+
+Aksi halde paket'in içindeki güncellemeler **uygulanmaz**, eski versiyon kalır.
