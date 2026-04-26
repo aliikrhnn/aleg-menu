@@ -1357,6 +1357,27 @@ export async function getZReport(
       byMethod[method].amount += Number(o.total);
     });
 
+    // ============================================================
+    // CARİ KASA HAREKETLERİ — payment_logs'tan order_id=null kayıtlar
+    // (manuel borç hariç method='other' dışındakiler kasaya yansır)
+    // ============================================================
+    const { data: cariPaymentLogs } = await admin
+      .from('payment_logs')
+      .select('id, amount, payment_method, performed_at, cashier_id')
+      .eq('business_id', businessId)
+      .is('order_id', null)
+      .neq('payment_method', 'other') // 'other' = manuel borç işareti, kasaya yansımaz
+      .gte('performed_at', start.toISOString())
+      .lte('performed_at', end.toISOString());
+
+    // byMethod'a ekle (Nakit/Kart/Havale toplamlarına dahil olsun)
+    (cariPaymentLogs || []).forEach((p) => {
+      const method = (p.payment_method as string) || 'other';
+      if (!byMethod[method]) byMethod[method] = { count: 0, amount: 0 };
+      byMethod[method].count++;
+      byMethod[method].amount += Number(p.amount);
+    });
+
     // Saat bazlı
     const hourMap = new Map<number, { count: number; amount: number }>();
     paid.forEach((o) => {
@@ -1365,6 +1386,15 @@ export async function getZReport(
       hourMap.set(h, {
         count: existing.count + 1,
         amount: existing.amount + Number(o.total),
+      });
+    });
+    // Cari ödemeleri saat bazlı'ya ekle
+    (cariPaymentLogs || []).forEach((p) => {
+      const h = new Date(p.performed_at).getHours();
+      const existing = hourMap.get(h) || { count: 0, amount: 0 };
+      hourMap.set(h, {
+        count: existing.count + 1,
+        amount: existing.amount + Number(p.amount),
       });
     });
     const byHour = Array.from(hourMap.entries())
@@ -1438,6 +1468,43 @@ export async function getZReport(
         ...existing,
         count: existing.count + 1,
         amount: existing.amount + Number(o.total),
+      });
+    });
+
+    // Cari hareketleri de kasiyere göre dağıt (cariPaymentLogs.cashier_id)
+    const cariCashierIds = (cariPaymentLogs || [])
+      .map((p) => p.cashier_id as string | null)
+      .filter((x): x is string => !!x);
+    let cariCashierNames: Map<string, string> = new Map();
+    if (cariCashierIds.length > 0) {
+      const uniq = Array.from(new Set(cariCashierIds));
+      const { data: cashiersData } = await admin
+        .from('cashier_accounts')
+        .select('id, display_name')
+        .in('id', uniq);
+      cariCashierNames = new Map(
+        (cashiersData || []).map((c) => [
+          c.id as string,
+          (c.display_name as string) || 'Kasiyer',
+        ])
+      );
+    }
+    (cariPaymentLogs || []).forEach((p) => {
+      const ccId = (p.cashier_id as string | null) || '__none';
+      const cashierName =
+        ccId === '__none'
+          ? 'Panel / Admin'
+          : cariCashierNames.get(ccId) || 'Kasiyer';
+      const existing = cashierMap.get(ccId) || {
+        cashier_id: ccId === '__none' ? null : ccId,
+        cashier_name: cashierName,
+        count: 0,
+        amount: 0,
+      };
+      cashierMap.set(ccId, {
+        ...existing,
+        count: existing.count + 1,
+        amount: existing.amount + Number(p.amount),
       });
     });
     const byCashier = Array.from(cashierMap.values()).sort(

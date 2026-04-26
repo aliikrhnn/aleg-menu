@@ -362,22 +362,26 @@ export function ZReportModal({
                   ÖDEME YÖNTEMİ DAĞILIMI
                 </div>
                 <div className="space-y-2">
-                  {Object.entries(report.by_method)
-                    .sort((a, b) => b[1].amount - a[1].amount)
-                    .map(([method, data]) => {
-                      const pct =
-                        report.total_revenue > 0
-                          ? (data.amount / report.total_revenue) * 100
-                          : 0;
-                      return (
-                        <div
-                          key={method}
-                          className="rounded-[10px] p-3"
-                          style={{
-                            background: 'var(--paper-2)',
-                            border: '1px solid var(--line)',
-                          }}
-                        >
+                  {(() => {
+                    const totalMethodAmount = Object.values(
+                      report.by_method
+                    ).reduce((s, d) => s + d.amount, 0);
+                    return Object.entries(report.by_method)
+                      .sort((a, b) => b[1].amount - a[1].amount)
+                      .map(([method, data]) => {
+                        const pct =
+                          totalMethodAmount > 0
+                            ? (data.amount / totalMethodAmount) * 100
+                            : 0;
+                        return (
+                          <div
+                            key={method}
+                            className="rounded-[10px] p-3"
+                            style={{
+                              background: 'var(--paper-2)',
+                              border: '1px solid var(--line)',
+                            }}
+                          >
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-2">
                               <span
@@ -428,7 +432,8 @@ export function ZReportModal({
                           </div>
                         </div>
                       );
-                    })}
+                    });
+                  })()}
                 </div>
               </div>
             )}

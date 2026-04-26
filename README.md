@@ -1,164 +1,140 @@
-# 🎯 CARİ MANUEL PAKET A — Kasa Yansıması
+# 🎯 Z RAPORU — Cari Ödemeler Tüm Modüllere Yansısın
 
-Manuel borç ve manuel alacak hareketleri artık **kasaya yansıyor** ve **gün
-sonu raporunda detaylı görünüyor**.
+Manuel borç/alacak ve cari ödemeler artık Z raporundaki **tüm modüllere** dahil
+edilir: ödeme yöntemi dağılımı, saat bazlı, kasiyere göre, mutabakat.
 
-**5 dosya · Migration yok.**
+**2 dosya · Migration yok.**
 
-## ✅ Yapılan
+## 🐛 Sorun
 
-### 1. Manuel Borç (`addManualCharge`)
-- ❗ **Kasa oturumu zorunlu** (kapalıysa "Önce kasayı aç" hatası)
-- Aktif oturumla otomatik bağlanır
-- `payment_logs`'a `method='other'` olarak kayıt → ciroya dahil değil
-- `customer_transactions` kayıt: cashier_id + cash_session_id + payment_log_id
-- Z raporunda "Yeni borçlanma" listesinde **MANUEL** rozetiyle görünür
+Önceki paket sadece "Açık Hesap (Cari)" özet bölümünü ekledi. Ama:
+- ❌ Ödeme yöntemi dağılımı — sadece sipariş ödemelerini topluyordu
+- ❌ Saat bazlı ödeme — cari ödemeler görünmüyordu
+- ❌ Kasiyere göre — cari işlemler atlanıyordu
+- ❌ Yüzdeler `total_revenue` üzerinden hesaplanıyordu, cari dahil olunca aşıyordu
 
-### 2. Manuel Alacak (`addManualCredit`) — 3 Tip
-```typescript
-creditType: 'cash' | 'card' | 'adjustment'
-```
+## ✅ Çözüm
 
-| Tip | Davranış |
-|-----|----------|
-| 💵 **Nakit** | Kasaya nakit girişi (avans tahsilatı). Kasa zorunlu. `payment_logs.method='cash'` |
-| 💳 **Kart** | Kasaya kart girişi. Kasa zorunlu. `payment_logs.method='card'` |
-| 📝 **Düzeltme** | Sadece bakiyeyi düzeltir, kasaya yazılmaz. Kasa opsiyonel. |
-
-### 3. UI (Cari Detay Modal)
-- **Manuel Alacak** modalında 3 tip seçim butonları
-- Tip seçimine göre dinamik açıklama:
-  - Nakit/Kart → "kasaya girer"
-  - Düzeltme → "sadece bakiye, kasaya yazılmaz"
-- **Manuel Borç** modalında uyarı bandı: "Kasa oturumu zorunlu"
-
-### 4. Z Raporu Genişletildi
-`getZReport.on_account_summary` artık 4 hareket tipini de dahil ediyor:
+`getZReport` artık `payment_logs`'tan **`order_id IS NULL`** olan kayıtları da
+(cari ödemeler ve avans tahsilatları) entegre ediyor:
 
 ```typescript
-new_charges: [
-  { customer_name, amount, time, source: 'order' | 'manual' }
-]
-payments_received: [
-  { customer_name, amount, time, method, source: 'payment' | 'manual_credit' }
-]
+const { data: cariPaymentLogs } = await admin
+  .from('payment_logs')
+  .select('id, amount, payment_method, performed_at, cashier_id')
+  .eq('business_id', businessId)
+  .is('order_id', null)
+  .neq('payment_method', 'other')  // 'other' = manuel borç işareti, kasaya yansımaz
+  .gte('performed_at', start.toISOString())
+  .lte('performed_at', end.toISOString());
 ```
 
-**Kategori mantığı:**
-- **Yeni Borçlanma** (kırmızı):
-  - `charge` (sipariş açık hesaba) → `source: 'order'` → "SİPARİŞ" rozet
-  - `manual_charge` (panelden manuel) → `source: 'manual'` → "MANUEL" rozet
-- **Tahsilat** (yeşil):
-  - `payment` (cari ödeme alındı) → `source: 'payment'` → "TAHSİLAT" rozet
-  - `manual_credit` kasalı (avans nakit/kart) → `source: 'manual_credit'` → "AVANS" rozet
-  - `manual_credit` düzeltme → **listede görünmez** (kasa hareketi değil)
+### Etkilenen Modüller
 
-### 5. Z Modal UI — Source Badges
-Detay listesinde hareket başına etiket:
-```
-14:30 · Ahmet Yılmaz [SİPARİŞ]              +₺120
-15:00 · Mehmet Demir [MANUEL]               +₺50
-15:30 · Ahmet Yılmaz [TAHSİLAT] Nakit       −₺200
-16:00 · Veli Bey [AVANS] Nakit              −₺100
-```
+**1. Ödeme Yöntemi Dağılımı (`byMethod`)**
+- Cari ödemeler `cash`/`card`/`transfer` olarak doğru kategoriye düşer
+- Yüzde hesabı artık `byMethod` toplamı üzerinden (cari dahil), eskiden
+  `total_revenue` üzerinden hesaplandığı için %100'ü aşabilirdi
 
-### 6. Z Raporu PDF
-Aynı source bilgisi PDF'e de yansıdı:
-```
-14:30  Ahmet Yilmaz [SIPARIS]                +120,00 TL
-15:00  Mehmet Demir [MANUEL]                  +50,00 TL
-15:30  Ahmet Yilmaz [TAHSILAT] (Nakit)       -200,00 TL
-16:00  Veli Bey [AVANS] (Nakit)              -100,00 TL
-```
+**2. Saat Bazlı Ödeme (`byHour`)**
+- Cari ödeme saatleri grafikte görünür
+- "En yoğun saat" cari ödemeleri de hesaba katar
 
-## 📦 Dosyalar (5)
+**3. Kasiyere Göre (`byCashier`)**
+- Cari ödeme alan kasiyer kendi adına ciro olarak görünür
+- `cashier_accounts.display_name` ile JOIN
+
+**4. Mutabakat (`reconciliation`)**
+- `cashTotal`, `cardTotal` byMethod'tan gelir → cari dahil ✓
+- `expected_cash = opening + cashTotal - refunds` → kasiyerin gerçek beklenen
+  nakit miktarı ✓ (avans + cari ödeme + sipariş hepsi sayılır)
+
+### Hariç Tutulan: Manuel Borç
+
+Manuel borç (`addManualCharge`) `payment_logs`'a `method='other'` ile yazılır.
+Z raporu bu hareketleri **kasaya yansıtmaz** — sadece "Açık Hesap → Yeni
+Borçlanma" listesinde görünür. Mantıklı çünkü manuel borç gerçek para
+hareketi değil, sadece kayıt.
+
+### Etkilenmeyen: `total_revenue` (Bugünkü Ciro)
+
+`total_revenue` hâlâ sadece sipariş cirosudur. Cari ödemeler önceki günlerin
+tahsilatı, bugünün cirosu değil. **Doğru davranış**:
+- Bugünkü Ciro: ₺0 (sipariş yok)
+- Nakit girişi: ₺2.035 (cari ödeme — kasada gerçekten var)
+
+## 📦 Dosyalar (2)
 
 ```
-lib/actions/customers.ts                          (helper + 2 action)
-lib/actions/payments.ts                           (Z rapor + type)
-lib/utils/z-report-pdf.ts                         (PDF source label)
-app/panel/(shell)/pos/z-report-modal.tsx          (UI source badge)
-app/panel/(shell)/cari-hesaplar/
-  customer-detail-modal.tsx                       (3 tip + uyarı)
+lib/actions/payments.ts                       (cari payment_logs entegrasyonu)
+app/panel/(shell)/pos/z-report-modal.tsx      (yüzde hesabı düzeltildi)
 ```
 
 ## 🚀 Push
 
 ```powershell
 git add .
-git commit -m "feat(cari): manuel borç/alacak kasaya yansısın + z rapor source"
+git commit -m "fix(z-rapor): cari ödemeler tüm modüllere yansısın"
 git push
 ```
 
-## 🧪 Test
+## 🧪 Test Senaryosu
 
-### A) Manuel Borç (Kasa Zorunlu)
-1. **Kasa kapalıyken**: Cari → Ahmet → + Manuel Borç → ₺50 → ✅ Hata: "Açık kasa oturumu yok"
-2. Kasiyer kasayı aç (₺200 açılış)
-3. Aynı işlemi tekrar dene → ✅ Toast "Eklendi"
-4. ✅ Ahmet'in borcu +₺50
-5. Z Raporu → "Açık Hesap (Cari)" bölümü:
-   - ✅ Yeni borçlanma: 1 sipariş ₺50
-   - ✅ Detayda: "Ahmet Yılmaz [MANUEL] +₺50"
+### Hazırlık
+1. Kasiyer kasayı açar (₺200 açılış)
+2. Bugün hiç sipariş açma
+3. Cari işlemler:
+   - Ahmet'e + Manuel Borç ₺50
+   - Mehmet'e + Cari Ödeme ₺200 nakit
+   - Ali'ye + Manuel Alacak ₺100 nakit (avans)
+   - Veli'ye + Manuel Alacak ₺50 düzeltme
 
-### B) Manuel Alacak — 3 Tip
+### Beklenen Z Raporu
 
-**Tip 1: Nakit (Avans)**
-1. Cari → Ahmet → + Manuel Alacak → 3 buton görünür
-2. **Nakit** seç → açıklama: "kasaya nakit girişi olarak yazılır"
-3. ₺100 → Onayla → ✅
-4. Z Raporu: "Tahsilat ₺100 [AVANS] Nakit" görünür
-5. Kasa nakit toplamı +₺100
+**Bugünkü Ciro**: ₺0 (sipariş yok)
 
-**Tip 2: Kart (Avans)**
-1. **Kart** seç → ₺200 → Onayla
-2. Z Raporu: "AVANS Kart ₺200" — kart toplamına dahil
+**Ödeme Yöntemi Dağılımı**:
+- Nakit (2 ödeme) ₺300 (cari ₺200 + avans ₺100)
+- 100% (toplam yöntem üzerinden)
 
-**Tip 3: Düzeltme**
-1. **Düzeltme** seç → açıklama: "sadece bakiye, kasaya yazılmaz"
-2. Kasa kapalı bile olsa çalışır
-3. ₺30 → Onayla → ✅
-4. Z Raporu: **liste'de YOK** (çünkü kasa hareketi değil)
-5. Cari hareketinde görünür: "Manuel Alacak (Düzeltme) +₺30"
+**Saat Bazlı**: ödemelerin saatleri görünür
 
-### C) Kasa Yansıması
-1. Bugün 1 manuel borç (₺50), 1 avans nakit (₺100), 1 ödeme (₺200)
-2. Kasa ekranında "Bugünkü Ciro ₺0" (sipariş yok)
-3. Z Raporu:
-   - Yeni borçlanma: 1 ₺50 (manuel)
-   - Tahsilat: 2 ₺300 (1 avans + 1 ödeme)
-   - Net: +₺250 (kasaya net giriş)
-4. Kasa nakit toplamı: ₺300 (₺100 avans + ₺200 ödeme)
+**Kasiyere Göre**: kasa açan kasiyer 3 işlem ₺300
 
-### D) Z Raporu PDF
-1. PDF İndir
-2. ✅ "ACIK HESAP (CARI)" bölümü
-3. ✅ Detay listesinde her satırda **[SIPARIS]** / **[MANUEL]** / **[TAHSILAT]** / **[AVANS]** etiketi
-4. ✅ Yöntem (Nakit/Kart/Havale) parantezde
+**Açık Hesap (Cari)**:
+- Yeni Borçlanma: 1 hareket ₺50 (manuel)
+- Tahsilat: 2 hareket ₺300 (cari + avans)
+- Net: +₺250
 
-## 💡 Mantık Özeti
+**Mutabakat**:
+- Açılış: ₺200
+- Nakit: ₺300
+- Beklenen: ₺500
+
+**Hariç Tutulan**: Manuel borç ₺50 ve düzeltme ₺50 ödeme yöntemine yansımaz
+(payment_method='other' veya null).
+
+## 💡 Davranış Tablosu
 
 ```
-Hareket Tipi → Kasa Yansıması?
-
-charge          → ❌ ciro yansımaz (sipariş zaten ciroda) ama yeni borç olarak listelenir
-manual_charge   → ❌ ciroya yansımaz, sadece "yeni borç" listesinde
-payment         → ✅ kasaya method'a göre yansır (nakit/kart/havale)
-manual_credit (cash/card)  → ✅ kasaya yansır (avans tahsilatı)
-manual_credit (adjustment) → ❌ sadece bakiye düzeltir
+İşlem                         payment_logs   byMethod   Z Açık Hesap
+────────────────────────────────────────────────────────────────────
+Sipariş Nakit Ödeme             cash         ✅          ❌ (sipariş)
+Sipariş Açık Hesap              other        ❌          ✅ (Sipariş)
+Cari Ödeme Nakit                cash         ✅          ✅ (Tahsilat)
+Cari Ödeme Kart                 card         ✅          ✅ (Tahsilat)
+Manuel Borç                     other        ❌          ✅ (Manuel)
+Manuel Alacak Nakit             cash         ✅          ✅ (Avans)
+Manuel Alacak Kart              card         ✅          ✅ (Avans)
+Manuel Alacak Düzeltme          (yazılmaz)   ❌          ❌
 ```
 
 ## 🗺️ Durum
 
 | | |
 |---|---|
-| Cari Paket 1: Backend + Panel | ✅ |
-| Cari Paket 2: Kasa Entegrasyonu | ✅ |
-| Cari Paket 3: Z Rapor + İyileştirmeler | ✅ |
-| **Cari Manuel Paket A: Kasa Yansıması** | **✅ TESLİM** |
+| Cari Manuel Paket A | ✅ |
+| **Z Raporu Tüm Modül Entegrasyonu** | **✅ TESLİM** |
 | Paket B: Yeni siparişler kolonu silme + flash | 🔜 |
 
----
-
-Push → test → çalışırsa **Paket B** (kasa yeni sipariş kolonu silme + 5dk
-kırmızı flash bildirim + otomatik onay) söyle 🚀
+Push → test → çalışırsa **Paket B** başla 🚀
