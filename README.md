@@ -1,81 +1,164 @@
-# 🔧 KASA — Empty State Fix
+# 🎯 CARİ MANUEL PAKET A — Kasa Yansıması
 
-Kasa "Günün özeti" ekranında sadece cari ödeme alındığı halde istatistikler
-görünmeyen sorunu düzeltir.
+Manuel borç ve manuel alacak hareketleri artık **kasaya yansıyor** ve **gün
+sonu raporunda detaylı görünüyor**.
 
-**1 dosya.**
+**5 dosya · Migration yok.**
 
-## 🐛 Sorun
+## ✅ Yapılan
 
-Senaryo:
-- Bugün hiç sipariş açılmamış
-- 4 cari ödeme alınmış (₺2.035 toplam)
-- Ekran: "Bugün henüz sipariş yok" gösteriyor
-- Halbuki **kasada nakit girişi var, raporda görünmeli**
+### 1. Manuel Borç (`addManualCharge`)
+- ❗ **Kasa oturumu zorunlu** (kapalıysa "Önce kasayı aç" hatası)
+- Aktif oturumla otomatik bağlanır
+- `payment_logs`'a `method='other'` olarak kayıt → ciroya dahil değil
+- `customer_transactions` kayıt: cashier_id + cash_session_id + payment_log_id
+- Z raporunda "Yeni borçlanma" listesinde **MANUEL** rozetiyle görünür
 
-## 🔍 Sebep
-
+### 2. Manuel Alacak (`addManualCredit`) — 3 Tip
 ```typescript
-const hasData = report && report.total_orders > 0;
+creditType: 'cash' | 'card' | 'adjustment'
 ```
 
-`hasData` sadece sipariş sayısına bakıyordu. Cari ödemeler ayrı tablolarda
-(`customer_transactions` + `payment_logs`) tutulduğu için "veri yok" sanılıyordu.
+| Tip | Davranış |
+|-----|----------|
+| 💵 **Nakit** | Kasaya nakit girişi (avans tahsilatı). Kasa zorunlu. `payment_logs.method='cash'` |
+| 💳 **Kart** | Kasaya kart girişi. Kasa zorunlu. `payment_logs.method='card'` |
+| 📝 **Düzeltme** | Sadece bakiyeyi düzeltir, kasaya yazılmaz. Kasa opsiyonel. |
 
-## ✅ Çözüm
+### 3. UI (Cari Detay Modal)
+- **Manuel Alacak** modalında 3 tip seçim butonları
+- Tip seçimine göre dinamik açıklama:
+  - Nakit/Kart → "kasaya girer"
+  - Düzeltme → "sadece bakiye, kasaya yazılmaz"
+- **Manuel Borç** modalında uyarı bandı: "Kasa oturumu zorunlu"
+
+### 4. Z Raporu Genişletildi
+`getZReport.on_account_summary` artık 4 hareket tipini de dahil ediyor:
 
 ```typescript
-const hasOnAccountActivity =
-  report &&
-  report.on_account_summary &&
-  (report.on_account_summary.new_charges_count > 0 ||
-   report.on_account_summary.payments_received_count > 0);
-
-const hasData =
-  report && (report.total_orders > 0 || !!hasOnAccountActivity);
+new_charges: [
+  { customer_name, amount, time, source: 'order' | 'manual' }
+]
+payments_received: [
+  { customer_name, amount, time, method, source: 'payment' | 'manual_credit' }
+]
 ```
 
-Artık **sipariş VEYA cari aktivite** varsa "veri var" sayılır → istatistik
-kartları + Açık Hesap (Cari) bölümü + analizler hepsi görünür.
+**Kategori mantığı:**
+- **Yeni Borçlanma** (kırmızı):
+  - `charge` (sipariş açık hesaba) → `source: 'order'` → "SİPARİŞ" rozet
+  - `manual_charge` (panelden manuel) → `source: 'manual'` → "MANUEL" rozet
+- **Tahsilat** (yeşil):
+  - `payment` (cari ödeme alındı) → `source: 'payment'` → "TAHSİLAT" rozet
+  - `manual_credit` kasalı (avans nakit/kart) → `source: 'manual_credit'` → "AVANS" rozet
+  - `manual_credit` düzeltme → **listede görünmez** (kasa hareketi değil)
 
-## 🧪 Test
+### 5. Z Modal UI — Source Badges
+Detay listesinde hareket başına etiket:
+```
+14:30 · Ahmet Yılmaz [SİPARİŞ]              +₺120
+15:00 · Mehmet Demir [MANUEL]               +₺50
+15:30 · Ahmet Yılmaz [TAHSİLAT] Nakit       −₺200
+16:00 · Veli Bey [AVANS] Nakit              −₺100
+```
 
-### A) Sadece Cari Aktivite
-1. Bugün hiç sipariş açma
-2. Panel → Cari → bir kullanıcıya ödeme al (₺200 nakit)
-3. Kasa ekranı → "Günün özeti"
-4. ✅ İstatistik kartları görünür (Sipariş 0, Sepet ort. ₺0)
-5. ✅ "Açık Hesap (Cari)" bölümü: Tahsilat ₺200
-6. ✅ Z raporu olarak indirilebilir
+### 6. Z Raporu PDF
+Aynı source bilgisi PDF'e de yansıdı:
+```
+14:30  Ahmet Yilmaz [SIPARIS]                +120,00 TL
+15:00  Mehmet Demir [MANUEL]                  +50,00 TL
+15:30  Ahmet Yilmaz [TAHSILAT] (Nakit)       -200,00 TL
+16:00  Veli Bey [AVANS] (Nakit)              -100,00 TL
+```
 
-### B) Hiç Aktivite Yok
-1. Bugün ne sipariş ne cari ödeme
-2. ✅ "Bugün henüz sipariş yok" mesajı (eski davranış korundu)
+## 📦 Dosyalar (5)
 
-### C) Karışık Aktivite
-1. Bugün 5 sipariş + 2 cari ödeme
-2. ✅ Tüm kartlar + Açık Hesap bölümü dolu
+```
+lib/actions/customers.ts                          (helper + 2 action)
+lib/actions/payments.ts                           (Z rapor + type)
+lib/utils/z-report-pdf.ts                         (PDF source label)
+app/panel/(shell)/pos/z-report-modal.tsx          (UI source badge)
+app/panel/(shell)/cari-hesaplar/
+  customer-detail-modal.tsx                       (3 tip + uyarı)
+```
 
 ## 🚀 Push
 
 ```powershell
-git add . && git commit -m "fix(kasa): cari aktivite varken istatistikleri göster" && git push
+git add .
+git commit -m "feat(cari): manuel borç/alacak kasaya yansısın + z rapor source"
+git push
 ```
 
-## 💡 Not
+## 🧪 Test
 
-İlk görseldeki **"Bugünkü Ciro ₺0,00"** doğru kalır — çünkü ciro = bugün satılan
-ürünler. Cari ödemeler önceki günlerin tahsilatı, ciroya dahil edilmemeli.
-Ama **istatistik kartları + Açık Hesap özeti** artık görünür → kasiyer bağlamı
-anlar.
+### A) Manuel Borç (Kasa Zorunlu)
+1. **Kasa kapalıyken**: Cari → Ahmet → + Manuel Borç → ₺50 → ✅ Hata: "Açık kasa oturumu yok"
+2. Kasiyer kasayı aç (₺200 açılış)
+3. Aynı işlemi tekrar dene → ✅ Toast "Eklendi"
+4. ✅ Ahmet'in borcu +₺50
+5. Z Raporu → "Açık Hesap (Cari)" bölümü:
+   - ✅ Yeni borçlanma: 1 sipariş ₺50
+   - ✅ Detayda: "Ahmet Yılmaz [MANUEL] +₺50"
 
-## 🗺️ Bonus: Başka Şey Kaybolmadı
+### B) Manuel Alacak — 3 Tip
 
-Dosya kontrol edildi:
-- ✅ Sipariş / Sepet Ort. / Açık Sipariş kartları kodda var
-- ✅ İptal / İade / En Yoğun Saat kartları kodda var
-- ✅ Z Raporu modal kodda var
-- ✅ Kasa kapatma kodda var
-- ❌ Sorun: `hasData` flag yanlış hesaplanıyordu
+**Tip 1: Nakit (Avans)**
+1. Cari → Ahmet → + Manuel Alacak → 3 buton görünür
+2. **Nakit** seç → açıklama: "kasaya nakit girişi olarak yazılır"
+3. ₺100 → Onayla → ✅
+4. Z Raporu: "Tahsilat ₺100 [AVANS] Nakit" görünür
+5. Kasa nakit toplamı +₺100
 
-Yani **tüm eski özellikler korundu**, sadece görünme kuralı (gating) düzeltildi.
+**Tip 2: Kart (Avans)**
+1. **Kart** seç → ₺200 → Onayla
+2. Z Raporu: "AVANS Kart ₺200" — kart toplamına dahil
+
+**Tip 3: Düzeltme**
+1. **Düzeltme** seç → açıklama: "sadece bakiye, kasaya yazılmaz"
+2. Kasa kapalı bile olsa çalışır
+3. ₺30 → Onayla → ✅
+4. Z Raporu: **liste'de YOK** (çünkü kasa hareketi değil)
+5. Cari hareketinde görünür: "Manuel Alacak (Düzeltme) +₺30"
+
+### C) Kasa Yansıması
+1. Bugün 1 manuel borç (₺50), 1 avans nakit (₺100), 1 ödeme (₺200)
+2. Kasa ekranında "Bugünkü Ciro ₺0" (sipariş yok)
+3. Z Raporu:
+   - Yeni borçlanma: 1 ₺50 (manuel)
+   - Tahsilat: 2 ₺300 (1 avans + 1 ödeme)
+   - Net: +₺250 (kasaya net giriş)
+4. Kasa nakit toplamı: ₺300 (₺100 avans + ₺200 ödeme)
+
+### D) Z Raporu PDF
+1. PDF İndir
+2. ✅ "ACIK HESAP (CARI)" bölümü
+3. ✅ Detay listesinde her satırda **[SIPARIS]** / **[MANUEL]** / **[TAHSILAT]** / **[AVANS]** etiketi
+4. ✅ Yöntem (Nakit/Kart/Havale) parantezde
+
+## 💡 Mantık Özeti
+
+```
+Hareket Tipi → Kasa Yansıması?
+
+charge          → ❌ ciro yansımaz (sipariş zaten ciroda) ama yeni borç olarak listelenir
+manual_charge   → ❌ ciroya yansımaz, sadece "yeni borç" listesinde
+payment         → ✅ kasaya method'a göre yansır (nakit/kart/havale)
+manual_credit (cash/card)  → ✅ kasaya yansır (avans tahsilatı)
+manual_credit (adjustment) → ❌ sadece bakiye düzeltir
+```
+
+## 🗺️ Durum
+
+| | |
+|---|---|
+| Cari Paket 1: Backend + Panel | ✅ |
+| Cari Paket 2: Kasa Entegrasyonu | ✅ |
+| Cari Paket 3: Z Rapor + İyileştirmeler | ✅ |
+| **Cari Manuel Paket A: Kasa Yansıması** | **✅ TESLİM** |
+| Paket B: Yeni siparişler kolonu silme + flash | 🔜 |
+
+---
+
+Push → test → çalışırsa **Paket B** (kasa yeni sipariş kolonu silme + 5dk
+kırmızı flash bildirim + otomatik onay) söyle 🚀

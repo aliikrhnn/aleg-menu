@@ -588,6 +588,28 @@ async function recomputeCustomerBalance(
 }
 
 // ============================================================
+// HELPER: aktif kasa oturumunu bul
+// ============================================================
+async function findActiveCashSession(
+  admin: ReturnType<typeof createAdminClient>,
+  businessId: string
+): Promise<{ id: string; cashier_id: string | null } | null> {
+  const { data: session } = await admin
+    .from('cash_drawer_sessions')
+    .select('id, opened_by_cashier')
+    .eq('business_id', businessId)
+    .is('closed_at', null)
+    .order('opened_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!session) return null;
+  return {
+    id: session.id,
+    cashier_id: session.opened_by_cashier as string | null,
+  };
+}
+
+// ============================================================
 // ADD MANUAL CHARGE — Manuel borç ekle
 // ============================================================
 export async function addManualCharge(input: {
@@ -606,7 +628,7 @@ export async function addManualCharge(input: {
     // Kullanıcı güvenliği
     const { data: customer } = await admin
       .from('customers')
-      .select('id, business_id, is_active')
+      .select('id, business_id, name, is_active')
       .eq('id', input.customerId)
       .maybeSingle();
 
@@ -617,6 +639,37 @@ export async function addManualCharge(input: {
       return { success: false, error: 'Kullanıcı pasif' };
     }
 
+    // KASA OTURUMU ZORUNLU - Manuel borç da kasaya yansıyacak
+    const session = await findActiveCashSession(admin, businessId);
+    if (!session) {
+      return {
+        success: false,
+        error:
+          'Açık kasa oturumu yok. Önce bir kasiyer kasayı açmalı (gün sonu raporu için gerekli).',
+      };
+    }
+
+    // payment_logs'a kayıt — Z raporu için (action='other' = ciroya dahil değil)
+    // Bu sadece "borç eklendi" işareti, gerçek nakit/kart girişi değil
+    const noteText = input.note?.trim()
+      ? `Manuel borç (${customer.name}): ${input.note.trim()}`
+      : `Manuel borç (${customer.name})`;
+
+    const { data: paymentLog } = await admin
+      .from('payment_logs')
+      .insert({
+        business_id: businessId,
+        order_id: null,
+        cashier_id: session.cashier_id,
+        cash_session_id: session.id,
+        action: 'payment',
+        amount: input.amount,
+        payment_method: 'other',
+        note: noteText,
+      })
+      .select('id')
+      .single();
+
     const { error } = await admin.from('customer_transactions').insert({
       business_id: businessId,
       customer_id: input.customerId,
@@ -624,9 +677,18 @@ export async function addManualCharge(input: {
       amount: input.amount,
       note: input.note?.trim() || null,
       member_id: memberId,
+      cashier_id: session.cashier_id,
+      cash_session_id: session.id,
+      payment_log_id: paymentLog?.id || null,
     });
 
-    if (error) return { success: false, error: error.message };
+    if (error) {
+      // payment_log'u silmeye çalış (rollback)
+      if (paymentLog?.id) {
+        await admin.from('payment_logs').delete().eq('id', paymentLog.id);
+      }
+      return { success: false, error: error.message };
+    }
 
     await recomputeCustomerBalance(admin, input.customerId);
 
@@ -646,6 +708,12 @@ export async function addManualCharge(input: {
 export async function addManualCredit(input: {
   customerId: string;
   amount: number;
+  /**
+   * Tip seçimi:
+   *  - 'cash' / 'card' → kasaya nakit/kart girişi (avans, ödeme)
+   *  - 'adjustment'    → düzeltme/iade (kasa girişi YOK, sadece bakiye düzeltir)
+   */
+  creditType: 'cash' | 'card' | 'adjustment';
   note?: string;
 }): Promise<{ success: boolean; error?: string }> {
   try {
@@ -658,7 +726,7 @@ export async function addManualCredit(input: {
 
     const { data: customer } = await admin
       .from('customers')
-      .select('id, business_id, is_active')
+      .select('id, business_id, name, is_active')
       .eq('id', input.customerId)
       .maybeSingle();
 
@@ -669,16 +737,75 @@ export async function addManualCredit(input: {
       return { success: false, error: 'Kullanıcı pasif' };
     }
 
+    // Nakit/Kart için kasa oturumu zorunlu (kasaya girişi var)
+    // Düzeltme için kasa oturumu opsiyonel (sadece kayıt)
+    let cashSessionId: string | null = null;
+    let resolvedCashierId: string | null = null;
+    let paymentLogId: string | null = null;
+
+    const isCashOrCard =
+      input.creditType === 'cash' || input.creditType === 'card';
+
+    if (isCashOrCard) {
+      const session = await findActiveCashSession(admin, businessId);
+      if (!session) {
+        return {
+          success: false,
+          error:
+            'Açık kasa oturumu yok. Önce bir kasiyer kasayı açmalı (gün sonu raporu için gerekli).',
+        };
+      }
+      cashSessionId = session.id;
+      resolvedCashierId = session.cashier_id;
+
+      // payment_logs'a kayıt — kasaya nakit/kart girişi
+      const noteText = input.note?.trim()
+        ? `Manuel alacak (${customer.name}): ${input.note.trim()}`
+        : `Manuel alacak (${customer.name})`;
+
+      const { data: paymentLog, error: payErr } = await admin
+        .from('payment_logs')
+        .insert({
+          business_id: businessId,
+          order_id: null,
+          cashier_id: resolvedCashierId,
+          cash_session_id: cashSessionId,
+          action: 'payment',
+          amount: input.amount,
+          payment_method: input.creditType, // 'cash' | 'card'
+          note: noteText,
+        })
+        .select('id')
+        .single();
+
+      if (payErr) return { success: false, error: payErr.message };
+      paymentLogId = paymentLog.id;
+    }
+
+    // customer_transactions'a kayıt
+    const txPaymentMethod =
+      input.creditType === 'adjustment' ? null : input.creditType;
+
     const { error } = await admin.from('customer_transactions').insert({
       business_id: businessId,
       customer_id: input.customerId,
       type: 'manual_credit',
       amount: input.amount,
+      payment_method: txPaymentMethod,
+      payment_log_id: paymentLogId,
+      cash_session_id: cashSessionId,
+      cashier_id: resolvedCashierId,
       note: input.note?.trim() || null,
       member_id: memberId,
     });
 
-    if (error) return { success: false, error: error.message };
+    if (error) {
+      // Rollback payment log
+      if (paymentLogId) {
+        await admin.from('payment_logs').delete().eq('id', paymentLogId);
+      }
+      return { success: false, error: error.message };
+    }
 
     await recomputeCustomerBalance(admin, input.customerId);
 

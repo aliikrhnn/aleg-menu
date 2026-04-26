@@ -961,10 +961,34 @@ function OnAccountSection({
                     'color-mix(in srgb, var(--accent) 4%, transparent)',
                 }}
               >
-                <span style={{ color: 'var(--ink-2)' }}>
+                <span
+                  className="flex items-center gap-1.5 flex-wrap"
+                  style={{ color: 'var(--ink-2)' }}
+                >
                   <span style={{ fontFamily: 'var(--f-mono)' }}>{c.time}</span>
-                  {' · '}
+                  <span style={{ opacity: 0.5 }}>·</span>
                   <span style={{ fontWeight: 600 }}>{c.customer_name}</span>
+                  <span
+                    className="uppercase"
+                    style={{
+                      fontFamily: 'var(--f-mono)',
+                      fontSize: 8,
+                      fontWeight: 700,
+                      letterSpacing: '0.1em',
+                      padding: '1px 5px',
+                      borderRadius: 3,
+                      background:
+                        c.source === 'manual'
+                          ? 'color-mix(in srgb, var(--accent) 18%, transparent)'
+                          : 'color-mix(in srgb, var(--ink) 8%, transparent)',
+                      color:
+                        c.source === 'manual'
+                          ? 'var(--accent)'
+                          : 'var(--ink-2)',
+                    }}
+                  >
+                    {c.source === 'manual' ? 'MANUEL' : 'SİPARİŞ'}
+                  </span>
                 </span>
                 <span
                   style={{
@@ -985,11 +1009,34 @@ function OnAccountSection({
                   background: 'color-mix(in srgb, var(--ok) 4%, transparent)',
                 }}
               >
-                <span style={{ color: 'var(--ink-2)' }}>
+                <span
+                  className="flex items-center gap-1.5 flex-wrap"
+                  style={{ color: 'var(--ink-2)' }}
+                >
                   <span style={{ fontFamily: 'var(--f-mono)' }}>{p.time}</span>
-                  {' · '}
+                  <span style={{ opacity: 0.5 }}>·</span>
                   <span style={{ fontWeight: 600 }}>{p.customer_name}</span>
-                  {' · '}
+                  <span
+                    className="uppercase"
+                    style={{
+                      fontFamily: 'var(--f-mono)',
+                      fontSize: 8,
+                      fontWeight: 700,
+                      letterSpacing: '0.1em',
+                      padding: '1px 5px',
+                      borderRadius: 3,
+                      background:
+                        p.source === 'manual_credit'
+                          ? 'color-mix(in srgb, var(--super) 18%, transparent)'
+                          : 'color-mix(in srgb, var(--ok) 12%, transparent)',
+                      color:
+                        p.source === 'manual_credit'
+                          ? 'var(--super)'
+                          : 'var(--ok)',
+                    }}
+                  >
+                    {p.source === 'manual_credit' ? 'AVANS' : 'TAHSİLAT'}
+                  </span>
                   <span style={{ fontSize: 10, opacity: 0.7 }}>
                     {p.method === 'cash'
                       ? 'Nakit'

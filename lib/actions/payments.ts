@@ -1191,12 +1191,14 @@ export type ZReport = {
       customer_name: string;
       amount: number;
       time: string; // HH:MM
+      source: 'order' | 'manual';
     }>;
     payments_received: Array<{
       customer_name: string;
       amount: number;
       method: string; // 'cash' | 'card' | 'transfer'
       time: string;
+      source: 'payment' | 'manual_credit';
     }>;
   };
 };
@@ -1841,37 +1843,18 @@ export async function getZReport(
     // CARİ HESAP ÖZETİ (Açık Hesap)
     // ============================================================
     // Bu raporun aralığında:
-    //   - Yeni açık hesap borçlanmaları (charge): orders + customer_id ile
-    //   - Cari ödemeler (payment): customer_transactions type='payment'
-    //   - Net etki = tahsilat - yeni borçlanma
-    const { data: chargesInRange } = await admin
+    //   - charge        → sipariş cariye yazıldı (yeni borç)
+    //   - manual_charge → panelden manuel borç (yeni borç)
+    //   - payment       → cari ödeme alındı (tahsilat)
+    //   - manual_credit → manuel alacak (kasa girişi olanlar tahsilat sayılır)
+    const { data: allCariTxs } = await admin
       .from('customer_transactions')
       .select(
-        'id, amount, customer_id, order_id, created_at, customers(name)'
+        'id, type, amount, customer_id, order_id, payment_method, created_at, customers(name)'
       )
       .eq('business_id', businessId)
-      .eq('type', 'charge')
       .gte('created_at', start.toISOString())
       .lte('created_at', end.toISOString());
-
-    const { data: paymentsInRange } = await admin
-      .from('customer_transactions')
-      .select(
-        'id, amount, customer_id, payment_method, created_at, customers(name)'
-      )
-      .eq('business_id', businessId)
-      .eq('type', 'payment')
-      .gte('created_at', start.toISOString())
-      .lte('created_at', end.toISOString());
-
-    const newChargesAmount = (chargesInRange || []).reduce(
-      (s, t) => s + Number(t.amount),
-      0
-    );
-    const paymentsReceivedAmount = (paymentsInRange || []).reduce(
-      (s, t) => s + Number(t.amount),
-      0
-    );
 
     type CustomerJoin = { name?: string } | { name?: string }[] | null;
     const extractName = (cj: CustomerJoin): string => {
@@ -1880,29 +1863,65 @@ export async function getZReport(
       return '—';
     };
 
-    const newCharges = (chargesInRange || []).map((t) => ({
-      customer_name: extractName(t.customers as CustomerJoin),
-      amount: Number(t.amount),
-      time: new Date(t.created_at).toLocaleTimeString('tr-TR', {
+    type RawTx = {
+      id: string;
+      type: string;
+      amount: number | string;
+      payment_method: string | null;
+      created_at: string;
+      customers: CustomerJoin;
+    };
+    const txs = ((allCariTxs || []) as unknown as RawTx[]) || [];
+
+    // Charge'lar (sipariş + manuel borç)
+    const chargeTxs = txs.filter(
+      (t) => t.type === 'charge' || t.type === 'manual_charge'
+    );
+    // Tahsilat (payment + kasaya giren manuel alacak)
+    const paymentTxs = txs.filter(
+      (t) =>
+        t.type === 'payment' ||
+        (t.type === 'manual_credit' && t.payment_method != null)
+    );
+
+    const newChargesAmount = chargeTxs.reduce(
+      (s, t) => s + Number(t.amount),
+      0
+    );
+    const paymentsReceivedAmount = paymentTxs.reduce(
+      (s, t) => s + Number(t.amount),
+      0
+    );
+
+    const formatTime = (iso: string) =>
+      new Date(iso).toLocaleTimeString('tr-TR', {
         hour: '2-digit',
         minute: '2-digit',
-      }),
+      });
+
+    const newCharges = chargeTxs.map((t) => ({
+      customer_name: extractName(t.customers),
+      amount: Number(t.amount),
+      time: formatTime(t.created_at),
+      source:
+        t.type === 'manual_charge' ? ('manual' as const) : ('order' as const),
     }));
 
-    const paymentsReceived = (paymentsInRange || []).map((t) => ({
-      customer_name: extractName(t.customers as CustomerJoin),
+    const paymentsReceived = paymentTxs.map((t) => ({
+      customer_name: extractName(t.customers),
       amount: Number(t.amount),
       method: (t.payment_method as string) || 'cash',
-      time: new Date(t.created_at).toLocaleTimeString('tr-TR', {
-        hour: '2-digit',
-        minute: '2-digit',
-      }),
+      time: formatTime(t.created_at),
+      source:
+        t.type === 'manual_credit'
+          ? ('manual_credit' as const)
+          : ('payment' as const),
     }));
 
     const onAccountSummary = {
-      new_charges_count: chargesInRange?.length || 0,
+      new_charges_count: chargeTxs.length,
       new_charges_amount: newChargesAmount,
-      payments_received_count: paymentsInRange?.length || 0,
+      payments_received_count: paymentTxs.length,
       payments_received_amount: paymentsReceivedAmount,
       net_change: paymentsReceivedAmount - newChargesAmount,
       new_charges: newCharges,

@@ -895,6 +895,7 @@ export async function generateZReportPdf(
         amount: number;
         isCharge: boolean;
         method?: string;
+        sourceLabel: string;
       }> = [];
       oas.new_charges.forEach((c) =>
         allItems.push({
@@ -902,6 +903,7 @@ export async function generateZReportPdf(
           name: c.customer_name,
           amount: c.amount,
           isCharge: true,
+          sourceLabel: c.source === 'manual' ? 'MANUEL' : 'SIPARIS',
         })
       );
       oas.payments_received.forEach((p) =>
@@ -911,6 +913,7 @@ export async function generateZReportPdf(
           amount: p.amount,
           isCharge: false,
           method: p.method,
+          sourceLabel: p.source === 'manual_credit' ? 'AVANS' : 'TAHSILAT',
         })
       );
       // Saate göre sırala
@@ -930,10 +933,11 @@ export async function generateZReportPdf(
         setText(pdf, COLORS.ink3);
         pdf.text(it.time, MARGIN + 2, y);
         setText(pdf, COLORS.ink2);
-        const labelTxt = it.isCharge
-          ? asciify(it.name)
-          : `${asciify(it.name)} (${it.method === 'cash' ? 'Nakit' : it.method === 'card' ? 'Kart' : it.method === 'transfer' ? 'Havale' : it.method})`;
-        pdf.text(labelTxt.substring(0, 50), MARGIN + 14, y);
+        const methodSuffix = !it.isCharge && it.method
+          ? ` (${it.method === 'cash' ? 'Nakit' : it.method === 'card' ? 'Kart' : it.method === 'transfer' ? 'Havale' : it.method})`
+          : '';
+        const labelTxt = `${asciify(it.name)} [${it.sourceLabel}]${methodSuffix}`;
+        pdf.text(labelTxt.substring(0, 60), MARGIN + 14, y);
         setText(pdf, it.isCharge ? COLORS.accent : COLORS.ok);
         pdf.text(
           `${it.isCharge ? '+' : '-'}${money(it.amount)}`,

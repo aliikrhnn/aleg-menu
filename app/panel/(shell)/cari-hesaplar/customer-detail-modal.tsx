@@ -826,6 +826,10 @@ function ActionModal({
   const [paymentMethod, setPaymentMethod] = useState<
     'cash' | 'card' | 'transfer'
   >('cash');
+  // Manuel alacak için 3 tip
+  const [creditType, setCreditType] = useState<'cash' | 'card' | 'adjustment'>(
+    'cash'
+  );
   const [submitting, setSubmitting] = useState(false);
 
   const amt = parseFloat(amount) || 0;
@@ -838,8 +842,8 @@ function ActionModal({
   };
   const subtitles = {
     payment: `${customerName}'den ödeme al (kasaya yazılır)`,
-    manual_charge: `${customerName}'in hesabına borç ekle`,
-    manual_credit: `${customerName}'in hesabına alacak ekle (avans, iade)`,
+    manual_charge: `${customerName}'in hesabına borç ekle (kasaya yansır)`,
+    manual_credit: `${customerName}'in hesabına alacak ekle`,
   };
   const colors = {
     payment: 'var(--ok)',
@@ -871,6 +875,7 @@ function ActionModal({
       result = await addManualCredit({
         customerId,
         amount: amt,
+        creditType,
         note: note.trim() || undefined,
       });
     }
@@ -1040,6 +1045,82 @@ function ActionModal({
                   görünür.
                 </span>
               </div>
+            </div>
+          )}
+
+          {/* Manuel Alacak - 3 tip seçimi */}
+          {mode === 'manual_credit' && (
+            <div>
+              <div
+                className="uppercase mb-2"
+                style={{
+                  fontFamily: 'var(--f-mono)',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: '0.14em',
+                  color: 'var(--ink-2)',
+                }}
+              >
+                ALACAK TİPİ
+              </div>
+              <div className="grid grid-cols-3 gap-1.5">
+                <MethodBtn
+                  active={creditType === 'cash'}
+                  onClick={() => setCreditType('cash')}
+                  icon="💵"
+                  label="Nakit"
+                />
+                <MethodBtn
+                  active={creditType === 'card'}
+                  onClick={() => setCreditType('card')}
+                  icon="💳"
+                  label="Kart"
+                />
+                <MethodBtn
+                  active={creditType === 'adjustment'}
+                  onClick={() => setCreditType('adjustment')}
+                  icon="📝"
+                  label="Düzeltme"
+                />
+              </div>
+              <div
+                className="mt-2 text-xs flex items-start gap-2"
+                style={{
+                  color: 'var(--ink-3)',
+                  fontStyle: 'italic',
+                  lineHeight: 1.5,
+                }}
+              >
+                <span>ℹ️</span>
+                <span>
+                  {creditType === 'cash' &&
+                    'Avans olarak nakit alındı → kasaya nakit girişi olarak yazılır.'}
+                  {creditType === 'card' &&
+                    'Avans olarak kart ödemesi alındı → kasaya kart girişi olarak yazılır.'}
+                  {creditType === 'adjustment' &&
+                    'Düzeltme/iade — sadece bakiyeyi düzeltir, kasaya yazılmaz.'}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Manuel Borç - kasa uyarısı */}
+          {mode === 'manual_charge' && (
+            <div
+              className="rounded-[8px] p-3 text-xs flex items-start gap-2"
+              style={{
+                background: 'color-mix(in srgb, var(--accent) 6%, transparent)',
+                border:
+                  '1px solid color-mix(in srgb, var(--accent) 25%, var(--line))',
+                color: 'var(--ink-2)',
+                lineHeight: 1.5,
+              }}
+            >
+              <span>⚠️</span>
+              <span>
+                Manuel borç bugünün kasa oturumuna kayıt yapılır. Kasa
+                kapalıysa önce bir kasiyer kasayı açmalı.
+              </span>
             </div>
           )}
 
