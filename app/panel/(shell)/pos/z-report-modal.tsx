@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useEscapeKey } from '@/lib/hooks/use-escape-key';
 import { getZReport, type ZReport } from '@/lib/actions/payments';
 import { generateZReportPdf } from '@/lib/utils/z-report-pdf';
 import { toast } from '@/components/ui/toast';
@@ -9,9 +8,6 @@ import { toast } from '@/components/ui/toast';
 type Props = {
   open: boolean;
   onClose: () => void;
-  businessName?: string;
-  businessAddress?: string;
-  businessLogoUrl?: string;
 };
 
 const METHOD_LABELS: Record<string, string> = {
@@ -35,6 +31,9 @@ const METHOD_COLORS: Record<string, string> = {
 export function ZReportModal({
   open,
   onClose,
+  businessName: _businessName,
+  businessAddress: _businessAddress,
+  businessLogoUrl: _businessLogoUrl,
 }: Props) {
   const [report, setReport] = useState<ZReport | null>(null);
   const [loading, setLoading] = useState(false);
@@ -57,8 +56,14 @@ export function ZReportModal({
     });
   }, [open, date]);
 
-  // ESC ile kapama
-  useEscapeKey(onClose, open);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
 
   async function handleDownloadPdf() {
     if (!report) return;
@@ -357,26 +362,22 @@ export function ZReportModal({
                   ÖDEME YÖNTEMİ DAĞILIMI
                 </div>
                 <div className="space-y-2">
-                  {(() => {
-                    const totalMethodAmount = Object.values(
-                      report.by_method
-                    ).reduce((s, d) => s + d.amount, 0);
-                    return Object.entries(report.by_method)
-                      .sort((a, b) => b[1].amount - a[1].amount)
-                      .map(([method, data]) => {
-                        const pct =
-                          totalMethodAmount > 0
-                            ? (data.amount / totalMethodAmount) * 100
-                            : 0;
-                        return (
-                          <div
-                            key={method}
-                            className="rounded-[10px] p-3"
-                            style={{
-                              background: 'var(--paper-2)',
-                              border: '1px solid var(--line)',
-                            }}
-                          >
+                  {Object.entries(report.by_method)
+                    .sort((a, b) => b[1].amount - a[1].amount)
+                    .map(([method, data]) => {
+                      const pct =
+                        report.total_revenue > 0
+                          ? (data.amount / report.total_revenue) * 100
+                          : 0;
+                      return (
+                        <div
+                          key={method}
+                          className="rounded-[10px] p-3"
+                          style={{
+                            background: 'var(--paper-2)',
+                            border: '1px solid var(--line)',
+                          }}
+                        >
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-2">
                               <span
@@ -427,18 +428,10 @@ export function ZReportModal({
                           </div>
                         </div>
                       );
-                    });
-                  })()}
+                    })}
                 </div>
               </div>
             )}
-
-            {/* AÇIK HESAP (CARİ) ÖZETİ */}
-            {report.on_account_summary &&
-              (report.on_account_summary.new_charges_count > 0 ||
-                report.on_account_summary.payments_received_count > 0) && (
-                <OnAccountSection summary={report.on_account_summary} />
-              )}
 
             {/* Saat bazlı */}
             {report.by_hour.length > 0 && (
@@ -786,281 +779,4 @@ function fmt(n: number) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(n);
-}
-
-// ============================================================
-// AÇIK HESAP (CARİ) BÖLÜMÜ
-// ============================================================
-function OnAccountSection({
-  summary,
-}: {
-  summary: ZReport['on_account_summary'];
-}) {
-  const netPositive = summary.net_change > 0;
-  const netZero = summary.net_change === 0;
-
-  return (
-    <div>
-      <div
-        className="uppercase mb-3 flex items-center justify-between"
-        style={{
-          fontFamily: 'var(--f-mono)',
-          fontSize: 10,
-          fontWeight: 700,
-          letterSpacing: '0.14em',
-          color: 'var(--ink-3)',
-        }}
-      >
-        <span>📒 AÇIK HESAP (CARİ)</span>
-        <span
-          style={{
-            color: netZero
-              ? 'var(--ink-3)'
-              : netPositive
-                ? 'var(--ok)'
-                : 'var(--accent)',
-          }}
-        >
-          NET:{' '}
-          {netPositive ? '+' : netZero ? '' : '−'}
-          {fmt(Math.abs(summary.net_change))}
-        </span>
-      </div>
-
-      <div
-        className="rounded-[10px] p-4 space-y-3"
-        style={{
-          background: 'var(--paper-2)',
-          border: '1px solid var(--line)',
-        }}
-      >
-        {/* Yeni borçlanma */}
-        <div className="flex items-center justify-between">
-          <div>
-            <div
-              className="text-xs"
-              style={{
-                color: 'var(--ink-2)',
-                fontWeight: 600,
-              }}
-            >
-              ➕ Yeni borçlanma
-            </div>
-            <div
-              className="text-xs"
-              style={{ color: 'var(--ink-3)', marginTop: 2 }}
-            >
-              {summary.new_charges_count} sipariş açık hesaba yazıldı
-            </div>
-          </div>
-          <div
-            style={{
-              fontFamily: 'var(--f-mono)',
-              fontSize: 16,
-              fontWeight: 700,
-              color: 'var(--accent)',
-            }}
-          >
-            {fmt(summary.new_charges_amount)}
-          </div>
-        </div>
-
-        {/* Tahsilat */}
-        <div
-          className="flex items-center justify-between pt-3"
-          style={{ borderTop: '1px solid var(--line)' }}
-        >
-          <div>
-            <div
-              className="text-xs"
-              style={{
-                color: 'var(--ink-2)',
-                fontWeight: 600,
-              }}
-            >
-              ➖ Tahsilat (kasa girişi)
-            </div>
-            <div
-              className="text-xs"
-              style={{ color: 'var(--ink-3)', marginTop: 2 }}
-            >
-              {summary.payments_received_count} cari ödeme alındı
-            </div>
-          </div>
-          <div
-            style={{
-              fontFamily: 'var(--f-mono)',
-              fontSize: 16,
-              fontWeight: 700,
-              color: 'var(--ok)',
-            }}
-          >
-            {fmt(summary.payments_received_amount)}
-          </div>
-        </div>
-
-        {/* Net */}
-        <div
-          className="flex items-center justify-between pt-3"
-          style={{ borderTop: '1px dashed var(--line)' }}
-        >
-          <div
-            className="text-xs"
-            style={{
-              fontFamily: 'var(--f-mono)',
-              fontWeight: 700,
-              letterSpacing: '0.08em',
-              color: 'var(--ink-2)',
-              textTransform: 'uppercase',
-            }}
-          >
-            Net Değişim
-          </div>
-          <div
-            style={{
-              fontFamily: 'var(--f-mono)',
-              fontSize: 18,
-              fontWeight: 700,
-              color: netZero
-                ? 'var(--ink-3)'
-                : netPositive
-                  ? 'var(--ok)'
-                  : 'var(--accent)',
-            }}
-          >
-            {netPositive ? '+' : netZero ? '' : '−'}
-            {fmt(Math.abs(summary.net_change))}
-          </div>
-        </div>
-      </div>
-
-      {/* Detay listesi (sipariş + ödeme) */}
-      {(summary.new_charges.length > 0 ||
-        summary.payments_received.length > 0) && (
-        <details className="mt-2">
-          <summary
-            className="cursor-pointer text-xs px-2 py-1.5"
-            style={{
-              fontFamily: 'var(--f-mono)',
-              fontWeight: 600,
-              letterSpacing: '0.08em',
-              color: 'var(--ink-3)',
-              textTransform: 'uppercase',
-            }}
-          >
-            Hareketleri Göster ({summary.new_charges.length +
-              summary.payments_received.length})
-          </summary>
-          <div className="mt-2 space-y-1">
-            {summary.new_charges.map((c, i) => (
-              <div
-                key={`c-${i}`}
-                className="flex items-center justify-between py-1.5 px-3 text-xs rounded-[6px]"
-                style={{
-                  background:
-                    'color-mix(in srgb, var(--accent) 4%, transparent)',
-                }}
-              >
-                <span
-                  className="flex items-center gap-1.5 flex-wrap"
-                  style={{ color: 'var(--ink-2)' }}
-                >
-                  <span style={{ fontFamily: 'var(--f-mono)' }}>{c.time}</span>
-                  <span style={{ opacity: 0.5 }}>·</span>
-                  <span style={{ fontWeight: 600 }}>{c.customer_name}</span>
-                  <span
-                    className="uppercase"
-                    style={{
-                      fontFamily: 'var(--f-mono)',
-                      fontSize: 8,
-                      fontWeight: 700,
-                      letterSpacing: '0.1em',
-                      padding: '1px 5px',
-                      borderRadius: 3,
-                      background:
-                        c.source === 'manual'
-                          ? 'color-mix(in srgb, var(--accent) 18%, transparent)'
-                          : 'color-mix(in srgb, var(--ink) 8%, transparent)',
-                      color:
-                        c.source === 'manual'
-                          ? 'var(--accent)'
-                          : 'var(--ink-2)',
-                    }}
-                  >
-                    {c.source === 'manual' ? 'MANUEL' : 'SİPARİŞ'}
-                  </span>
-                </span>
-                <span
-                  style={{
-                    fontFamily: 'var(--f-mono)',
-                    fontWeight: 700,
-                    color: 'var(--accent)',
-                  }}
-                >
-                  +{fmt(c.amount)}
-                </span>
-              </div>
-            ))}
-            {summary.payments_received.map((p, i) => (
-              <div
-                key={`p-${i}`}
-                className="flex items-center justify-between py-1.5 px-3 text-xs rounded-[6px]"
-                style={{
-                  background: 'color-mix(in srgb, var(--ok) 4%, transparent)',
-                }}
-              >
-                <span
-                  className="flex items-center gap-1.5 flex-wrap"
-                  style={{ color: 'var(--ink-2)' }}
-                >
-                  <span style={{ fontFamily: 'var(--f-mono)' }}>{p.time}</span>
-                  <span style={{ opacity: 0.5 }}>·</span>
-                  <span style={{ fontWeight: 600 }}>{p.customer_name}</span>
-                  <span
-                    className="uppercase"
-                    style={{
-                      fontFamily: 'var(--f-mono)',
-                      fontSize: 8,
-                      fontWeight: 700,
-                      letterSpacing: '0.1em',
-                      padding: '1px 5px',
-                      borderRadius: 3,
-                      background:
-                        p.source === 'manual_credit'
-                          ? 'color-mix(in srgb, var(--super) 18%, transparent)'
-                          : 'color-mix(in srgb, var(--ok) 12%, transparent)',
-                      color:
-                        p.source === 'manual_credit'
-                          ? 'var(--super)'
-                          : 'var(--ok)',
-                    }}
-                  >
-                    {p.source === 'manual_credit' ? 'AVANS' : 'TAHSİLAT'}
-                  </span>
-                  <span style={{ fontSize: 10, opacity: 0.7 }}>
-                    {p.method === 'cash'
-                      ? 'Nakit'
-                      : p.method === 'card'
-                        ? 'Kart'
-                        : p.method === 'transfer'
-                          ? 'Havale'
-                          : p.method}
-                  </span>
-                </span>
-                <span
-                  style={{
-                    fontFamily: 'var(--f-mono)',
-                    fontWeight: 700,
-                    color: 'var(--ok)',
-                  }}
-                >
-                  −{fmt(p.amount)}
-                </span>
-              </div>
-            ))}
-          </div>
-        </details>
-      )}
-    </div>
-  );
 }

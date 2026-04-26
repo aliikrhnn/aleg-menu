@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useMemo, useTransition } from 'react';
-import { useEscapeKey } from '@/lib/hooks/use-escape-key';
 import {
   getPosMenu,
   addItemsToOrder,
@@ -65,12 +64,6 @@ export function OrderComposer({ open, mode, onClose, onSuccess }: Props) {
   const [complimentaryPicker, setComplimentaryPicker] = useState<string | null>(null); // cart id
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-
-  // ESC ile kapama (variant picker, complimentary picker veya transition sırasında değil)
-  useEscapeKey(
-    onClose,
-    open && !variantPicker && !complimentaryPicker && !isPending
-  );
 
   // Menu'yü yükle
   useEffect(() => {

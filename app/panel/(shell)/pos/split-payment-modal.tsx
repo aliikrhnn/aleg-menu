@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useTransition, useCallback } from 'react';
-import { useEscapeKey } from '@/lib/hooks/use-escape-key';
 import { takePartialPayment, getPartialPayments, type PaymentMethod } from '@/lib/actions/payments';
 import { playSuccess, playDing } from '@/lib/sounds';
 import { cn } from '@/lib/utils';
@@ -22,6 +21,7 @@ type OrderInput = {
 type Props = {
   order: OrderInput;
   discountAmount: number;
+  discountReason: string;
   tipAmount: number;
   onClose: () => void;
   onAllPaid: () => void;
@@ -40,6 +40,7 @@ type PaidRecord = {
 export function SplitPaymentModal({
   order,
   discountAmount,
+  discountReason: _discountReason,
   tipAmount,
   onClose,
   onAllPaid,
@@ -79,8 +80,13 @@ export function SplitPaymentModal({
     loadPayments();
   }, [loadPayments]);
 
-  // ESC ile kapat (işlem sırasında değil)
-  useEscapeKey(onClose, !isPending);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !isPending) onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose, isPending]);
 
   const totalPaid = payments.reduce((s, p) => s + p.amount, 0);
   const remaining = Math.max(0, netTotal - totalPaid);

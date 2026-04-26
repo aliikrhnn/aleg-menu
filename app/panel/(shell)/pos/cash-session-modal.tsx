@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition, useEffect } from 'react';
+import { useState, useTransition } from 'react';
 import { useEscapeKey } from '@/lib/hooks/use-escape-key';
 import { type CashSession } from '@/lib/actions/payments';
 import { useOfflineActions } from '@/lib/offline/use-offline-actions';

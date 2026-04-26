@@ -137,11 +137,7 @@ export function RegisterPanel({ businessId }: Props) {
   return <RegisterContent onLockRequest={() => setUnlocked(false)} />;
 }
 
-function RegisterContent({
-  onLockRequest,
-}: {
-  onLockRequest: () => void;
-}) {
+function RegisterContent({ onLockRequest }: { onLockRequest: () => void }) {
   const { status, simulating, toggleSimulate } = useOnlineStatus();
   const { cashier } = useCashierSession();
   // Session ilk render için sessionStorage'dan oku (anında göster)
@@ -366,14 +362,7 @@ function RegisterContent({
   }
 
   const isOnline = status === 'online';
-  // Cari ödemeler de aktivite sayılır (bugün sipariş yok ama tahsilat yapıldıysa)
-  const hasOnAccountActivity =
-    report &&
-    report.on_account_summary &&
-    (report.on_account_summary.new_charges_count > 0 ||
-      report.on_account_summary.payments_received_count > 0);
-  const hasData =
-    report && (report.total_orders > 0 || !!hasOnAccountActivity);
+  const hasData = report && report.total_orders > 0;
   const maxHourAmount =
     report && report.by_hour.length > 0
       ? Math.max(...report.by_hour.map((h) => h.amount), 1)
