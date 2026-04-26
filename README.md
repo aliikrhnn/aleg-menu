@@ -1,141 +1,81 @@
-# 🔧 HESAP PANEL — Mutfak Fişi Toggle
+# 🔧 CARİ HESAPLAR — MIGRATION FIX
 
-Sepete ürün eklenirken **kasiyer karar versin** — mutfağa gitsin mi gitmesin mi.
+Önceki paket 1'deki migration ve action hatalarını düzeltir.
 
-**2 dosya · Migration yok.**
+**2 dosya · Sadece düzeltme.**
 
-## 🎨 UI
-
-Sepet altında yeni bir toggle:
+## 🐛 Hata
 
 ```
-┌─────────────────────────────────────────┐
-│ 🛒 SEPET                                │
-│ ─────────────────────────────────────── │
-│ 1× Su                            ₺10   │
-│ 1× Bardak                        ₺5    │
-│ ─────────────────────────────────────── │
-│ 2 ÜRÜN              [+ Masaya Ekle]    │
-│ ₺15                                     │
-│ ─────────────────────────────────────── │
-│ 🚫 MUTFAĞA YOLLAMA           [○──]    │  ← KAPALI (default)
-│ Sadece hesaba eklenir                  │
-└─────────────────────────────────────────┘
-
-Toggle açıldığında:
-┌─────────────────────────────────────────┐
-│ 🖨️ MUTFAĞA YOLLA              [──●]   │  ← AÇIK
-│ Fiş basılır, istasyona düşer            │
-└─────────────────────────────────────────┘
+ERROR: 42P01: relation "cash_sessions" does not exist
 ```
 
-## ⚙️ Davranış
+## ✅ Düzeltmeler
 
-- **HesapPanel'de default**: KAPALI (mutfağa gitmez)
-- **Garson akışında default**: AÇIK
-- Kasiyer her seferinde **toggle ile değiştirebilir**
-- Sepet temizlenince state korunur (kasiyer ayarladığı gibi devam eder)
+### 1. `supabase/migrations/0030_customers.sql`
+- ❌ `REFERENCES cash_sessions(id)` → ✅ `REFERENCES cash_drawer_sessions(id)`
+- Gereksiz `payment_logs_payment_method_check` drop bloğu silindi
+  (enum'da `transfer` zaten mevcut — extra constraint manipülasyonu gereksiz)
 
-## 🎯 Kullanım Senaryoları
+### 2. `lib/actions/customers.ts` — `recordCustomerPayment`
+| Yanlış | Doğru |
+|---|---|
+| `from('cash_sessions')` | `from('cash_drawer_sessions')` |
+| `.eq('cashier_id', x)` | `.eq('opened_by_cashier', x)` |
+| `.eq('status', 'open')` | `.is('closed_at', null)` |
+| `session.cashier_id` | `session.opened_by_cashier` |
+| `payment_logs.insert({ ... })` (action eksik) | `+ action: 'payment'` (zorunlu kolon) |
 
-| Senaryo | Toggle |
-|---------|--------|
-| Müşteri "1 su daha ister" — masada zaten su var | KAPALI |
-| Müşteri "1 yeni kahve" — barista yapacak | AÇIK |
-| "Bardak getir" gibi servis ürün | KAPALI |
-| Yemek sipariş ekleme | AÇIK |
+## 🚀 Uygulama
 
-## 🔧 API
+### Eğer önceki migration başarısız olduysa:
+1. Eski 0030 başarısız oldu, yarısı bile çalışmadı
+2. Yeni 0030_customers.sql ile **temiz** çalışacak
+3. Supabase Studio → SQL Editor → migration'ı tekrar çalıştır
 
-```typescript
-type Props = {
-  tableId: string;
-  targetOrderId?: string;
-  cashierId: string;
-  onAdded: () => void;
-  /**
-   * Toggle'ın başlangıç değeri.
-   * HesapPanel: false (kapalı)
-   * Garson/Quick Add: true (açık)
-   */
-  defaultSendToKitchen?: boolean;
-  /**
-   * Toggle'ı tamamen gizle (forced behavior)
-   */
-  hideKitchenToggle?: boolean;
-};
+### Dosyaları kopyala:
 ```
-
-## 📦 Dosyalar (2)
-
+supabase/migrations/0030_customers.sql   ← yeni hali ile değiştir
+lib/actions/customers.ts                 ← yeni hali ile değiştir
 ```
-components/order/menu-picker.tsx    (toggle UI + state + ToggleSwitch component)
-components/order/hesap-panel.tsx    (defaultSendToKitchen={false})
-```
-
-## 🚀 Push
 
 ```powershell
 git add .
-git commit -m "feat(hesap-panel): mutfak fişi toggle - kasiyer karar versin"
+git commit -m "fix(cari): cash_drawer_sessions tablo/kolon adları"
 git push
 ```
 
 ## 🧪 Test
 
-### A) Hesap Panel — Default Kapalı
-1. Hesap Al → sağ menü
-2. Sepete ürün ekle
-3. ✅ Toggle: **KAPALI** (gri 🚫 + "Sadece hesaba eklenir")
-4. **+ Masaya Ekle** → ✅ mutfağa GİTMEZ, sadece hesaba düşer
+1. Migration başarılı → ✅ tablolar oluşur
+2. Panel → Cari Hesaplar → kullanıcı ekle ✓
+3. Manuel borç ekle → bakiye düşer ✓
+4. **Kasa açıkken** ödeme al:
+   - Backend `cash_drawer_sessions` ile `closed_at IS NULL` kontrol eder
+   - `payment_logs.insert` artık `action: 'payment'` ile geçer
+5. ✅ Z raporunda görünür
 
-### B) Toggle Açma
-1. Sepette ürün varken toggle'a tıkla
-2. ✅ Toggle accent renge döner (🖨️ + "Fiş basılır, istasyona düşer")
-3. **+ Masaya Ekle** → ✅ mutfağa fiş basılır
+## 💡 Backend Değişen Sorgular
 
-### C) State Korunma
-1. Toggle'ı AÇIK yap → ürün ekle → sepet temizlenir
-2. Yeni ürün ekle
-3. ✅ Toggle hâlâ AÇIK (kasiyerin tercihi korundu)
-
-### D) Garson Akışı (etkilenmedi)
-1. Garson masaya tıkla → OrderTakingModal
-2. Bu MenuPicker değil OrderTakingModal — toggle yok
-3. Eski davranış: her zaman mutfağa gider ✓
-
-## 💡 Mimari
-
-### State Yönetimi
 ```typescript
-const [sendToKitchen, setSendToKitchen] = useState(defaultSendToKitchen);
+// Aktif oturum bul (artık doğru)
+const { data: session } = await admin
+  .from('cash_drawer_sessions')
+  .select('id, opened_by_cashier')
+  .eq('business_id', businessId)
+  .is('closed_at', null)         // ← status='open' yerine
+  .order('opened_at', { ascending: false })
+  .limit(1)
+  .maybeSingle();
+
+// payment_logs insert (action zorunlu)
+await admin.from('payment_logs').insert({
+  business_id: businessId,
+  cashier_id: resolvedCashierId,
+  cash_session_id: cashSessionId,
+  action: 'payment',              // ← yeni eklendi (CHECK constraint)
+  amount: input.amount,
+  payment_method: input.paymentMethod,
+  note: noteText,
+});
 ```
-
-- Component mount'ta `defaultSendToKitchen` ile başlar
-- Kasiyer toggle ile değiştirir
-- Component yeniden render olmadıkça state korunur
-
-### `hideKitchenToggle` Prop
-Toggle'ı tamamen gizlemek için (örn. ileride kiosk modunda):
-```tsx
-<MenuPicker hideKitchenToggle defaultSendToKitchen={true} />
-```
-
-### Görsel İpuçları
-
-| Durum | İkon | Renk | Mesaj |
-|-------|------|------|-------|
-| Açık | 🖨️ | accent | "Fiş basılır, istasyona düşer" |
-| Kapalı | 🚫 | gri | "Sadece hesaba eklenir" |
-
-## 🗺️ Durum
-
-| | |
-|---|---|
-| Hesap panel B (tam özellik) | ✅ |
-| Ödenen kalem grileşme | ✅ |
-| Kalan tutar + satır click | ✅ |
-| **Mutfak fişi toggle** | **✅ BU PAKET** |
-| Süper admin paneli | 🔜 |
-
-Push → test → çalışırsa **"süper admin paneli"** veya başka iş söyle 🚀
