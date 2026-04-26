@@ -1,136 +1,168 @@
-# 🎯 PAKET B — Yeni Sipariş Kolonu Silme + 5dk Flash + Otomatik Onay
+# 🎯 UX PAKET 1 — Görünür İyileştirmeler
 
-Kasada "Yeni Sipariş" kolonu kaldırıldı, yeni gelenler **otomatik olarak Hazırlanıyor'a düşer**, **5 dakika boyunca kırmızı flash** ile dikkat çeker.
+Aleg'e yeni temel UI primitive'leri + cari modal'lara uygulamalar.
 
-**3 dosya · Migration yok.**
+**8 dosya · Migration yok.** Yeni paket'lerde de kullanılacak helper'lar.
 
-## ✅ Yapılan
+## ✨ Ne Eklendi?
 
-### 1. Yeni Sipariş Kolonu Kaldırıldı
-`STAGES`'ten `'received'` (Yeni Sipariş) kolonu silindi. Artık sadece 2 kolon:
-- **Hazırlanıyor** (gold) → Hazır
-- **Hazır · Teslim** (olive) → Teslim Edildi
+### 1. `useEscapeKey` Hook 🎹
 
-### 2. Otomatik Onay
-Yeni gelen `received` siparişler **otomatik `preparing`'e geçer**:
-- Polling'de `received` saptanınca `updateOrderStatus(id, 'preparing')` çağrılır
-- Mutfak fişi **yeniden basılmaz** (zaten basılmıştı, sadece status geçer)
-- Optimistic UI: client tarafında anında preparing kolonunda görünür
-- `autoConfirmedRef` ile aynı sipariş 2 kez onaylanmaz
+Modal'lara ESC tuşu desteği. Tek satır kullanım:
 
-### 3. Sipariş Kart Flash (5 dakika)
-Yeni gelen sipariş kart'ında 5 dakika boyunca **pulse animation**:
-- Kırmızı (accent) border ışıması
-- 1.4s ritmiyle yansır söner
-- 5dk sonra `setInterval` cleanup ile listeden temizlenir
-- Yeni sipariş gelirse **kendi 5dk timer'ı** başlar (eskileri etkilemez)
+```typescript
+import { useEscapeKey } from '@/lib/hooks/use-escape-key';
 
-### 4. Tab Flash (Kasa Üst Tabbar)
-"Siparişler" tab'ı yanında 5 dakika kırmızı dot + arka plan flash:
-- Aktif değilse animasyonlu (Hazırlanıyor'a bakmıyorsa dikkat çek)
-- Aktif tab'a gelince animasyon durur (kullanıcı zaten görüyor)
-- Sayı badge varsa (eski özellikler) onunla uyumlu
-
-## 📦 Dosyalar (3)
-
-```
-app/kasa/kasa-board.tsx                       (orderFlashUntil state + tick)
-app/kasa/kasa-tabs.tsx                        (flashing prop + animasyon CSS)
-app/panel/(shell)/pos/orders-board.tsx        (received kolonu sil + auto-confirm + flash)
+function MyModal({ onClose }) {
+  useEscapeKey(onClose);
+  return <div>...</div>;
+}
 ```
 
-### Detaylı Değişiklikler
+- `enabled: false` → geçici devre dışı (örn. iç submit sırasında)
+- Birden fazla modal açıkken sadece en üstteki kapanır
 
-**`orders-board.tsx`**:
-- `STAGES`: `received` kolonu silindi → 2 kolon kaldı
-- `recentOrders: Map<string, number>` state — her sipariş ID → flash bitiş timestamp
-- `autoConfirmedRef` — duplicate onay önleme
-- `refreshOrders`: yeni gelenleri tespit, otomatik `preparing`'e taşı, flash listesine ekle
-- Optimistic UI: client'ta `received` → `preparing` direkt
-- 30sn'de bir flash listesi temizleme effect
-- `preparing` kolonu artık `received | confirmed | preparing` hepsini gösterir
-- `OrderCard`: `isFlashing` prop, pulse animation CSS
+### 2. `Skeleton` Component 💀
 
-**`kasa-tabs.tsx`**:
-- `flashing?: Partial<Record<KasaTab, boolean>>` prop
-- 2 CSS keyframes (tab pulse + dot pulse)
-- Aktif tab'da animasyon devre dışı
+Boş ekran iskelet placeholder. Pulse animation ile yükleniyor görsel efekti:
 
-**`kasa-board.tsx`**:
-- `orderFlashUntil` state (timestamp)
-- 700ms tick effect for animation re-renders
-- Yeni sipariş gelince: `setOrderFlashUntil(Date.now() + 5*60*1000)`
-- KasaTabs'a `flashing={{ orders: Date.now() < orderFlashUntil }}` geçer
+```tsx
+import { Skeleton } from '@/components/ui';
+
+{loading ? <Skeleton.List rows={3} /> : <RealList />}
+```
+
+**Hazır şablonlar:**
+- `Skeleton.Box` — özel boyutlu kare/dikdörtgen
+- `Skeleton.Text` — tek satır metin
+- `Skeleton.Card` — kart (3 satır default)
+- `Skeleton.List` — avatar + 2 satır + sağ taraf
+- `Skeleton.Tile` — küçük istatistik kartı
+- `Skeleton.Stats` — 4 grid stat layout
+
+**Bonus**: `prefers-reduced-motion` desteği — animasyon hassas kullanıcılar
+için otomatik durur.
+
+### 3. `EmptyState` Component 📭
+
+Standart "veri yok" hali. Sadece "boş" demez, **kullanıcıya ne yapacağını söyler**:
+
+```tsx
+import { EmptyState } from '@/components/ui';
+
+<EmptyState
+  icon="📒"
+  title="Henüz cari kullanıcı yok"
+  description="İlk cari kullanıcını ekleyerek başla"
+  actionLabel="+ Yeni Kullanıcı"
+  onAction={() => setModalOpen(true)}
+/>
+```
+
+**Props:**
+- `icon` — emoji veya ReactNode
+- `title` — kısa, anlaşılır başlık
+- `description` — opsiyonel açıklama
+- `actionLabel` + `onAction` — opsiyonel CTA buton
+- `variant` — `'dashed'` (default) veya `'solid'`
+- `size` — `'sm'` / `'md'` / `'lg'`
+
+### 4. `Spinner` Component 🔄
+
+Inline yükleniyor göstergesi:
+
+```tsx
+import { Spinner } from '@/components/ui';
+
+<button disabled={loading}>
+  {loading ? <Spinner size={14} /> : '✓ Kaydet'}
+</button>
+```
+
+## 📦 Uygulama Yerleri (Bu Pakette)
+
+### Cari Detay Modal (`customer-detail-modal.tsx`)
+- ✅ **ESC tuşu**: modal kapanır (iç action modal kapalıyken)
+- ✅ **EmptyState**: "Henüz hareket yok" anlamlı mesaj + filter ipucu
+
+### Cari Form Modal (`customer-form-modal.tsx`)
+- ✅ **ESC tuşu**: modal kapanır (kayıt sırasında değil)
+
+### Customer Picker (`customer-picker.tsx`) — Kasada açık hesap akışı
+- ✅ **ESC tuşu**: picker kapanır
+- ✅ **Skeleton.List**: liste yüklenirken iskelet (eski "Yükleniyor…" yerine)
 
 ## 🚀 Push
 
 ```powershell
 git add .
-git commit -m "feat(kasa): yeni sipariş kolonu sil + otomatik onay + 5dk flash"
+git commit -m "feat(ui): skeleton + empty state + esc hook + cari uygulamalar"
 git push
 ```
 
-## 🧪 Test Senaryosu
+## 🧪 Test
 
-### A) Yeni Sipariş — Akış
-1. Müşteri QR menüden sipariş verir
-2. Kasada (başka tab'daysan):
-   - ✅ "Siparişler" tab'ı yanında **kırmızı dot yansıp söner** (5 dk)
-   - ✅ Toast "🍽 Masa B5 · Yeni sipariş · ₺120" görünür
-   - ✅ Bildirim sesi çalar
-3. **Siparişler** tab'ına geç:
-   - ✅ Sipariş **direkt "Hazırlanıyor"** kolonunda (Yeni Sipariş kolonu YOK)
-   - ✅ Sipariş kartı **kırmızı pulse animation** ile flash ediyor
-   - ✅ Mutfak ekranında da görünür (zaten preparing)
-4. 5 dakika sonra:
-   - ✅ Tab dot kaybolur
-   - ✅ Kart flash durur
+### A) ESC ile Modal Kapama
+1. Panel → Cari Hesaplar → Ahmet'e tıkla
+2. **ESC** → ✅ modal kapanır
+3. + Manuel Borç → modal açılır → **ESC** → ✅ iç action kapanır, ana modal açık kalır
+4. Submit sırasında ESC bas → ✅ submit'i bozmaz
 
-### B) Çoklu Sipariş
-1. 1 dakika içinde 3 yeni sipariş gel
-2. ✅ Hepsi flash eder (kendi 5dk timer'ları)
-3. İlki 5dk dolunca o flash durur, diğerleri devam eder
+### B) Empty State
+1. Panel → Cari Hesaplar → yeni bir kullanıcı oluştur
+2. Detay aç → "HAREKETLER (0)"
+3. ✅ **📒 Henüz hareket yok** ikonu + alt yazı + "Sipariş açık hesaba yazıldığında..."
+4. Filter chip "Son 7 Gün" tıkla → ✅ "Bu aralıkta hareket yok" + "Farklı bir tarih..."
 
-### C) Kolonlar
-1. Siparişler tab'ı → Hazırlanıyor + Hazır kolonları
-2. ✅ Sadece 2 kolon (eski 3'tü)
-3. Hazırlanıyor kolonunda: yeni gelen + onaylanmış + hazırlanan hepsi
+### C) Skeleton — Cari Picker
+1. Kasa → masa hesabı → 📒 Açık Hes → "Açık Hesap Olarak Kapat"
+2. CustomerPicker modal açılır
+3. ✅ **Skeleton.List** kısa süre görünür (yükleniyor iskelet)
+4. ✅ Sonra gerçek kullanıcı listesi
 
-### D) Manuel Onay (eski davranış korundu)
-1. Bir kasiyer manuel olarak "Hazırlanıyor → Hazır" geçişi yapabilir
-2. ✅ Buton hâlâ var, çalışır
+### D) ESC + Customer Picker
+1. CustomerPicker açıldığında **ESC** → ✅ kapanır
 
-### E) Aktif Tab'a Geçince
-1. Yeni sipariş geldi, **Masalar** tab'ındasın → flash görünüyor
-2. **Siparişler**'e tıkla → flash durur (zaten görüyorsun)
-3. Sipariş kartı hâlâ flash eder (5 dk dolana kadar)
+## 💡 Sonraki Paketlerde Kullanım
 
-## 💡 Mantık Notları
+Bu helper'lar **future paketlerde** çok iş görür:
 
-### Mutfak Fişi
-Otomatik onay'da `updateOrderStatus(id, 'preparing')` çağrılır. Bu mutfak fişini
-**yeniden basmaz** çünkü:
-- QR siparişler zaten `received` olarak gelir
-- `received` durumunda mutfak fişi **henüz basılmamıştır**
-- Eski akışta kasiyer "Mutfağa Yolla" butonuna basınca status `preparing` olur ve fiş basılır
-- Yeni akışta otomatik basılır → kullanıcının manuel onayını gerektirmez
+```tsx
+// Süper admin paneli işletme listesi
+{loading ? <Skeleton.List rows={5} /> : <BusinessList />}
+{businesses.length === 0 && (
+  <EmptyState
+    icon="🏢"
+    title="Henüz işletme yok"
+    actionLabel="+ İlk İşletme"
+    onAction={() => router.push('/admin/isletmeler/yeni')}
+  />
+)}
 
-E�er mutfak fişi zaten QR siparişte basılıyorsa (örn. orders.received status'una otomatik basıyorsa) **2 kez basılma riski** var. Bunu test edip görmen lazım.
-
-### Animasyon Performansı
-- Flash listesi `Map<string, number>` — sipariş ID → timestamp
-- 30 saniyede bir cleanup, 5dk dolanları siler
-- React state olduğu için re-render olur, ama animasyon CSS-only (GPU)
-
-### Re-render Tick
-Tab'da `Date.now() < orderFlashUntil` kontrolü gerçek zamanlı; ama React bunu otomatik bilmez. 700ms'de bir `setFlashTick` ile re-render tetiklenir → `Date.now()` yeniden hesaplanır → animasyon süresi geçince `flashing.orders=false` olur.
+// Modüller sayfası
+function ModuleSettings() {
+  useEscapeKey(onClose);
+  return <ModuleGrid />;
+}
+```
 
 ## 🗺️ Durum
 
 | | |
 |---|---|
-| Cari Manuel Paket A | ✅ |
-| Z Raporu Tüm Modül Entegrasyonu | ✅ |
-| **Paket B: Yeni sipariş + flash + otomatik onay** | **✅ TESLİM** |
+| Cari + Z Rapor + Paket B | ✅ |
+| **UX Paket 1: Görünür İyileştirmeler** | **✅ TESLİM** |
+| UX Paket 2: Mobile/Tablet | 🔜 |
+| UX Paket 3: Kod kalitesi | 🔜 |
 
-Push → test → çalışırsa başka iş söyle 🚀
+## 🔮 İlerideki Uygulamalar
+
+Bu pakette sadece cari modal'lara uyguladık (gözlem amaçlı). Sonraki adımlar:
+
+1. **Tüm modal'lara ESC** — 31 modal var, hepsine `useEscapeKey` ekle
+2. **Tüm liste'lere Skeleton** — masa grid, sipariş listesi, ürün listesi
+3. **Tüm boş hallere EmptyState** — tutarlı mesajlama
+
+İstersen sonraki paket bu olabilir → "UX Paket 1B: Tüm yerlere uygula".
+
+Push → test → çalışırsa söyle, devam edelim 🚀

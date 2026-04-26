@@ -13,6 +13,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from '@/components/ui/toast';
+import { useEscapeKey } from '@/lib/hooks/use-escape-key';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   listCustomers,
   type CustomerWithStats,
@@ -41,6 +43,9 @@ export function CustomerPicker({
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<CustomerWithStats | null>(null);
   const [note, setNote] = useState('');
+
+  // ESC tuşu ile kapama
+  useEscapeKey(onClose);
 
   const load = useCallback(async (q: string) => {
     setLoading(true);
@@ -255,16 +260,7 @@ export function CustomerPicker({
         {!selected && (
           <div className="flex-1 overflow-y-auto px-3 py-2 min-h-0">
             {loading ? (
-              <div
-                className="text-center py-8"
-                style={{
-                  fontFamily: 'var(--f-serif)',
-                  fontStyle: 'italic',
-                  color: 'var(--ink-3)',
-                }}
-              >
-                Yükleniyor…
-              </div>
+              <Skeleton.List rows={4} />
             ) : customers.length === 0 ? (
               <EmptyState search={search} />
             ) : (

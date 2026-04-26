@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { toast } from '@/components/ui/toast';
+import { useEscapeKey } from '@/lib/hooks/use-escape-key';
 import {
   getCustomer,
   updateCustomer,
@@ -36,6 +37,9 @@ export function CustomerFormModal({
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [note, setNote] = useState('');
+
+  // ESC tuşu ile kapama (submitting hariç)
+  useEscapeKey(onClose, !submitting);
 
   useEffect(() => {
     if (!customerId) return;

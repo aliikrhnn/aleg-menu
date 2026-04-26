@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from '@/components/ui/toast';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
+import { useEscapeKey } from '@/lib/hooks/use-escape-key';
+import { EmptyState } from '@/components/ui/empty-state';
 import {
   getCustomer,
   deactivateCustomer,
@@ -86,6 +88,9 @@ export function CustomerDetailModal({
   const [actionMode, setActionMode] = useState<ActionMode>(null);
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
   const [filterLoading, setFilterLoading] = useState(false);
+
+  // ESC tuşu ile kapama (sadece iç action modal kapalıyken)
+  useEscapeKey(onClose, !actionMode);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -447,18 +452,20 @@ export function CustomerDetailModal({
               Filtreleniyor…
             </div>
           ) : transactions.length === 0 ? (
-            <div
-              className="text-center py-12"
-              style={{
-                fontFamily: 'var(--f-serif)',
-                fontStyle: 'italic',
-                color: 'var(--ink-3)',
-              }}
-            >
-              {dateFilter === 'all'
-                ? 'Henüz hareket yok'
-                : 'Bu aralıkta hareket yok'}
-            </div>
+            <EmptyState
+              icon="📒"
+              title={
+                dateFilter === 'all'
+                  ? 'Henüz hareket yok'
+                  : 'Bu aralıkta hareket yok'
+              }
+              description={
+                dateFilter === 'all'
+                  ? 'Sipariş açık hesaba yazıldığında veya manuel kayıt eklendiğinde burada görünecek'
+                  : 'Farklı bir tarih aralığı seçmeyi deneyin'
+              }
+              size="sm"
+            />
           ) : (
             <div className="space-y-2">
               {transactions.map((tx) => (
