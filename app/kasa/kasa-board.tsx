@@ -60,6 +60,10 @@ export function KasaBoard({ initialOrders, businessId }: Props) {
   // Hızlı satış ödemesi — composer başarılı olduktan sonra otomatik açılır
   const [autoPayOrder, setAutoPayOrder] = useState<OrderForPayment | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  // Yeni sipariş flash bildirimi - timestamp ms (5 dk = 300000 ms)
+  // Bu zamana kadar Siparişler tab'ında kırmızı bildirim yansın söner
+  const [orderFlashUntil, setOrderFlashUntil] = useState<number>(0);
+  const [, setFlashTick] = useState(0); // animasyon için re-render tick
 
   // ============================================================
   // GARSON ÇAĞRILARI (waiter_calls) - Tüm tab'larda aktif
@@ -155,6 +159,19 @@ export function KasaBoard({ initialOrders, businessId }: Props) {
   // Daha önce ses çaldığımız sipariş ID'leri — tekrar çalmasın
   const seenOrderIdsRef = useRef<Set<string>>(new Set());
 
+  // Flash animasyonu için tick - her 700ms'de bir state değiştir
+  useEffect(() => {
+    if (Date.now() >= orderFlashUntil) return;
+    const interval = setInterval(() => {
+      setFlashTick((t) => t + 1);
+      // Süresi geçtiyse durdur
+      if (Date.now() >= orderFlashUntil) {
+        // Componenent re-render olunca interval cleanup edilir
+      }
+    }, 700);
+    return () => clearInterval(interval);
+  }, [orderFlashUntil]);
+
   // Polling - 5 saniyede bir son 30 saniyenin yeni QR siparişleri
   useEffect(() => {
     let canceled = false;
@@ -179,6 +196,8 @@ export function KasaBoard({ initialOrders, businessId }: Props) {
       const fresh = orders.filter((o) => !seen.has(o.id));
       if (fresh.length > 0) {
         playOrderSound();
+        // 5 dakika boyunca kırmızı flash başlat
+        setOrderFlashUntil(Date.now() + 5 * 60 * 1000);
         fresh.forEach((o) => {
           const tableLabel = o.table_name
             ? o.table_name.toUpperCase()
@@ -738,7 +757,13 @@ export function KasaBoard({ initialOrders, businessId }: Props) {
 
       {/* TAB BAR */}
       <div className="px-4 md:px-6 pt-4">
-        <KasaTabs active={activeTab} onChange={setActiveTab} />
+        <KasaTabs
+          active={activeTab}
+          onChange={setActiveTab}
+          flashing={{
+            orders: Date.now() < orderFlashUntil && activeTab !== 'orders',
+          }}
+        />
       </div>
 
       {/* TAB İÇERİK */}

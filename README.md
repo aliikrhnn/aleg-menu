@@ -1,140 +1,136 @@
-# 🎯 Z RAPORU — Cari Ödemeler Tüm Modüllere Yansısın
+# 🎯 PAKET B — Yeni Sipariş Kolonu Silme + 5dk Flash + Otomatik Onay
 
-Manuel borç/alacak ve cari ödemeler artık Z raporundaki **tüm modüllere** dahil
-edilir: ödeme yöntemi dağılımı, saat bazlı, kasiyere göre, mutabakat.
+Kasada "Yeni Sipariş" kolonu kaldırıldı, yeni gelenler **otomatik olarak Hazırlanıyor'a düşer**, **5 dakika boyunca kırmızı flash** ile dikkat çeker.
 
-**2 dosya · Migration yok.**
+**3 dosya · Migration yok.**
 
-## 🐛 Sorun
+## ✅ Yapılan
 
-Önceki paket sadece "Açık Hesap (Cari)" özet bölümünü ekledi. Ama:
-- ❌ Ödeme yöntemi dağılımı — sadece sipariş ödemelerini topluyordu
-- ❌ Saat bazlı ödeme — cari ödemeler görünmüyordu
-- ❌ Kasiyere göre — cari işlemler atlanıyordu
-- ❌ Yüzdeler `total_revenue` üzerinden hesaplanıyordu, cari dahil olunca aşıyordu
+### 1. Yeni Sipariş Kolonu Kaldırıldı
+`STAGES`'ten `'received'` (Yeni Sipariş) kolonu silindi. Artık sadece 2 kolon:
+- **Hazırlanıyor** (gold) → Hazır
+- **Hazır · Teslim** (olive) → Teslim Edildi
 
-## ✅ Çözüm
+### 2. Otomatik Onay
+Yeni gelen `received` siparişler **otomatik `preparing`'e geçer**:
+- Polling'de `received` saptanınca `updateOrderStatus(id, 'preparing')` çağrılır
+- Mutfak fişi **yeniden basılmaz** (zaten basılmıştı, sadece status geçer)
+- Optimistic UI: client tarafında anında preparing kolonunda görünür
+- `autoConfirmedRef` ile aynı sipariş 2 kez onaylanmaz
 
-`getZReport` artık `payment_logs`'tan **`order_id IS NULL`** olan kayıtları da
-(cari ödemeler ve avans tahsilatları) entegre ediyor:
+### 3. Sipariş Kart Flash (5 dakika)
+Yeni gelen sipariş kart'ında 5 dakika boyunca **pulse animation**:
+- Kırmızı (accent) border ışıması
+- 1.4s ritmiyle yansır söner
+- 5dk sonra `setInterval` cleanup ile listeden temizlenir
+- Yeni sipariş gelirse **kendi 5dk timer'ı** başlar (eskileri etkilemez)
 
-```typescript
-const { data: cariPaymentLogs } = await admin
-  .from('payment_logs')
-  .select('id, amount, payment_method, performed_at, cashier_id')
-  .eq('business_id', businessId)
-  .is('order_id', null)
-  .neq('payment_method', 'other')  // 'other' = manuel borç işareti, kasaya yansımaz
-  .gte('performed_at', start.toISOString())
-  .lte('performed_at', end.toISOString());
-```
+### 4. Tab Flash (Kasa Üst Tabbar)
+"Siparişler" tab'ı yanında 5 dakika kırmızı dot + arka plan flash:
+- Aktif değilse animasyonlu (Hazırlanıyor'a bakmıyorsa dikkat çek)
+- Aktif tab'a gelince animasyon durur (kullanıcı zaten görüyor)
+- Sayı badge varsa (eski özellikler) onunla uyumlu
 
-### Etkilenen Modüller
-
-**1. Ödeme Yöntemi Dağılımı (`byMethod`)**
-- Cari ödemeler `cash`/`card`/`transfer` olarak doğru kategoriye düşer
-- Yüzde hesabı artık `byMethod` toplamı üzerinden (cari dahil), eskiden
-  `total_revenue` üzerinden hesaplandığı için %100'ü aşabilirdi
-
-**2. Saat Bazlı Ödeme (`byHour`)**
-- Cari ödeme saatleri grafikte görünür
-- "En yoğun saat" cari ödemeleri de hesaba katar
-
-**3. Kasiyere Göre (`byCashier`)**
-- Cari ödeme alan kasiyer kendi adına ciro olarak görünür
-- `cashier_accounts.display_name` ile JOIN
-
-**4. Mutabakat (`reconciliation`)**
-- `cashTotal`, `cardTotal` byMethod'tan gelir → cari dahil ✓
-- `expected_cash = opening + cashTotal - refunds` → kasiyerin gerçek beklenen
-  nakit miktarı ✓ (avans + cari ödeme + sipariş hepsi sayılır)
-
-### Hariç Tutulan: Manuel Borç
-
-Manuel borç (`addManualCharge`) `payment_logs`'a `method='other'` ile yazılır.
-Z raporu bu hareketleri **kasaya yansıtmaz** — sadece "Açık Hesap → Yeni
-Borçlanma" listesinde görünür. Mantıklı çünkü manuel borç gerçek para
-hareketi değil, sadece kayıt.
-
-### Etkilenmeyen: `total_revenue` (Bugünkü Ciro)
-
-`total_revenue` hâlâ sadece sipariş cirosudur. Cari ödemeler önceki günlerin
-tahsilatı, bugünün cirosu değil. **Doğru davranış**:
-- Bugünkü Ciro: ₺0 (sipariş yok)
-- Nakit girişi: ₺2.035 (cari ödeme — kasada gerçekten var)
-
-## 📦 Dosyalar (2)
+## 📦 Dosyalar (3)
 
 ```
-lib/actions/payments.ts                       (cari payment_logs entegrasyonu)
-app/panel/(shell)/pos/z-report-modal.tsx      (yüzde hesabı düzeltildi)
+app/kasa/kasa-board.tsx                       (orderFlashUntil state + tick)
+app/kasa/kasa-tabs.tsx                        (flashing prop + animasyon CSS)
+app/panel/(shell)/pos/orders-board.tsx        (received kolonu sil + auto-confirm + flash)
 ```
+
+### Detaylı Değişiklikler
+
+**`orders-board.tsx`**:
+- `STAGES`: `received` kolonu silindi → 2 kolon kaldı
+- `recentOrders: Map<string, number>` state — her sipariş ID → flash bitiş timestamp
+- `autoConfirmedRef` — duplicate onay önleme
+- `refreshOrders`: yeni gelenleri tespit, otomatik `preparing`'e taşı, flash listesine ekle
+- Optimistic UI: client'ta `received` → `preparing` direkt
+- 30sn'de bir flash listesi temizleme effect
+- `preparing` kolonu artık `received | confirmed | preparing` hepsini gösterir
+- `OrderCard`: `isFlashing` prop, pulse animation CSS
+
+**`kasa-tabs.tsx`**:
+- `flashing?: Partial<Record<KasaTab, boolean>>` prop
+- 2 CSS keyframes (tab pulse + dot pulse)
+- Aktif tab'da animasyon devre dışı
+
+**`kasa-board.tsx`**:
+- `orderFlashUntil` state (timestamp)
+- 700ms tick effect for animation re-renders
+- Yeni sipariş gelince: `setOrderFlashUntil(Date.now() + 5*60*1000)`
+- KasaTabs'a `flashing={{ orders: Date.now() < orderFlashUntil }}` geçer
 
 ## 🚀 Push
 
 ```powershell
 git add .
-git commit -m "fix(z-rapor): cari ödemeler tüm modüllere yansısın"
+git commit -m "feat(kasa): yeni sipariş kolonu sil + otomatik onay + 5dk flash"
 git push
 ```
 
 ## 🧪 Test Senaryosu
 
-### Hazırlık
-1. Kasiyer kasayı açar (₺200 açılış)
-2. Bugün hiç sipariş açma
-3. Cari işlemler:
-   - Ahmet'e + Manuel Borç ₺50
-   - Mehmet'e + Cari Ödeme ₺200 nakit
-   - Ali'ye + Manuel Alacak ₺100 nakit (avans)
-   - Veli'ye + Manuel Alacak ₺50 düzeltme
+### A) Yeni Sipariş — Akış
+1. Müşteri QR menüden sipariş verir
+2. Kasada (başka tab'daysan):
+   - ✅ "Siparişler" tab'ı yanında **kırmızı dot yansıp söner** (5 dk)
+   - ✅ Toast "🍽 Masa B5 · Yeni sipariş · ₺120" görünür
+   - ✅ Bildirim sesi çalar
+3. **Siparişler** tab'ına geç:
+   - ✅ Sipariş **direkt "Hazırlanıyor"** kolonunda (Yeni Sipariş kolonu YOK)
+   - ✅ Sipariş kartı **kırmızı pulse animation** ile flash ediyor
+   - ✅ Mutfak ekranında da görünür (zaten preparing)
+4. 5 dakika sonra:
+   - ✅ Tab dot kaybolur
+   - ✅ Kart flash durur
 
-### Beklenen Z Raporu
+### B) Çoklu Sipariş
+1. 1 dakika içinde 3 yeni sipariş gel
+2. ✅ Hepsi flash eder (kendi 5dk timer'ları)
+3. İlki 5dk dolunca o flash durur, diğerleri devam eder
 
-**Bugünkü Ciro**: ₺0 (sipariş yok)
+### C) Kolonlar
+1. Siparişler tab'ı → Hazırlanıyor + Hazır kolonları
+2. ✅ Sadece 2 kolon (eski 3'tü)
+3. Hazırlanıyor kolonunda: yeni gelen + onaylanmış + hazırlanan hepsi
 
-**Ödeme Yöntemi Dağılımı**:
-- Nakit (2 ödeme) ₺300 (cari ₺200 + avans ₺100)
-- 100% (toplam yöntem üzerinden)
+### D) Manuel Onay (eski davranış korundu)
+1. Bir kasiyer manuel olarak "Hazırlanıyor → Hazır" geçişi yapabilir
+2. ✅ Buton hâlâ var, çalışır
 
-**Saat Bazlı**: ödemelerin saatleri görünür
+### E) Aktif Tab'a Geçince
+1. Yeni sipariş geldi, **Masalar** tab'ındasın → flash görünüyor
+2. **Siparişler**'e tıkla → flash durur (zaten görüyorsun)
+3. Sipariş kartı hâlâ flash eder (5 dk dolana kadar)
 
-**Kasiyere Göre**: kasa açan kasiyer 3 işlem ₺300
+## 💡 Mantık Notları
 
-**Açık Hesap (Cari)**:
-- Yeni Borçlanma: 1 hareket ₺50 (manuel)
-- Tahsilat: 2 hareket ₺300 (cari + avans)
-- Net: +₺250
+### Mutfak Fişi
+Otomatik onay'da `updateOrderStatus(id, 'preparing')` çağrılır. Bu mutfak fişini
+**yeniden basmaz** çünkü:
+- QR siparişler zaten `received` olarak gelir
+- `received` durumunda mutfak fişi **henüz basılmamıştır**
+- Eski akışta kasiyer "Mutfağa Yolla" butonuna basınca status `preparing` olur ve fiş basılır
+- Yeni akışta otomatik basılır → kullanıcının manuel onayını gerektirmez
 
-**Mutabakat**:
-- Açılış: ₺200
-- Nakit: ₺300
-- Beklenen: ₺500
+E�er mutfak fişi zaten QR siparişte basılıyorsa (örn. orders.received status'una otomatik basıyorsa) **2 kez basılma riski** var. Bunu test edip görmen lazım.
 
-**Hariç Tutulan**: Manuel borç ₺50 ve düzeltme ₺50 ödeme yöntemine yansımaz
-(payment_method='other' veya null).
+### Animasyon Performansı
+- Flash listesi `Map<string, number>` — sipariş ID → timestamp
+- 30 saniyede bir cleanup, 5dk dolanları siler
+- React state olduğu için re-render olur, ama animasyon CSS-only (GPU)
 
-## 💡 Davranış Tablosu
-
-```
-İşlem                         payment_logs   byMethod   Z Açık Hesap
-────────────────────────────────────────────────────────────────────
-Sipariş Nakit Ödeme             cash         ✅          ❌ (sipariş)
-Sipariş Açık Hesap              other        ❌          ✅ (Sipariş)
-Cari Ödeme Nakit                cash         ✅          ✅ (Tahsilat)
-Cari Ödeme Kart                 card         ✅          ✅ (Tahsilat)
-Manuel Borç                     other        ❌          ✅ (Manuel)
-Manuel Alacak Nakit             cash         ✅          ✅ (Avans)
-Manuel Alacak Kart              card         ✅          ✅ (Avans)
-Manuel Alacak Düzeltme          (yazılmaz)   ❌          ❌
-```
+### Re-render Tick
+Tab'da `Date.now() < orderFlashUntil` kontrolü gerçek zamanlı; ama React bunu otomatik bilmez. 700ms'de bir `setFlashTick` ile re-render tetiklenir → `Date.now()` yeniden hesaplanır → animasyon süresi geçince `flashing.orders=false` olur.
 
 ## 🗺️ Durum
 
 | | |
 |---|---|
 | Cari Manuel Paket A | ✅ |
-| **Z Raporu Tüm Modül Entegrasyonu** | **✅ TESLİM** |
-| Paket B: Yeni siparişler kolonu silme + flash | 🔜 |
+| Z Raporu Tüm Modül Entegrasyonu | ✅ |
+| **Paket B: Yeni sipariş + flash + otomatik onay** | **✅ TESLİM** |
 
-Push → test → çalışırsa **Paket B** başla 🚀
+Push → test → çalışırsa başka iş söyle 🚀

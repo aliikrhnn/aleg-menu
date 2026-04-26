@@ -29,12 +29,6 @@ const COLUMNS: Array<{
   nextAction?: { status: OrderStatus; label: string };
 }> = [
   {
-    key: 'received',
-    label: 'Yeni Sipariş',
-    accentColor: 'var(--accent)',
-    nextAction: { status: 'preparing', label: 'Mutfağa Yolla' },
-  },
-  {
     key: 'preparing',
     label: 'Hazırlanıyor',
     accentColor: 'var(--gold)',
@@ -53,9 +47,16 @@ export function OrdersBoard({ initialOrders, businessId }: OrdersBoardProps) {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [busyOrderId, setBusyOrderId] = useState<string | null>(null);
   const [paymentOrder, setPaymentOrder] = useState<ActiveOrder | null>(null);
+  // Yeni gelen sipariş ID'leri ve flash bitiş zamanı (ms timestamp)
+  // 5 dakika boyunca kırmızı flash gösterilir
+  const [recentOrders, setRecentOrders] = useState<Map<string, number>>(
+    new Map()
+  );
   const pendingSyncCount = usePendingCount();
   const { isOnline } = useOnlineStatus();
   const prevOrderIds = useRef<Set<string>>(new Set(initialOrders.map((o) => o.id)));
+  // Otomatik onay yapılan ID'leri takip et (yeniden onaylama olmasın)
+  const autoConfirmedRef = useRef<Set<string>>(new Set());
 
   // Initial orders'ı cache'le + sync worker başlat
   useEffect(() => {
@@ -160,17 +161,49 @@ export function OrdersBoard({ initialOrders, businessId }: OrdersBoardProps) {
   async function refreshOrders() {
     const result = await getActiveOrders();
     if (result.success && result.orders) {
-      // Yeni sipariş geldi mi kontrol et (ses için)
+      // Yeni sipariş geldi mi kontrol et (ses + flash + otomatik onay)
       const currentIds = new Set(result.orders.map((o) => o.id));
       const prevIds = prevOrderIds.current;
       const newReceivedOrders = result.orders.filter(
         (o) => !prevIds.has(o.id) && o.status === 'received'
       );
+
       if (newReceivedOrders.length > 0) {
         playDing();
+
+        // Yeni siparişleri flash listesine ekle (5 dk = 300000 ms)
+        const FLASH_DURATION = 5 * 60 * 1000;
+        const flashUntil = Date.now() + FLASH_DURATION;
+        setRecentOrders((prev) => {
+          const next = new Map(prev);
+          newReceivedOrders.forEach((o) => {
+            next.set(o.id, flashUntil);
+          });
+          return next;
+        });
+
+        // Otomatik onay — receivedaki yeni siparişleri preparing'e taşı
+        // (mutfak fişi yeniden basılmaz çünkü zaten basıldı)
+        for (const order of newReceivedOrders) {
+          if (autoConfirmedRef.current.has(order.id)) continue;
+          autoConfirmedRef.current.add(order.id);
+          // Async, beklemeden — UI hızlı kalsın
+          updateOrderStatus(order.id, 'preparing').catch((err) => {
+            console.warn('[orders-board] auto-confirm failed:', err);
+          });
+        }
       }
+
       prevOrderIds.current = currentIds;
-      setOrders(result.orders);
+
+      // Optimistic: 'received' status olanları client'ta direkt 'preparing' yap
+      // (server response'u gelene kadar UI tutarlı olsun)
+      const optimistic = result.orders.map((o) =>
+        o.status === 'received' && autoConfirmedRef.current.has(o.id)
+          ? { ...o, status: 'preparing' as const }
+          : o
+      );
+      setOrders(optimistic);
     }
   }
 
@@ -210,6 +243,25 @@ export function OrdersBoard({ initialOrders, businessId }: OrdersBoardProps) {
     setOrders((prev) => prev.filter((o) => o.id !== orderId));
   }
 
+  // Flash listesini her dakika temizle (süresi geçenleri sil)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+      setRecentOrders((prev) => {
+        let changed = false;
+        const next = new Map(prev);
+        for (const [id, until] of next.entries()) {
+          if (until <= now) {
+            next.delete(id);
+            changed = true;
+          }
+        }
+        return changed ? next : prev;
+      });
+    }, 30 * 1000); // 30 sn'de bir kontrol
+    return () => clearInterval(interval);
+  }, []);
+
   // Yeni siparişleri en üste alarak kolonlara dağıt
   const ordersByColumn = COLUMNS.map((col) => ({
     ...col,
@@ -218,7 +270,12 @@ export function OrdersBoard({ initialOrders, businessId }: OrdersBoardProps) {
         return o.status === 'ready' || o.status === 'on_way';
       }
       if (col.key === 'preparing') {
-        return o.status === 'preparing' || o.status === 'confirmed';
+        // received (yeni gelen, otomatik onay bekleyen) + confirmed + preparing
+        return (
+          o.status === 'received' ||
+          o.status === 'confirmed' ||
+          o.status === 'preparing'
+        );
       }
       return o.status === col.key;
     }),
@@ -408,6 +465,7 @@ export function OrdersBoard({ initialOrders, businessId }: OrdersBoardProps) {
                     onCancel={handleCancel}
                     onPayment={setPaymentOrder}
                     busy={busyOrderId === order.id}
+                    isFlashing={recentOrders.has(order.id)}
                   />
                 ))
               )}
@@ -573,6 +631,7 @@ function OrderCard({
   onCancel,
   onPayment,
   busy,
+  isFlashing = false,
 }: {
   order: ActiveOrder;
   accentColor: string;
@@ -581,6 +640,7 @@ function OrderCard({
   onCancel: (id: string) => void;
   onPayment: (order: ActiveOrder) => void;
   busy: boolean;
+  isFlashing?: boolean;
 }) {
   // Hydration mismatch'i önlemek için: ilk render'da boş, useEffect ile set
   const [elapsed, setElapsed] = useState<string>('');
@@ -604,7 +664,7 @@ function OrderCard({
 
   return (
     <article
-      className="bg-paper border border-line rounded-[14px] overflow-hidden transition-opacity"
+      className={`bg-paper border rounded-[14px] overflow-hidden transition-opacity ${isFlashing ? 'aleg-flash-new' : 'border-line'}`}
       style={{
         opacity: busy ? 0.5 : isCompleted ? 0.75 : 1,
         background: isCompleted
@@ -612,8 +672,30 @@ function OrderCard({
           : isPaid
           ? 'color-mix(in srgb, var(--ok) 2%, var(--paper))'
           : 'var(--paper)',
+        ...(isFlashing
+          ? {
+              borderWidth: 2,
+              borderColor: 'var(--accent)',
+            }
+          : {}),
       }}
     >
+      {/* CSS animation - flashing */}
+      {isFlashing && (
+        <style>{`
+          @keyframes aleg-flash {
+            0%, 100% {
+              box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent);
+            }
+            50% {
+              box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 35%, transparent);
+            }
+          }
+          .aleg-flash-new {
+            animation: aleg-flash 1.4s ease-in-out infinite;
+          }
+        `}</style>
+      )}
       {/* Card head */}
       <div
         className="px-3.5 py-2.5 border-b border-line flex items-center justify-between"
