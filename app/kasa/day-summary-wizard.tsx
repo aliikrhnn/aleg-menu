@@ -98,6 +98,8 @@ export function DaySummaryWizard({
   // Stale fetch koruması + basit cache
   const latestFetchToken = useRef(0);
   const reportCache = useRef<Map<string, ZReport>>(new Map());
+  // ESC tuşu için handleCloseAttempt'e referans (fonksiyon aşağıda tanımlı)
+  const handleCloseAttemptRef = useRef<(() => void) | null>(null);
 
   const rangeCacheKey = useCallback((r: DaySummaryRange): string => {
     if (r.preset === 'custom') return `custom:${r.from}:${r.to}`;
@@ -105,7 +107,10 @@ export function DaySummaryWizard({
   }, []);
 
   // ESC ile kapama (handleCloseAttempt çağır - confirm dialog gösterir)
-  useEscapeKey(handleCloseAttempt, open);
+  // İnline lambda — fonksiyon aşağıda tanımlandığı için ref ile çağrılır
+  useEscapeKey(() => {
+    handleCloseAttemptRef.current?.();
+  }, open);
 
   // Scroll kilidi
   useEffect(() => {
@@ -225,6 +230,8 @@ export function DaySummaryWizard({
     }
     onClose();
   };
+  // ESC için ref - handleCloseAttempt henüz yukarıda tanımlı değildi
+  handleCloseAttemptRef.current = handleCloseAttempt;
 
   const handleConfirmClose = () => {
     setConfirmCloseOpen(false);
