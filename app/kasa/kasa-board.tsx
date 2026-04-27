@@ -57,12 +57,10 @@ export function KasaBoard({ initialOrders, businessId }: Props) {
     tableId: string;
     tableName: string;
   } | null>(null);
-  // Hızlı satış ödemesi — composer başarılı olduktan sonra otomatik açılır
-  // Yeni: HesapPanel ile aç, "Hızlı Satış" tableName ile
-  const [autoPayOrder, setAutoPayOrder] = useState<{
-    order: TableOrderDetail;
-    tableName: string;
-  } | null>(null);
+  // Hızlı satış HesapPanel — kullanıcı "Yeni Satış" tıklayınca direkt açılır
+  // Boş başlar, menüden ürün eklenince createManualOrder ile sipariş yaratılır
+  const [quickSaleOpen, setQuickSaleOpen] = useState(false);
+  const [quickSaleOrders, setQuickSaleOrders] = useState<TableOrderDetail[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
   // Yeni sipariş flash bildirimi - timestamp ms (5 dk = 300000 ms)
   // Bu zamana kadar Siparişler tab'ında kırmızı bildirim yansın söner
@@ -561,30 +559,22 @@ export function KasaBoard({ initialOrders, businessId }: Props) {
       toast.error('Kasa kapalı - önce Kasa sekmesinden kasayı aç');
       return;
     }
-    setComposerState({ mode: { kind: 'quick' } });
+    // Yeni akış: Direkt boş HesapPanel aç (orders=[])
+    // Kullanıcı menüden ürün ekledikçe createManualOrder ile sipariş yaratılır
+    setQuickSaleOpen(true);
   };
 
   const handleComposerClose = () => setComposerState(null);
 
-  const handleComposerSuccess = async (info: {
+  const handleComposerSuccess = async (_info: {
     queued?: boolean;
     online?: boolean;
     orderId?: string;
   }) => {
-    const wasQuickSale = composerState?.mode.kind === 'quick';
+    // Yalnızca masa siparişleri composer üzerinden yapılır artık.
+    // Hızlı satış doğrudan HesapPanel ile çalışıyor (handleQuickSale).
     setComposerState(null);
     setRefreshKey((k) => k + 1);
-
-    // Hızlı satış ise → HesapPanel'i otomatik aç (yeni ödeme akışı)
-    if (wasQuickSale && info.online && info.orderId) {
-      const r = await getOrderAsDetail(info.orderId);
-      if (r.success && r.order) {
-        setAutoPayOrder({
-          order: r.order,
-          tableName: r.tableName || 'Hızlı Satış',
-        });
-      }
-    }
   };
 
   if (!cashier) return null;
@@ -954,26 +944,46 @@ export function KasaBoard({ initialOrders, businessId }: Props) {
         />
       )}
 
-      {/* Hızlı Satış Otomatik Ödeme — Yeni HesapPanel akışı */}
-      {autoPayOrder && cashier && (
+      {/* Hızlı Satış HesapPanel - boş başlar, menüden ürün eklenince doldurulur */}
+      {quickSaleOpen && cashier && (
         <HesapPanel
           tableId="__quick__"
-          tableName={autoPayOrder.tableName}
-          orders={[autoPayOrder.order]}
+          tableName="Hızlı Satış"
+          orders={quickSaleOrders}
           cashierId={cashier.id}
-          onClose={() => setAutoPayOrder(null)}
-          onChanged={async () => {
-            // Sipariş güncellendi (ikram, indirim vs) → tazele
-            const r = await getOrderAsDetail(autoPayOrder.order.id);
-            if (r.success && r.order) {
-              setAutoPayOrder({
-                order: r.order,
-                tableName: autoPayOrder.tableName,
-              });
+          onClose={() => {
+            setQuickSaleOpen(false);
+            setQuickSaleOrders([]);
+            setRefreshKey((k) => k + 1);
+          }}
+          onChanged={async (newOrderId) => {
+            // Yeni sipariş yaratıldıysa onu listeye ekle
+            if (newOrderId) {
+              const r = await getOrderAsDetail(newOrderId);
+              if (r.success && r.order) {
+                setQuickSaleOrders((prev) => {
+                  // Aynı id varsa güncelle, yoksa ekle
+                  const idx = prev.findIndex((o) => o.id === newOrderId);
+                  if (idx >= 0) {
+                    const next = [...prev];
+                    next[idx] = r.order!;
+                    return next;
+                  }
+                  return [...prev, r.order!];
+                });
+              }
+            } else {
+              // Mevcut siparişler güncellendi (ikram/indirim/ödeme) - tazele
+              const updated: TableOrderDetail[] = [];
+              for (const o of quickSaleOrders) {
+                const r = await getOrderAsDetail(o.id);
+                if (r.success && r.order) updated.push(r.order);
+              }
+              setQuickSaleOrders(updated);
             }
             setRefreshKey((k) => k + 1);
           }}
-          hideMenu
+          quickSale
           hideOnAccount
         />
       )}

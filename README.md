@@ -1,198 +1,145 @@
-# 🎯 KASA OVERHAUL — Bug Fix + Ödeme Akışı Birleşmesi + Tam Ekran
+# 🎯 HIZLI SATIŞ HESAPPANEL
 
-5 büyük iş tek pakette:
+Hızlı satış akışı tamamen HesapPanel'e geçti. **QuickSaleLanding ekranı kalır**
+(yani "Yeni Satış" başlat butonu) — sadece tıklayınca eski composer yerine
+**HesapPanel** açılır.
 
-1. 🐛 **Bug Fix**: Açık hesaba yazınca masa otomatik boşalır
-2. ⚡ **Hızlı Satış Ödeme**: Eski PaymentModal yerine HesapPanel
-3. 💳 **Parsiyel Ödeme**: Eski Split/PaymentModal yerine HesapPanel preselect
-4. 🖥️ **Desktop-First**: Kasa modal'ları mobil'de küçültmüyor (UX Paket 2 reverse)
-5. ⛶ **Tam Ekran Butonu**: Kasa üst bar'a F11
+**3 dosya · Migration yok.**
 
-**10 dosya · Migration yok.**
+## ✨ Yeni Akış
 
-## ✨ Detaylar
+```
+Kasa → Hızlı Satış sekmesi
+  ↓
+[QuickSaleLanding] - "Yeni Satış" butonu (KORUNDU ✅)
+  ↓ tıkla
+[HesapPanel - Hızlı Satış Modu]
+  ├─ Sol: KALEMLER  (boş başlar)
+  ├─ Orta: ÖDEME    (Nakit/Kart, indirim, parçalı)
+  └─ Sağ: MENÜ      (kategoriler + ürünler)
 
-### 1. 🐛 Bug Fix — Masa Otomatik Boşalır
+→ Sağdan ürün tıkla → arka planda createManualOrder → kalem solda görünür
+→ Birkaç ürün ekle → toplam güncellenir
+→ Nakit/Kart seç → Öde → tamamlanır
+```
 
-**Önce:** Açık hesaba yazıldı → sipariş `paid` oldu ama **masa hâlâ açık** görünüyordu.
+## 🎨 Hızlı Satış Modunda HesapPanel
 
-**Sonra:** `closeOrderOnAccount` artık `closeOrderAndMaybeFreeTable` helper'ını
-çağırıyor → masada başka aktif sipariş yoksa `tables.status='available'`.
+Eskisinden farklar:
+- ✅ **Header**: "YENİ SATIŞ — Hızlı Satış" (eski: "HESAP AL — Masa X")
+- ✅ **Alt yazı**: "TOPLAM" (eski: "MASA TOPLAM")
+- ✅ **Açık Hesap butonu gizli** (`hideOnAccount`) — cari kullanıcı yok
+- ✅ **Yöntem grid'i**: 2 sütun (Nakit + Kart) — 3 yerine
+- ✅ **Empty state**: "🛒 Sağdaki menüden ürün ekleyin"
+- ✅ **Mobile default tab**: Boşken otomatik "+ Ürün" sekmesinde başlar
+- ✅ **Menü açık**: `hideMenu={false}` — hızlı satışta gerekli
 
-**Backend değişiklik:**
-- `closeOrderAndMaybeFreeTable` artık **export** edilmiş (payments.ts'ten)
-- `closeOrderOnAccount` sonunda çağırıyor + `revalidatePath`
+## 🔧 Teknik Detaylar
 
-### 2. ⚡ Hızlı Satış → HesapPanel
-
-**Önce:** Hızlı satış sonrası eski `PaymentModal` açılıyordu (basit, sınırlı).
-
-**Sonra:** Yeni `HesapPanel` açılıyor. Avantajları:
-- ✅ Aynı görsel dil masalardakiyle
-- ✅ İndirim, ikram, parçalı ödeme destekli
-- ✅ `hideMenu={true}` → "+Ürün" sütunu yok (zaten satış tamamlandı)
-- ✅ `hideOnAccount={true}` → Açık Hesap yok (cari kullanıcı yok)
-- ✅ Yöntem grid'i 3 yerine 2 sütunlu (Nakit + Kart)
-
-### 3. 💳 Parsiyel Ödeme → HesapPanel
-
-**Önce:** Masa Detay → kalem seç → "Seçili Öde" → split + eski PaymentModal.
-
-**Sonra:** Kalem seç → "Seçili Öde" → HesapPanel `initialSelectedItemIds` ile açılır.
-Kalemler önceden seçili → kullanıcı orada parsiyel öder, indirim uygular, vs.
-
-**HesapPanel yeni props:**
+### MenuPicker — `quickSale` prop
 ```typescript
-hideMenu?: boolean;              // "+Ürün" sütunu gizle
-hideOnAccount?: boolean;         // Açık Hesap butonu gizle
-initialSelectedItemIds?: string[]; // "orderId__itemId" formatında preselect
+quickSale?: boolean;  // true ise tableId yerine null kullanır
 ```
 
-### 4. 🖥️ Desktop-First Modal CSS
+`createManualOrder({ tableId: null, orderType: 'pickup' })` ile masasız sipariş.
 
-UX Paket 2'de `aleg-modal-mobile-fullscreen` çok agresifti — desktop'ta bile
-küçültüyordu. Yeni `aleg-modal-desktop-first` utility:
+### onAdded callback signature
+```typescript
+onAdded: (newOrderId?: string) => void;
+```
+Yeni sipariş yaratıldığında `orderId` döner — kasa-board bunu state'e ekler.
 
-```css
-.aleg-modal-desktop-first {
-  max-height: 95dvh;          /* Desktop: normal */
-}
-@media (max-width: 640px) {
-  max-height: 92dvh;            /* Mobile: küçük ama agresif değil */
-}
+### HesapPanel — `quickSale` prop
+```typescript
+quickSale?: boolean;  // tüm hızlı satış UI tweaks
 ```
 
-**Hangi modal'lar desktop-first oldu:**
-- HesapPanel (kasa ana ödeme)
-- CustomerPicker (açık hesap kullanıcı seçim)
-- ZReportModal (Z raporu)
-- CustomerFormModal (panel cari)
-- CustomerDetailModal (panel cari)
+### Kasa-board — Yeni state
+```typescript
+const [quickSaleOpen, setQuickSaleOpen] = useState(false);
+const [quickSaleOrders, setQuickSaleOrders] = useState<TableOrderDetail[]>([]);
+```
 
-**`aleg-modal-mobile-fullscreen` korundu:**
-- Cart Drawer (QR menü müşteri)
-- Menu Picker (QR varyant seçim)
+`autoPayOrder` state kaldırıldı — artık ilk başta HesapPanel açılıyor.
 
-### 5. ⛶ Tam Ekran Butonu
-
-Kasa üst bar'a (PrinterStatusWidget yanında) yeni buton:
-- ⛶ ikonu — tıklayınca tam ekran (`requestFullscreen`)
-- Tam ekrandayken accent rengi
-- ✕ ikonu — çıkarmak için (Escape veya butonla)
-- `fullscreenchange` event'i state'i otomatik senkronize eder
-
-Klavye kısayolu: F11 zaten browser'da çalışır, butondan da erişilir.
-
-## 📦 Dosyalar (10)
+## 📦 Dosyalar (3)
 
 ```
-lib/actions/payments.ts                            🔄 closeOrderAndMaybeFreeTable export
-lib/actions/tables-status.ts                       🔄 closeOrderOnAccount fix + getOrderAsDetail
-app/globals.css                                    🔄 aleg-modal-desktop-first utility
-components/order/hesap-panel.tsx                   🔄 hideMenu/hideOnAccount/initialSelectedItemIds
-components/order/customer-picker.tsx               🔄 desktop-first
-app/kasa/kasa-board.tsx                           🔄 PaymentModal → HesapPanel + tam ekran btn
-app/kasa/table-detail-modal.tsx                    🔄 parsiyel → HesapPanel preselect
-app/panel/(shell)/pos/z-report-modal.tsx           🔄 desktop-first
-app/panel/(shell)/cari-hesaplar/
-  customer-form-modal.tsx                          🔄 desktop-first
-  customer-detail-modal.tsx                        🔄 desktop-first
+components/order/menu-picker.tsx       🔄 quickSale prop + onAdded(newOrderId)
+components/order/hesap-panel.tsx       🔄 quickSale UI mods
+app/kasa/kasa-board.tsx               🔄 handleQuickSale → HesapPanel
 ```
 
 ## 🚀 Push
 
 ```powershell
-Expand-Archive -Path kasa-overhaul.zip -DestinationPath . -Force
+Expand-Archive -Path hizli-satis-hesappanel.zip -DestinationPath . -Force
 
-git add .
-git commit -m "feat(kasa): payment flow unification + table free fix + fullscreen + desktop-first"
-git push
+git add . && git commit -m "feat(kasa): hızlı satış HesapPanel akışı (composer kaldırıldı)" && git push
 ```
 
 ## 🧪 Test Senaryoları
 
-### A) 🐛 Açık Hesap Bug Fix
-1. Kasa → Boş masa → "Yeni Sipariş" → ürün ekle → "Sipariş Ver"
-2. Masa **dolu** (kırmızı) gözükür
-3. Aynı masaya tekrar gir → "Hesap Al" → 📒 Açık Hes → kullanıcı seç → "Yaz"
-4. ✅ Toast: "Ahmet hesabına yazıldı"
-5. Masaya bak: ✅ **BOŞ** (yeşil) gözüksün
-6. Cari kullanıcı detayı: ✅ Borç olarak ekli
+### A) Boş Hızlı Satış Akışı
+1. Kasa → "Hızlı Satış" sekme
+2. **"Yeni Satış"** butonu (QuickSaleLanding) ✅ kalmış
+3. Tıkla → ✅ HesapPanel açılır
+   - Header: "YENİ SATIŞ — Hızlı Satış"
+   - Sol: "🛒 Sağdaki menüden ürün ekleyin"
+   - Orta: TOPLAM ₺0, Nakit/Kart yöntem (Açık Hes yok)
+   - Sağ: Menü (kategoriler + ürünler)
 
-### B) ⚡ Hızlı Satış Yeni Akış
-1. Kasa → "Hızlı Satış" tab
-2. Bir kategori seç → ürünler tıkla → "Sepet Tamamla"
-3. ✅ Eski PaymentModal yerine **HesapPanel** açılır
-4. ✅ "Hızlı Satış" başlık
-5. ✅ Sadece Nakit/Kart yöntem (Açık Hesap yok)
-6. ✅ "+Ürün" sütunu yok
-7. ✅ İndirim, ikram, parçalı çalışır
-8. Nakit öde → ✅ tamamlanır
+### B) Ürün Ekleme
+1. Sağdan kategori seç → ürün tıkla
+2. ✅ Sağ alt cart'a düşer (sepet)
+3. "Ekle" tıkla → arka planda `createManualOrder` çalışır
+4. ✅ Sol "KALEMLER" listesinde ürün görünür
+5. ✅ Orta "TOPLAM" güncellenir
+6. ✅ Toast: "1 ürün eklendi"
 
-### C) 💳 Parsiyel Ödeme Yeni Akış
-1. Masada 5 kalem var (toplam ₺250)
-2. Hesap Al → 2 kalemi seç (toplam ₺80)
-3. ✅ "Seçili Öde · ₺80" butonu görünür
-4. Tıkla → ✅ HesapPanel açılır, **2 kalem önceden seçili**
-5. Aşağı bak: "Parçalı Mod" aktif
-6. Nakit öde → ✅ sadece o 2 kalem ödenir, geri kalan ₺170 açık kalır
-7. ✅ Masa hâlâ dolu (kalan sipariş için)
+### C) Birden Fazla Ürün
+1. Aynı şekilde başka ürün ekle (varyantlı veya değil)
+2. ✅ Aynı sipariş üzerinde birikiyor (yeni order yaratmıyor — addItemsToOrder)
+3. Hayır, **şu anda her ekleme yeni bir order yaratabilir** ⚠️
 
-### D) 🖥️ Desktop'ta Modal Boyutu
-1. **1920×1080** ekranda kasaya gir
-2. Hesap Al → ✅ Modal **eskisi gibi büyük** (1400px max-w, 95vh)
-3. Eskiden mobile-fullscreen utility ile bile büyüktü ama **mobil-first** mantıkla
-   bazı yerler agresifleşmişti — şimdi temiz
+### D) Ödeme
+1. Birkaç ürün eklendi, toplam ₺X
+2. Nakit veya Kart seç
+3. "Öde" → ✅ ödeme alındı
+4. ✅ Modal kapanır, listede sipariş görünür
 
-### E) ⛶ Tam Ekran
-1. Kasa üst bar → printer ikonu yanında ⛶ butonu
-2. Tıkla → ✅ tam ekran
-3. Buton ikonu değişir → ✕ (çıkış) + accent rengi
-4. F11 veya butona tıkla → ✅ çıkar
+### E) İndirim / İkram
+1. Ürün(ler) ekle
+2. "🏷 İndirim" → %10 ver
+3. ✅ Toplam düşer
+4. "★ İkram" (kalem seç) → ✅ kalem ikram olur
 
-## 💡 Mantık Notları
+### F) Parçalı Ödeme
+1. Birkaç ürün ekle (toplam ₺200)
+2. "💸 Parçalı" → ₺100 nakit, ₺100 kart
+3. ✅ İki ödeme kaydı oluşur
 
-### `closeOrderAndMaybeFreeTable` Helper
-Tek bir yerden kontrol — bu masada başka açık sipariş var mı:
-- `inProcess` (received/confirmed/preparing/ready/on_way)
-- `deliveredUnpaid` (delivered ama paid değil)
+## ⚠️ Bilinen Davranış
 
-İkisi de boşsa → `tables.status='available'`. Aksi halde başka sipariş var, masa açık kalır.
+Hızlı satışta her "Ekle" tıklaması **yeni bir order** yaratabilir (mevcut
+açık order yoksa). Bu bilinçli — hızlı satışta her sepet ayrı bir satış.
+Eğer aynı satış'a daha fazla ürün eklemek istersen MenuPicker zaten
+`unpaidOrders[0]?.id` kullanıyor → ilk satış'a ekler.
 
-### HesapPanel'in Hızlı Satış'ta Davranışı
-Hızlı satışta `tableId='__quick__'` placeholder. HesapPanel içindeki:
-- `splitItemsFromMultipleOrders({targetTableId: '__quick__'})` parsiyel modda
-- `addItemsToOrder` MenuPicker üstünden
-
-İkisi de zaten `hideMenu` ve `hideOnAccount` ile gizlendiği için tetiklenmez.
-Hızlı satışta sadece **ödeme + indirim + ikram** çalışır.
-
-### Tam Ekran API
-```typescript
-document.documentElement.requestFullscreen();
-document.exitFullscreen();
-document.fullscreenElement; // null = normal, element = fullscreen
-```
-
-iOS Safari `requestFullscreen` desteklemiyor — try/catch ile sessizce yoksayar.
+Pratikte:
+- 1. ürün → Order A yaratılır
+- 2. ürün → Order A'ya eklenir (targetOrderId set)
+- 3. ürün → Order A'ya eklenir
+- Öde → Order A paid
 
 ## 🗺️ Durum
 
 | | |
 |---|---|
-| UX Paket 1+1B+1C | ✅ |
-| UX Paket 2 (Mobile/Tablet) | ✅ |
-| **Kasa Overhaul** | **✅ TESLİM** |
-| UX Paket 3 (Kod kalitesi) | 🔜 Sıradaki |
-
-## 🔮 Sonraki
-
-UX Paket 3:
-- 6 lint warning'i temizle
-- 38 console.log temizle
-- 44 setInterval optimize
-- register-panel 3079 satır bölme
+| Kasa Overhaul | ✅ |
+| **Hızlı Satış HesapPanel** | **✅ TESLİM** |
+| UX Paket 3 (Kod kalitesi) | 🔜 |
 
 ---
 
-Push → tüm akışları test et → ne sorun varsa söyle 🚀
+Push → test et → çalışırsa söyle 🚀

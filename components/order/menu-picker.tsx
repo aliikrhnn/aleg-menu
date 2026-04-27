@@ -44,7 +44,7 @@ type Props = {
   /** Açık siparişe eklemek için. Yoksa yeni sipariş açılır. */
   targetOrderId?: string;
   cashierId: string;
-  onAdded: () => void;
+  onAdded: (newOrderId?: string) => void;
   /**
    * Mutfağa gönderme toggle'ının default değeri.
    * Hesap alma akışında genelde `false` (kasiyer hızlı eklerken),
@@ -56,6 +56,11 @@ type Props = {
    * Toggle switch'ini gizle - değer her zaman defaultSendToKitchen olur
    */
   hideKitchenToggle?: boolean;
+  /**
+   * Hızlı satış modu — tableId yerine null geçilir (createManualOrder
+   * masasız sipariş yaratır). HesapPanel'de hızlı satışta kullanılır.
+   */
+  quickSale?: boolean;
 };
 
 export function MenuPicker({
@@ -65,6 +70,7 @@ export function MenuPicker({
   onAdded,
   defaultSendToKitchen = true,
   hideKitchenToggle = false,
+  quickSale = false,
 }: Props) {
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState<CategoryForPos[]>([]);
@@ -215,6 +221,7 @@ export function MenuPicker({
 
     let success = false;
     let errorMsg: string | undefined;
+    let createdOrderId: string | undefined;
 
     if (targetOrderId) {
       const r = await addItemsToOrder({
@@ -227,14 +234,15 @@ export function MenuPicker({
       errorMsg = r.error;
     } else {
       const r = await createManualOrder({
-        tableId,
-        orderType: 'dine_in',
+        tableId: quickSale ? null : tableId,
+        orderType: quickSale ? 'pickup' : 'dine_in',
         cashierId,
         items,
         sendToKitchen,
       });
       success = r.success;
       errorMsg = r.error;
+      createdOrderId = r.orderId;
     }
 
     setSubmitting(false);
@@ -242,9 +250,13 @@ export function MenuPicker({
       toast.error(errorMsg || 'Eklenemedi');
       return;
     }
-    toast.success(`${cartItemCount} ürün masaya eklendi`);
+    toast.success(
+      quickSale
+        ? `${cartItemCount} ürün eklendi`
+        : `${cartItemCount} ürün masaya eklendi`
+    );
     setCart([]);
-    onAdded();
+    onAdded(createdOrderId);
   }, [
     cart,
     cartItemCount,
@@ -253,6 +265,7 @@ export function MenuPicker({
     cashierId,
     onAdded,
     sendToKitchen,
+    quickSale,
   ]);
 
   if (loading) {

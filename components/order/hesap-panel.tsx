@@ -60,7 +60,9 @@ type Props = {
   orders: TableOrderDetail[];
   cashierId: string;
   onClose: () => void;
-  onChanged: () => void;
+  /** Sipariş değişince callback. MenuPicker yeni sipariş yaratmışsa
+   *  newOrderId parametresi ile gelir. */
+  onChanged: (newOrderId?: string) => void;
   /** Hızlı satış / parsiyel ödeme gibi modlarda Menu sütunu gizlenir */
   hideMenu?: boolean;
   /** Hızlı satış gibi modlarda "Açık Hesap" butonu gizlenir */
@@ -68,6 +70,9 @@ type Props = {
   /** Başlangıçta seçili kalemler ("orderId__itemId" formatında).
    *  Parsiyel ödeme için dış'tan kalemleri preselect etmek için kullanılır. */
   initialSelectedItemIds?: string[];
+  /** Hızlı satış modu — masasız sipariş, tableId yerine null kullanılır.
+   *  Menu açıktır ama masa yerine masasız sipariş yaratır. */
+  quickSale?: boolean;
 };
 
 export function HesapPanel({
@@ -80,6 +85,7 @@ export function HesapPanel({
   hideMenu = false,
   hideOnAccount = false,
   initialSelectedItemIds,
+  quickSale = false,
 }: Props) {
   // Selection
   const [selectedItems, setSelectedItems] = useState<Set<string>>(
@@ -108,7 +114,9 @@ export function HesapPanel({
   const [onAccountModalOpen, setOnAccountModalOpen] = useState(false);
 
   // Mobile tab
-  const [mobileTab, setMobileTab] = useState<MobileTab>('items');
+  const [mobileTab, setMobileTab] = useState<MobileTab>(
+    quickSale && orders.length === 0 ? 'menu' : 'items'
+  );
   const [isMobile, setIsMobile] = useState(false);
 
   // ESC ile kapama - iç modal'lar veya submitting sırasında devre dışı
@@ -664,7 +672,7 @@ export function HesapPanel({
                 color: 'var(--accent)',
               }}
             >
-              HESAP AL
+              {quickSale ? 'YENİ SATIŞ' : 'HESAP AL'}
             </div>
             <h2
               className="truncate"
@@ -677,16 +685,30 @@ export function HesapPanel({
                 lineHeight: 1,
               }}
             >
-              Masa{' '}
-              <span
-                style={{
-                  fontStyle: 'italic',
-                  fontWeight: 400,
-                  color: 'var(--accent)',
-                }}
-              >
-                {tableName}
-              </span>
+              {quickSale ? (
+                <span
+                  style={{
+                    fontStyle: 'italic',
+                    fontWeight: 400,
+                    color: 'var(--accent)',
+                  }}
+                >
+                  Hızlı Satış
+                </span>
+              ) : (
+                <>
+                  Masa{' '}
+                  <span
+                    style={{
+                      fontStyle: 'italic',
+                      fontWeight: 400,
+                      color: 'var(--accent)',
+                    }}
+                  >
+                    {tableName}
+                  </span>
+                </>
+              )}
             </h2>
           </div>
           <div className="flex items-baseline gap-3 flex-shrink-0">
@@ -701,7 +723,7 @@ export function HesapPanel({
                   color: 'var(--ink-3)',
                 }}
               >
-                MASA TOPLAM
+                {quickSale ? 'TOPLAM' : 'MASA TOPLAM'}
               </div>
               <div
                 style={{
@@ -801,10 +823,23 @@ export function HesapPanel({
             <div className="flex-1 overflow-y-auto px-4 sm:px-5 py-3">
               {flatItems.length === 0 ? (
                 <div
-                  className="py-12 text-center"
+                  className="py-12 text-center flex flex-col items-center gap-3"
                   style={{ color: 'var(--ink-3)' }}
                 >
-                  Bu masada kalem yok
+                  <div style={{ fontSize: 32, opacity: 0.4 }}>
+                    {quickSale ? '🛒' : '📋'}
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: 'var(--f-serif)',
+                      fontStyle: 'italic',
+                      fontSize: 15,
+                    }}
+                  >
+                    {quickSale
+                      ? 'Sağdaki menüden ürün ekleyin'
+                      : 'Bu masada kalem yok'}
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-1.5">
@@ -1128,6 +1163,7 @@ export function HesapPanel({
                 cashierId={cashierId}
                 onAdded={onChanged}
                 defaultSendToKitchen={false}
+                quickSale={quickSale}
               />
             </div>
           )}
