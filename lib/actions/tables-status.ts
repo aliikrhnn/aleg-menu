@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { closeOrderAndMaybeFreeTable } from './payments';
 import { revalidatePath } from 'next/cache';
 
 // ============================================================
@@ -1090,6 +1091,81 @@ export async function getOrderForPayment(orderId: string): Promise<{
 }
 
 // ============================================================
+// Tek sipariş'i HesapPanel'e uygun TableOrderDetail formatında getirir.
+// Hızlı satış akışında kullanılır (tableId yok).
+// ============================================================
+export async function getOrderAsDetail(orderId: string): Promise<{
+  success: boolean;
+  order?: TableOrderDetail;
+  tableName?: string;
+  error?: string;
+}> {
+  try {
+    const { businessId } = await requireBusinessAccess();
+    const admin = createAdminClient();
+
+    const { data: order, error: orderErr } = await admin
+      .from('orders')
+      .select(`
+        id, business_id, order_no, status, payment_status, payment_method,
+        created_at, note, table_id, subtotal, total, complimentary_total,
+        tables(name)
+      `)
+      .eq('id', orderId)
+      .maybeSingle();
+
+    if (orderErr) return { success: false, error: orderErr.message };
+    if (!order || order.business_id !== businessId) {
+      return { success: false, error: 'Sipariş bulunamadı' };
+    }
+
+    const { data: items } = await admin
+      .from('order_items')
+      .select(`
+        id, product_name, quantity, unit_price, status, note,
+        is_complimentary, complimentary_reason
+      `)
+      .eq('order_id', orderId);
+
+    const tableJoin = order.tables as unknown as { name?: string } | { name?: string }[] | null;
+    const tableName = Array.isArray(tableJoin)
+      ? tableJoin[0]?.name || ''
+      : tableJoin?.name || '';
+
+    const detail: TableOrderDetail = {
+      id: order.id,
+      order_no: order.order_no || order.id.slice(0, 8).toUpperCase(),
+      status: order.status,
+      payment_status: order.payment_status,
+      payment_method: order.payment_method,
+      created_at: order.created_at,
+      note: order.note,
+      source: 'manual',
+      subtotal: Number(order.subtotal || 0),
+      total: Number(order.total || 0),
+      complimentary_total: Number(order.complimentary_total || 0),
+      items: (items || []).map((it) => ({
+        id: it.id,
+        product_name: it.product_name,
+        quantity: it.quantity,
+        unit_price: Number(it.unit_price),
+        status: it.status,
+        note: it.note,
+        is_complimentary: it.is_complimentary || false,
+        complimentary_reason: it.complimentary_reason || null,
+      })),
+    };
+
+    return { success: true, order: detail, tableName };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Bilinmeyen hata',
+    };
+  }
+}
+
+// ============================================================
 // MASA YÖNETİMİ — DEĞİŞTİR / BİRLEŞTİR / BÖL
 // ============================================================
 
@@ -1792,7 +1868,7 @@ export async function closeOrderOnAccount(input: {
     // Sipariş güvenliği — detaylı hata
     const { data: order, error: orderErr } = await admin
       .from('orders')
-      .select('id, business_id, payment_status, total, order_no')
+      .select('id, business_id, payment_status, total, order_no, table_id')
       .eq('id', input.orderId)
       .maybeSingle();
 
@@ -1917,6 +1993,17 @@ export async function closeOrderOnAccount(input: {
         last_transaction_at: lastAt,
       })
       .eq('id', input.customerId);
+
+    // Masada başka aktif sipariş yoksa masayı boşalt
+    await closeOrderAndMaybeFreeTable(
+      admin,
+      businessId,
+      input.orderId,
+      order.table_id
+    );
+
+    revalidatePath('/kasa');
+    revalidatePath('/panel/cari-hesaplar');
 
     return { success: true };
   } catch (e) {

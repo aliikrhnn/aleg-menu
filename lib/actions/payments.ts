@@ -41,7 +41,7 @@ async function requireBusinessAccess() {
 // Üç yerde kullanılır: takePayment (normal + giftAll) ve takePartialPayment (tam kapanınca)
 type AdminClient = ReturnType<typeof createAdminClient>;
 
-async function closeOrderAndMaybeFreeTable(
+export async function closeOrderAndMaybeFreeTable(
   admin: AdminClient,
   businessId: string,
   orderId: string,

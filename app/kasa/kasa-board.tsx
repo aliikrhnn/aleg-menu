@@ -8,12 +8,12 @@ import { TablesGrid } from './tables-grid';
 import { RegisterPanel } from './register-panel';
 import { OrderComposer } from './order-composer';
 import { TableDetailModal } from './table-detail-modal';
-import { PaymentModal } from '@/app/panel/(shell)/pos/payment-modal';
+import { HesapPanel } from '@/components/order/hesap-panel';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
 import { PrinterStatusWidget } from '@/components/panel/printer-status-widget';
 import {
-  getOrderForPayment,
-  type OrderForPayment,
+  getOrderAsDetail,
+  type TableOrderDetail,
 } from '@/lib/actions/tables-status';
 import { getActiveCashSession } from '@/lib/actions/payments';
 import {
@@ -58,7 +58,11 @@ export function KasaBoard({ initialOrders, businessId }: Props) {
     tableName: string;
   } | null>(null);
   // Hızlı satış ödemesi — composer başarılı olduktan sonra otomatik açılır
-  const [autoPayOrder, setAutoPayOrder] = useState<OrderForPayment | null>(null);
+  // Yeni: HesapPanel ile aç, "Hızlı Satış" tableName ile
+  const [autoPayOrder, setAutoPayOrder] = useState<{
+    order: TableOrderDetail;
+    tableName: string;
+  } | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   // Yeni sipariş flash bildirimi - timestamp ms (5 dk = 300000 ms)
   // Bu zamana kadar Siparişler tab'ında kırmızı bildirim yansın söner
@@ -103,6 +107,33 @@ export function KasaBoard({ initialOrders, businessId }: Props) {
       // yoksay
     }
   }, [muted]);
+
+  // ============================================================
+  // TAM EKRAN
+  // ============================================================
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const onChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+
+  const toggleFullscreen = useCallback(async () => {
+    if (typeof document === 'undefined') return;
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      } else {
+        await document.documentElement.requestFullscreen();
+      }
+    } catch {
+      // fullscreen API desteklenmiyor olabilir, sessizce yoksay
+    }
+  }, []);
 
   // Polling/realtime callbacks içinde stale closure olmasın diye ref
   const mutedRef = useRef(muted);
@@ -544,11 +575,14 @@ export function KasaBoard({ initialOrders, businessId }: Props) {
     setComposerState(null);
     setRefreshKey((k) => k + 1);
 
-    // Hızlı satış ise → PaymentModal'ı otomatik aç
+    // Hızlı satış ise → HesapPanel'i otomatik aç (yeni ödeme akışı)
     if (wasQuickSale && info.online && info.orderId) {
-      const r = await getOrderForPayment(info.orderId);
+      const r = await getOrderAsDetail(info.orderId);
       if (r.success && r.order) {
-        setAutoPayOrder(r.order);
+        setAutoPayOrder({
+          order: r.order,
+          tableName: r.tableName || 'Hızlı Satış',
+        });
       }
     }
   };
@@ -619,6 +653,55 @@ export function KasaBoard({ initialOrders, businessId }: Props) {
 
         <div className="flex items-center gap-2">
           <PrinterStatusWidget />
+
+          {/* Tam ekran toggle */}
+          <button
+            onClick={toggleFullscreen}
+            className="h-9 w-9 rounded-[8px] flex items-center justify-center transition-all hover:scale-[1.05] active:scale-95"
+            style={{
+              background: isFullscreen
+                ? 'color-mix(in srgb, var(--accent) 12%, transparent)'
+                : 'var(--paper-2)',
+              border: `1px solid ${isFullscreen ? 'color-mix(in srgb, var(--accent) 35%, var(--line))' : 'var(--line)'}`,
+              color: isFullscreen ? 'var(--accent)' : 'var(--ink-3)',
+            }}
+            title={isFullscreen ? 'Tam ekrandan çık (F11)' : 'Tam ekran (F11)'}
+            aria-label={isFullscreen ? 'Tam ekrandan çık' : 'Tam ekran'}
+          >
+            {isFullscreen ? (
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M8 3v3a2 2 0 0 1-2 2H3" />
+                <path d="M21 8h-3a2 2 0 0 1-2-2V3" />
+                <path d="M3 16h3a2 2 0 0 1 2 2v3" />
+                <path d="M16 21v-3a2 2 0 0 1 2-2h3" />
+              </svg>
+            ) : (
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M3 7V5a2 2 0 0 1 2-2h2" />
+                <path d="M17 3h2a2 2 0 0 1 2 2v2" />
+                <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
+                <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
+              </svg>
+            )}
+          </button>
 
           {/* Sessize al toggle - tüm bildirim seslerini kapatır/açar */}
           <button
@@ -871,23 +954,27 @@ export function KasaBoard({ initialOrders, businessId }: Props) {
         />
       )}
 
-      {/* Hızlı Satış Otomatik Ödeme Modal */}
-      {autoPayOrder && (
-        <PaymentModal
-          open={true}
+      {/* Hızlı Satış Otomatik Ödeme — Yeni HesapPanel akışı */}
+      {autoPayOrder && cashier && (
+        <HesapPanel
+          tableId="__quick__"
+          tableName={autoPayOrder.tableName}
+          orders={[autoPayOrder.order]}
+          cashierId={cashier.id}
           onClose={() => setAutoPayOrder(null)}
-          onItemsChanged={async () => {
-            // Kalem ikramı yapıldı → autoPayOrder'ı güncel veriyle tazele
-            const r = await getOrderForPayment(autoPayOrder.id);
+          onChanged={async () => {
+            // Sipariş güncellendi (ikram, indirim vs) → tazele
+            const r = await getOrderAsDetail(autoPayOrder.order.id);
             if (r.success && r.order) {
-              setAutoPayOrder(r.order);
+              setAutoPayOrder({
+                order: r.order,
+                tableName: autoPayOrder.tableName,
+              });
             }
-          }}
-          onSuccess={() => {
-            setAutoPayOrder(null);
             setRefreshKey((k) => k + 1);
           }}
-          order={autoPayOrder}
+          hideMenu
+          hideOnAccount
         />
       )}
 

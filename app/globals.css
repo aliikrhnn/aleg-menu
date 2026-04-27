@@ -399,6 +399,33 @@ section[id],
   }
 }
 
+/* Desktop-first modal — kasa için ideal.
+ * Desktop'ta: max-h 95vh + normal max-width + border-radius korunur.
+ * Mobile'da: dvh kullanır ama tam ekran yapmaz (modal görünümü korunur,
+ * fakat klavye açıldığında hâlâ doğru viewport hesabı yapılır).
+ *
+ * `aleg-modal-mobile-fullscreen` aksine, mobil'de **küçültmez** —
+ * kasa gibi desktop-öncelikli ekranlar için. */
+.aleg-modal-desktop-first {
+  max-height: 95vh;
+  max-height: 95dvh;
+}
+
+@supports (height: 100dvh) {
+  .aleg-modal-desktop-first {
+    max-height: 95dvh;
+  }
+}
+
+@media (max-width: 640px) {
+  .aleg-modal-desktop-first {
+    /* Mobilde sadece güvenli sınırlar — agresif değil */
+    max-height: 92vh;
+    max-height: 92dvh;
+  }
+}
+
+
 /* Bottom sheet'ler için klavye-aware */
 .aleg-bottom-sheet {
   max-height: 92vh;

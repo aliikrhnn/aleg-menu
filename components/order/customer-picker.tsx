@@ -83,7 +83,7 @@ export function CustomerPicker({
       }}
     >
       <div
-        className="w-full max-w-[520px] rounded-[14px] flex flex-col overflow-hidden aleg-modal-mobile-fullscreen aleg-modal-content"
+        className="w-full max-w-[520px] rounded-[14px] flex flex-col overflow-hidden aleg-modal-desktop-first aleg-modal-content"
         style={{
           background: 'var(--paper)',
           boxShadow: '0 24px 60px -20px rgba(0,0,0,0.4)',

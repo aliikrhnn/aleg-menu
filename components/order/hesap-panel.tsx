@@ -61,6 +61,13 @@ type Props = {
   cashierId: string;
   onClose: () => void;
   onChanged: () => void;
+  /** Hızlı satış / parsiyel ödeme gibi modlarda Menu sütunu gizlenir */
+  hideMenu?: boolean;
+  /** Hızlı satış gibi modlarda "Açık Hesap" butonu gizlenir */
+  hideOnAccount?: boolean;
+  /** Başlangıçta seçili kalemler ("orderId__itemId" formatında).
+   *  Parsiyel ödeme için dış'tan kalemleri preselect etmek için kullanılır. */
+  initialSelectedItemIds?: string[];
 };
 
 export function HesapPanel({
@@ -70,9 +77,14 @@ export function HesapPanel({
   cashierId,
   onClose,
   onChanged,
+  hideMenu = false,
+  hideOnAccount = false,
+  initialSelectedItemIds,
 }: Props) {
   // Selection
-  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  const [selectedItems, setSelectedItems] = useState<Set<string>>(
+    () => new Set(initialSelectedItemIds || [])
+  );
 
   // Ödeme
   const [paymentMethod, setPaymentMethod] = useState<LocalPaymentMethod>('cash');
@@ -627,7 +639,7 @@ export function HesapPanel({
       }}
     >
       <div
-        className="w-full max-w-[1400px] rounded-[14px] flex flex-col overflow-hidden aleg-modal-mobile-fullscreen aleg-modal-content"
+        className="w-full max-w-[1400px] rounded-[14px] flex flex-col overflow-hidden aleg-modal-desktop-first aleg-modal-content"
         style={{
           background: 'var(--card)',
           boxShadow: '0 24px 80px -20px rgba(0,0,0,0.5)',
@@ -988,7 +1000,7 @@ export function HesapPanel({
               >
                 YÖNTEM
               </div>
-              <div className="grid grid-cols-3 gap-1.5 mb-3">
+              <div className={`grid ${hideOnAccount ? 'grid-cols-2' : 'grid-cols-3'} gap-1.5 mb-3`}>
                 <PayMethodButton
                   active={paymentMethod === 'cash'}
                   onClick={() => setPaymentMethod('cash')}
@@ -1001,12 +1013,14 @@ export function HesapPanel({
                   icon="💳"
                   label="Kart"
                 />
-                <PayMethodButton
-                  active={paymentMethod === 'on_account'}
-                  onClick={() => setPaymentMethod('on_account')}
-                  icon="📒"
-                  label="Açık Hes."
-                />
+                {!hideOnAccount && (
+                  <PayMethodButton
+                    active={paymentMethod === 'on_account'}
+                    onClick={() => setPaymentMethod('on_account')}
+                    icon="📒"
+                    label="Açık Hes."
+                  />
+                )}
               </div>
 
               {/* Aksiyon butonları */}
@@ -1101,20 +1115,22 @@ export function HesapPanel({
           </div>
 
           {/* SAĞ: MENÜ (+ ÜRÜN EKLE) */}
-          <div
-            className={`flex flex-col flex-shrink-0 lg:w-[380px] lg:border-l ${
-              isMobile && mobileTab !== 'menu' ? 'hidden' : ''
-            }`}
-            style={{ borderColor: 'var(--line)' }}
-          >
-            <MenuPicker
-              tableId={tableId}
-              targetOrderId={unpaidOrders[0]?.id}
-              cashierId={cashierId}
-              onAdded={onChanged}
-              defaultSendToKitchen={false}
-            />
-          </div>
+          {!hideMenu && (
+            <div
+              className={`flex flex-col flex-shrink-0 lg:w-[380px] lg:border-l ${
+                isMobile && mobileTab !== 'menu' ? 'hidden' : ''
+              }`}
+              style={{ borderColor: 'var(--line)' }}
+            >
+              <MenuPicker
+                tableId={tableId}
+                targetOrderId={unpaidOrders[0]?.id}
+                cashierId={cashierId}
+                onAdded={onChanged}
+                defaultSendToKitchen={false}
+              />
+            </div>
+          )}
         </div>
 
         {/* MOBILE TAB BAR */}
@@ -1132,7 +1148,7 @@ export function HesapPanel({
               badge={selectableItems.length}
             />
             <MobileTabBtn tab="pay" label="Ödeme" badge={fmt(payableAmount)} />
-            <MobileTabBtn tab="menu" label="+ Ürün" />
+            {!hideMenu && <MobileTabBtn tab="menu" label="+ Ürün" />}
           </div>
         )}
       </div>

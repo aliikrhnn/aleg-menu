@@ -11,7 +11,6 @@ import {
   type TableOrderDetail,
   type TableWithStatus,
 } from '@/lib/actions/tables-status';
-import { PaymentModal } from '@/app/panel/(shell)/pos/payment-modal';
 import { useCashierSession } from '@/lib/cashier-session';
 import { toast } from '@/components/ui/toast';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
@@ -35,8 +34,6 @@ export function TableDetailModal({
   const [orders, setOrders] = useState<TableOrderDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  // Ödeme modali için seçili sipariş
-  const [payingOrder, setPayingOrder] = useState<TableOrderDetail | null>(null);
   // Kalem bazlı ikram picker (itemId + orderId takip)
   const [giftItemContext, setGiftItemContext] = useState<{
     orderId: string;
@@ -51,13 +48,16 @@ export function TableDetailModal({
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   // Hesap paneli açık mı (yan panel layout)
   const [hesapPanelOpen, setHesapPanelOpen] = useState(false);
+  // HesapPanel açıldığında preselect edilecek kalemler (parsiyel mod için)
+  const [hesapPanelInitialSelection, setHesapPanelInitialSelection] = useState<
+    string[] | undefined
+  >(undefined);
   // Kalem seçimi (orderId + itemId set olarak)
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const { cashier } = useCashierSession();
 
   // ESC ile kapama - iç modal'lar açıkken devre dışı
   const escEnabled =
-    !payingOrder &&
     !giftItemContext &&
     !tableActionsOpen &&
     !changeTableOpen &&
@@ -571,43 +571,14 @@ export function TableDetailModal({
                     ★ İkram
                   </button>
                   <button
-                    onClick={async () => {
-                      // Önce sipariş ayır, sonra paid yap (parsiyel ödeme)
-                      // splitItemsFromMultipleOrders kullanılır - mevcut backend
-                      const ok = await confirmDialog({
-                        title: 'Seçili kalemleri öde?',
-                        body: `${fmt(selectedTotal)} tutarında ${selectedFlatItems.length} kalem ayrı bir hesap olarak ödenecek.`,
-                        confirmLabel: 'Ayır ve Öde',
-                        cancelLabel: 'Vazgeç',
-                      });
-                      if (!ok || !cashier) return;
-                      const itemIds = selectedFlatItems.map((fi) => fi.item.id);
-                      const r = await splitItemsFromMultipleOrders({
-                        itemIds,
-                        targetTableId: tableId,
-                        cashierId: cashier.id,
-                      });
-                      if (!r.success) {
-                        toast.error(r.error || 'Ayırma başarısız');
-                        return;
-                      }
-                      toast.success('Kalemler ayrıldı, ödeme açılıyor');
-                      clearSelection();
-                      // Yeni siparişi yükle ve ödeme aç
-                      const fresh = await getTableOrders(tableId);
-                      if (fresh.success) {
-                        const orders = fresh.orders || [];
-                        setOrders(orders);
-                        const newOrderId = r.newOrderId;
-                        const target = newOrderId
-                          ? orders.find((o) => o.id === newOrderId)
-                          : orders.find(
-                              (o) =>
-                                o.payment_status !== 'paid' &&
-                                o.payment_status !== 'refunded'
-                            );
-                        if (target) setPayingOrder(target);
-                      }
+                    onClick={() => {
+                      // Yeni: HesapPanel'i parsiyel mod ile aç
+                      // Seçili kalemler preselect olacak, kullanıcı orada öder
+                      const ids = selectedFlatItems.map(
+                        (fi) => `${fi.orderId}__${fi.item.id}`
+                      );
+                      setHesapPanelInitialSelection(ids);
+                      setHesapPanelOpen(true);
                     }}
                     className="flex-1 h-11 rounded-[10px] font-semibold text-sm flex items-center justify-center gap-2 transition-all hover:opacity-95 active:scale-[0.99]"
                     style={{
@@ -626,6 +597,7 @@ export function TableDetailModal({
                 <button
                   onClick={() => {
                     // Yeni: HesapPanel'i aç (yan panel layout C3)
+                    setHesapPanelInitialSelection(undefined);
                     setHesapPanelOpen(true);
                   }}
                   className="flex-1 h-11 rounded-[10px] font-semibold text-sm flex items-center justify-center gap-2 transition-all hover:opacity-95 active:scale-[0.99]"
@@ -650,57 +622,6 @@ export function TableDetailModal({
           )}
         </div>
       </div>
-
-      {/* Ödeme Modal */}
-      {payingOrder && (
-        <PaymentModal
-          open={true}
-          onClose={() => setPayingOrder(null)}
-          onItemsChanged={async () => {
-            // PaymentModal'da kalem ikramı yapıldı → sipariş detayını yenile
-            const r = await getTableOrders(tableId);
-            if (r.success) {
-              const fresh = r.orders || [];
-              setOrders(fresh);
-              // payingOrder'ı güncel veriyle tazeleyelim
-              const refreshed = fresh.find((o) => o.id === payingOrder.id);
-              if (refreshed) setPayingOrder(refreshed);
-            }
-          }}
-          onSuccess={async () => {
-            setPayingOrder(null);
-            // Siparişleri yeniden yükle (load sonucu için data döndürelim)
-            const r = await getTableOrders(tableId);
-            if (r.success) {
-              const fresh = r.orders || [];
-              setOrders(fresh);
-              const stillUnpaid = fresh.some(
-                (o) =>
-                  o.payment_status !== 'paid' &&
-                  o.payment_status !== 'refunded'
-              );
-              // Tüm siparişler ödenmişse modal'ı otomatik kapat
-              if (!stillUnpaid) {
-                setTimeout(() => onClose(), 600); // kısa delay — success feedback gözüksün
-              }
-            }
-          }}
-          order={{
-            id: payingOrder.id,
-            order_no: payingOrder.order_no,
-            total: payingOrder.total,
-            table_label: tableName,
-            items: payingOrder.items.map((it) => ({
-              id: it.id,
-              product_name: it.product_name,
-              quantity: it.quantity,
-              unit_price: it.unit_price,
-              is_complimentary: it.is_complimentary,
-              complimentary_reason: it.complimentary_reason,
-            })),
-          }}
-        />
-      )}
 
       {/* Hızlı Ürün Ekle Modal (menüden direkt) */}
       {quickAddOpen && cashier && (() => {
@@ -748,7 +669,13 @@ export function TableDetailModal({
           tableName={tableName}
           orders={orders}
           cashierId={cashier.id}
-          onClose={() => setHesapPanelOpen(false)}
+          initialSelectedItemIds={hesapPanelInitialSelection}
+          onClose={() => {
+            setHesapPanelOpen(false);
+            setHesapPanelInitialSelection(undefined);
+            // HesapPanel kapanınca seçimi temizle
+            clearSelection();
+          }}
           onChanged={() => {
             // Sipariş değişti - listemizi tazele
             load();
