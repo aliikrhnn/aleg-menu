@@ -741,7 +741,7 @@ function ProductOptionsPicker({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full sm:max-w-md max-h-[85vh] flex flex-col rounded-t-[16px] sm:rounded-[16px] overflow-hidden"
+        className="w-full sm:max-w-md aleg-bottom-sheet aleg-modal-content flex flex-col rounded-t-[16px] sm:rounded-[16px] overflow-hidden"
         style={{ background: 'var(--paper)' }}
       >
         <div

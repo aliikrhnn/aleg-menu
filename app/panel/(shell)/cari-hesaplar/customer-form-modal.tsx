@@ -105,10 +105,9 @@ export function CustomerFormModal({
       }}
     >
       <div
-        className="w-full max-w-[480px] rounded-[14px] flex flex-col overflow-hidden"
+        className="w-full max-w-[480px] rounded-[14px] flex flex-col overflow-hidden aleg-modal-mobile-fullscreen aleg-modal-content"
         style={{
           background: 'var(--paper)',
-          maxHeight: '90vh',
           boxShadow: '0 24px 60px -20px rgba(0,0,0,0.4)',
         }}
       >

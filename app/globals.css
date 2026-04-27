@@ -364,3 +364,102 @@ section[id],
   0% { opacity: 0; transform: translateY(8px) scale(0.97); }
   100% { opacity: 1; transform: translateY(0) scale(1); }
 }
+
+/* ============================================================
+ * UX PAKET 2 — MOBILE/TABLET UTILITY'LERİ
+ * ============================================================ */
+
+/* Touch hedef minimum boyutu (iOS/Material guideline) */
+.aleg-touch-min {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Mobile'da modal tam ekran (klavye dahil dvh kullanır) */
+.aleg-modal-mobile-fullscreen {
+  max-height: min(95vh, 95dvh);
+}
+
+@supports (height: 100dvh) {
+  .aleg-modal-mobile-fullscreen {
+    max-height: min(95vh, 95dvh);
+  }
+}
+
+@media (max-width: 640px) {
+  .aleg-modal-mobile-fullscreen {
+    /* Mobilde tam ekrana yakın */
+    max-height: 100vh;
+    max-height: 100dvh;
+    height: 100vh;
+    height: 100dvh;
+    border-radius: 0 !important;
+    width: 100vw !important;
+    max-width: 100vw !important;
+  }
+}
+
+/* Bottom sheet'ler için klavye-aware */
+.aleg-bottom-sheet {
+  max-height: 92vh;
+  max-height: 92dvh;
+}
+
+@media (max-width: 640px) {
+  .aleg-bottom-sheet {
+    max-height: 100vh;
+    max-height: 100dvh;
+  }
+}
+
+/* iOS safe area (alt çentik) */
+.aleg-safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+.aleg-safe-top {
+  padding-top: env(safe-area-inset-top, 0);
+}
+
+/* Klavye açıkken alt buton bar - sticky bottom */
+.aleg-keyboard-aware-bottom {
+  position: sticky;
+  bottom: 0;
+  bottom: env(safe-area-inset-bottom, 0);
+  background: var(--paper);
+  border-top: 1px solid var(--line);
+  z-index: 1;
+}
+
+/* Tablet - kasa masalar grid genişlet */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .aleg-tables-grid-tablet {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+/* Tablet - sipariş kartları 2 sütun */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .aleg-orders-tablet-2col {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Input zoom önleme (iOS) */
+@media (max-width: 640px) {
+  input[type="text"],
+  input[type="email"],
+  input[type="tel"],
+  input[type="number"],
+  input[type="password"],
+  input[type="search"],
+  textarea,
+  select {
+    font-size: 16px !important; /* iOS Safari 16px altı zoom yapar */
+  }
+}
+
+/* Scroll'da overscroll bounce engelleme (modal) */
+.aleg-modal-content {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}

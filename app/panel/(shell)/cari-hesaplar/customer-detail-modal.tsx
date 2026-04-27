@@ -193,7 +193,7 @@ export function CustomerDetailModal({
       }}
     >
       <div
-        className="w-full max-w-[700px] h-full max-h-[90vh] rounded-[14px] flex flex-col overflow-hidden"
+        className="w-full max-w-[700px] rounded-[14px] flex flex-col overflow-hidden aleg-modal-mobile-fullscreen aleg-modal-content"
         style={{
           background: 'var(--card)',
           boxShadow: '0 24px 80px -20px rgba(0,0,0,0.5)',

@@ -627,7 +627,7 @@ export function HesapPanel({
       }}
     >
       <div
-        className="w-full max-w-[1400px] h-full max-h-[95vh] rounded-[14px] flex flex-col overflow-hidden"
+        className="w-full max-w-[1400px] rounded-[14px] flex flex-col overflow-hidden aleg-modal-mobile-fullscreen aleg-modal-content"
         style={{
           background: 'var(--card)',
           boxShadow: '0 24px 80px -20px rgba(0,0,0,0.5)',

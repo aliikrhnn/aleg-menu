@@ -91,7 +91,7 @@ export function ZReportModal({
       }}
     >
       <div
-        className="w-full max-w-[720px] max-h-[90vh] overflow-y-auto rounded-[var(--r)]"
+        className="w-full max-w-[720px] aleg-modal-mobile-fullscreen aleg-modal-content overflow-y-auto rounded-[var(--r)]"
         style={{
           background: 'var(--card)',
           boxShadow: '0 20px 60px -20px rgba(0,0,0,0.4)',
