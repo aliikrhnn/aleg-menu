@@ -1,118 +1,115 @@
-# 🚨 FULL SYNC — Tüm Güncel Dosyalar
+# 🎯 UX PAKET 1C — Kalan Modal'lara ESC Yayma
 
-Şu ana kadar tüm sohbette değiştirilen / eklenen **TÜM** dosyalar bu pakette.
-Lokal kopyandaki eski sürüm sorunlarını **kalıcı olarak çözer**.
+UX Paket 1B'den sonra kalan **15 modal**'a ESC tuşu desteği.
 
-**28 dosya · 1 migration.**
+**15 dosya · Migration yok.** Yeni dependency yok (Paket 1 helper'larını kullanır).
 
-## 🐛 Sorun
+## ✅ Yayma Detayı (15 modal)
 
-Önceki paketler `Expand-Archive` `-Force` flag'i olmadan çıkarıldığında
-**eski dosyalar üzerine yazılmadı** → her push'ta başka bir lint/build hatası
-çıktı:
+### Order
+| # | Modal | Devre Dışı Koşul |
+|---|-------|-----------------|
+| 1 | `order-taking-modal.tsx` (sipariş alma) | submitting |
 
-1. `useEffect` unused → cash-session-modal.tsx
-2. `PrintButton` unused → table-detail-modal.tsx
-3. `businessName` Props yok → z-report-modal.tsx
-4. `cancelOrderItems` export yok → tables-status.ts
-5. `setFillColor` 4 arg → z-report-pdf.ts  ← bu seferki
+### Panel
+| # | Modal | Devre Dışı Koşul |
+|---|-------|-----------------|
+| 2 | `call-buttons-manager.tsx` (ButtonForm) | pending |
+| 3 | `cashier-manager.tsx` (CashierFormModal) | pending |
+| 4 | `cashier-manager.tsx` (ChangePinModal) | pending |
+| 5 | `tables-manager.tsx` (Modal wrapper → tüm submodaller) | her zaman aktif |
+| 6 | `preset-form-modal.tsx` (varyasyon) | saving |
+| 7 | `attach-products-modal.tsx` (varyasyon) | saving |
 
-Bu paket **bütün lokal dosyaları güncel sürümle değiştirir** → tek seferde tüm
-sorunları çözer.
+### POS
+| # | Modal | Devre Dışı Koşul |
+|---|-------|-----------------|
+| 8 | `sync-panel.tsx` (eski ESC → hook) | open |
+| 9 | `pos-topbar.tsx` (DevMenu dropdown) | showDevMenu |
 
-## 📦 İçerik (28 dosya + 1 migration)
+### AI / Image
+| # | Modal | Devre Dışı Koşul |
+|---|-------|-----------------|
+| 10 | `ai-monogram-modal.tsx` | loading |
+| 11 | `ai-slogan-modal.tsx` | loading |
+| 12 | `product-image-crop-modal.tsx` | loading |
+| 13 | `qr-picker-modal.tsx` | busy (PDF üretimi) |
 
-### Backend / Actions
-- `lib/actions/customers.ts` — Cari sistemi (3 paket)
-- `lib/actions/payments.ts` — Z rapor cari entegrasyonu
-- `lib/actions/tables-status.ts` — `cancelOrderItems` + `closeOrderOnAccount` zorunlu customerId
+### Kasa & QR Menu
+| # | Modal | Devre Dışı Koşul |
+|---|-------|-----------------|
+| 14 | `day-summary-preview.tsx` (eski ESC → hook) | open |
+| 15 | `day-summary-wizard.tsx` (eski ESC → hook, handleCloseAttempt çağırır) | open |
+| 16 | `menu-view.tsx` (Çağrı Sheet) | callingButtonId |
+| 17 | `menu-view.tsx` (OptionPickerModal) | her zaman aktif |
 
-### Utility
-- `lib/utils/z-report-pdf.ts` — Açık Hesap bölümü + source label, **`setFillColor` düzeltildi**
+## 🚀 Push
 
-### Hooks (yeni)
-- `lib/hooks/use-escape-key.ts` — Modal ESC
-
-### UI Helpers (yeni)
-- `components/ui/skeleton.tsx`
-- `components/ui/empty-state.tsx`
-- `components/ui/spinner.tsx`
-- `components/ui/index.ts`
-
-### Order Components
-- `components/order/hesap-panel.tsx` — HesapPanel B + ESC + tüm submodaller
-- `components/order/menu-picker.tsx` — embedded picker + ESC
-- `components/order/customer-picker.tsx` — açık hesap kullanıcı seçici
-
-### Kasa
-- `app/kasa/kasa-board.tsx` — flash bildirim + tab pulse
-- `app/kasa/kasa-tabs.tsx` — flashing prop + animasyon
-- `app/kasa/order-composer.tsx` — ESC
-- `app/kasa/register-panel.tsx` — hasData cari aktivite dahil
-- `app/kasa/table-detail-modal.tsx` — ESC + unpaidTotal + flat satır click
-- `app/kasa/tables-grid.tsx` — Skeleton iskelet
-
-### Menu (QR)
-- `app/menu/[slug]/cart-drawer.tsx` — ESC
-
-### Panel POS
-- `app/panel/(shell)/pos/cash-session-modal.tsx` — ESC, `useEffect` import temiz
-- `app/panel/(shell)/pos/orders-board.tsx` — Yeni Sipariş kolonu silindi + auto-confirm
-- `app/panel/(shell)/pos/payment-modal.tsx` — ESC hook
-- `app/panel/(shell)/pos/split-payment-modal.tsx` — ESC hook
-- `app/panel/(shell)/pos/z-report-modal.tsx` — Açık Hesap bölümü + source badge
-
-### Cari Hesaplar
-- `app/panel/(shell)/cari-hesaplar/customer-detail-modal.tsx` — Filter + CSV + ESC
-- `app/panel/(shell)/cari-hesaplar/customer-form-modal.tsx` — ESC
-- `app/panel/(shell)/cari-hesaplar/customers-manager.tsx` — Skeleton
-
-### Migration
-- `supabase/migrations/0030_customers.sql` — customers tablosu
-
-## 🚀 Push (KRİTİK — Force Şart!)
+> ⚠️ UX Paket 1 (helpers) önce push edilmiş olmalı. Paket 1B push'undan sonra
+> bu paket gelir.
 
 ```powershell
-# 1. Force ile extract
-Expand-Archive -Path full-sync.zip -DestinationPath . -Force
+Expand-Archive -Path ux-paket-1C.zip -DestinationPath . -Force
 
-# 2. Migration daha önce uygulandıysa atla, yoksa Supabase'e uygula
-# (panel → SQL editor)
-
-# 3. Commit + push
 git add .
-git commit -m "sync: tüm güncel dosyalar (cari + ux paket 1B + lint fix)"
+git commit -m "feat(ux): paket 1C - kalan 15 modal'a esc yayma"
 git push
 ```
 
-## ✅ Beklenen Sonuç
+## 🧪 Test Senaryoları
 
-Push edince **build başarılı** olmalı. Geri kalan **6 warning** error değil:
-- 4× `kasa-board.tsx` useEffect missing dep
-- `receipt-preview.tsx` `<img>` öneri
-- `advanced-tab.tsx` useEffect missing dep
-- `toast.tsx` ref cleanup öneri
+### A) Panel Modal'ları
+1. **Çağrı Butonları** → + Yeni → ESC → ✅ kapanır
+2. **Kasiyerler** → + Yeni Kasiyer → ESC → ✅ kapanır
+3. **Kasiyer detay** → "PIN Değiştir" → ESC → ✅ kapanır
+4. **Masalar** → + Yeni Masa → ESC → ✅ (tüm modal'larda aynı çalışır - wrapper)
+5. **Varyasyonlar** → + Yeni Preset → ESC → ✅ kapanır
+6. **Bir preset** → "Ürünleri Bağla" → ESC → ✅ kapanır
 
-Bunlar sonra UX Paket 3'te toplu temizlenecek.
+### B) AI Modal'ları
+1. **İşletme** → "AI Logo Üret" → ESC → ✅ kapanır
+2. **AI Slogan** → ESC → ✅ kapanır
+3. Üretim sırasında ESC bas → ✅ engellenir
 
-## 💡 İleride
+### C) Diğerleri
+1. **Ürün resim yükleme** → kırpma modal → ESC → ✅ kapanır
+2. **Masalar → QR Yazdır** → QR Picker → ESC → ✅ kapanır (PDF üretim sırasında engellenir)
+3. **Kasa → Sync** → ESC → ✅ kapanır
+4. **Kasa POS → Top bar ⋯** → DevMenu açıkken ESC → ✅ kapanır
+5. **Hızlı Satış / Sipariş Alma** → ESC → ✅ kapanır
+6. **Kasa → Gün Sonu Wizard** → ESC → ✅ confirm dialog gösterir (handleCloseAttempt)
+7. **Gün Sonu Önizleme** → ESC → ✅ kapanır
 
-Bundan sonra her paket için:
+### D) QR Menü (Müşteri tarafı)
+1. **Çağrı butonu** (✋) → Service Sheet açılır → ESC → ✅ kapanır
+2. Çağrı gönderme sırasında ESC → ✅ engellenir
+3. **Varyantlı ürün** → + butonu → OptionPicker → ESC → ✅ kapanır
 
-```powershell
-Expand-Archive -Path PAKET.zip -DestinationPath . -Force
-```
+## 💡 Kapsam Bilançosu
 
-`-Force` **şart**. Yoksa eski dosyalar kalır, yine bu sorun döner.
+| | |
+|---|---|
+| Paket 1B'de yapılan | 9 modal |
+| **Bu pakette yapılan** | **15 modal** |
+| **Toplam ESC destekli** | **24 modal** |
+
+Aleg projesindeki **TÜM modal'larda** artık ESC çalışıyor 🎯
+
+### Kapsanmayan
+- `confirm-dialog.tsx` zaten ESC desteğine sahipti (Paket 1B'de fark edildi)
+- `kasa-board.tsx` ve `register-panel.tsx` içindeki dropdown/popover'lar — bunlar
+  modal değil, click-outside ile kapanır
 
 ## 🗺️ Durum
 
-Bu paket'le tüm bekleyen değişiklikler senkron olur:
-- ✅ Cari Paket 1, 2, 3
-- ✅ Cari Manuel Paket A
-- ✅ Z Raporu Tüm Modül
-- ✅ Kasa Empty Fix
-- ✅ Paket B (yeni sipariş + flash)
-- ✅ UX Paket 1 (helpers)
-- ✅ UX Paket 1B (yayma)
-- ✅ Tüm lint fix'ler
+| | |
+|---|---|
+| UX Paket 1 (helpers) | ✅ |
+| UX Paket 1B (yayma) | ✅ |
+| **UX Paket 1C (kalan modal'lar)** | **✅ TESLİM** |
+| UX Paket 2 (Mobile/Tablet) | 🔜 Sıradaki |
+| UX Paket 3 (Kod kalitesi) | 🔜 |
+
+---
+
+Push → test → çalışırsa **UX Paket 2 (Mobile/Tablet)** başla 🚀

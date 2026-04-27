@@ -8,6 +8,7 @@ import {
   useRef,
   useCallback,
 } from 'react';
+import { useEscapeKey } from '@/lib/hooks/use-escape-key';
 import type { LocalizedText } from '@/types/database';
 import { CartDrawer } from './cart-drawer';
 import {
@@ -151,6 +152,12 @@ export function MenuView({
 
   // Çağrı butonları - state olarak tut, sheet açıldığında refresh
   const [callButtons, setCallButtons] = useState<CallButton[]>(initialCallButtons);
+
+  // Service sheet ESC ile kapanır (çağrı gönderme sırasında değil)
+  useEscapeKey(
+    () => setServiceSheetOpen(false),
+    serviceSheetOpen && !callingButtonId
+  );
 
   // Sheet açıldığında en güncel butonları çek (cache bypass)
   useEffect(() => {
@@ -1939,6 +1946,9 @@ function OptionPickerModal({
   onConfirm: (selections: SelectedOption[]) => void;
   onClose: () => void;
 }) {
+  // ESC ile kapama
+  useEscapeKey(onClose);
+
   // İlk seçimleri hazırla (default'lar)
   const [selections, setSelections] = useState<Record<string, string[]>>(() => {
     const init: Record<string, string[]> = {};

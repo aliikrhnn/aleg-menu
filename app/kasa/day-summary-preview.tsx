@@ -11,6 +11,7 @@
  */
 
 import { useEffect } from 'react';
+import { useEscapeKey } from '@/lib/hooks/use-escape-key';
 import type { ZReport } from '@/lib/actions/payments';
 import { generateZReportPdf } from '@/lib/utils/z-report-pdf';
 import { toast } from '@/components/ui/toast';
@@ -49,20 +50,18 @@ export function DaySummaryPreview({
 }: Props) {
   const [downloading, setDownloading] = useState(false);
 
+  // ESC ile kapama
+  useEscapeKey(onClose, open);
+
+  // Scroll kilidi
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    // Scroll kilidi
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
-      window.removeEventListener('keydown', onKey);
       document.body.style.overflow = prev;
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open || !report) return null;
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useEscapeKey } from '@/lib/hooks/use-escape-key';
 
 interface Props {
   businessName: string;
@@ -35,6 +36,9 @@ export function AiSloganModal({
     limit: number;
     resetsIn?: number;
   } | null>(null);
+
+  // ESC ile kapama (loading sırasında değil)
+  useEscapeKey(onClose, !loading);
 
   // Modal açıldığında rate limit'i çek
   useEffect(() => {

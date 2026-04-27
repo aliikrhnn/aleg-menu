@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useEscapeKey } from '@/lib/hooks/use-escape-key';
 import {
   generateQrDataUrl,
   generateCardSvg,
@@ -36,6 +37,9 @@ export function QrPickerModal({ mode, onClose }: QrPickerModalProps) {
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
 
   const [previewSvg, setPreviewSvg] = useState<string>('');
+
+  // ESC ile kapama (PDF üretimi sırasında değil)
+  useEscapeKey(onClose, !busy);
 
   const previewItem: QrPdfItem =
     mode.kind === 'single' ? mode.item : mode.items[0] || { tableName: 'Masa 1', businessName: 'İşletme', qrUrl: 'https://example.com' };

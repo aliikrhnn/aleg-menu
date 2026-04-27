@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useEscapeKey } from '@/lib/hooks/use-escape-key';
 import {
   getDB,
   retryAllFailed,
@@ -40,14 +41,8 @@ export function SyncPanel({ open, onClose }: Props) {
     return () => clearInterval(t);
   }, [open]);
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  // ESC ile kapama
+  useEscapeKey(onClose, open);
 
   const handleRetryAll = async () => {
     setRefreshing(true);

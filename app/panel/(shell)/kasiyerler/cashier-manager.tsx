@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { useEscapeKey } from '@/lib/hooks/use-escape-key';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
 import {
   createCashier,
@@ -556,6 +557,9 @@ function CashierFormModal({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
+  // ESC ile kapama
+  useEscapeKey(onClose, !pending);
+
   const handleSubmit = () => {
     setError(null);
 
@@ -882,6 +886,9 @@ function ChangePinModal({
   const [pinConfirm, setPinConfirm] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  // ESC ile kapama
+  useEscapeKey(onClose, !pending);
 
   const handleSubmit = () => {
     if (pin !== pinConfirm) {

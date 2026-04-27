@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useTransition } from 'react';
+import { useEscapeKey } from '@/lib/hooks/use-escape-key';
 import { useRouter } from 'next/navigation';
 import {
   createTable,
@@ -1146,6 +1147,9 @@ function Modal({
   children: React.ReactNode;
   onClose: () => void;
 }) {
+  // ESC ile kapama
+  useEscapeKey(onClose);
+
   return (
     <div
       className="fixed inset-0 z-[1000] flex items-center justify-center p-5"

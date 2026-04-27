@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { useEscapeKey } from '@/lib/hooks/use-escape-key';
 import {
   CallButton,
   createCallButton,
@@ -342,6 +343,9 @@ function ButtonForm({
   const [pending, startTransition] = useTransition();
 
   const isEdit = !!initial;
+
+  // ESC ile kapama (submit sırasında değil)
+  useEscapeKey(onClose, !pending);
 
   const handleSubmit = () => {
     if (!name.trim()) {

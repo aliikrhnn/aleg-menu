@@ -20,6 +20,7 @@
  */
 
 import { useState } from 'react';
+import { useEscapeKey } from '@/lib/hooks/use-escape-key';
 import { useOnlineStatus } from '@/lib/hooks/use-online-status';
 import { SyncPanel } from './sync-panel';
 
@@ -32,6 +33,9 @@ export function PosTopbar({ onRefresh, pendingSyncCount }: Props) {
   const { status, simulating, toggleSimulate } = useOnlineStatus();
   const [syncModal, setSyncModal] = useState(false);
   const [showDevMenu, setShowDevMenu] = useState(false);
+
+  // Dev menu ESC ile kapansın
+  useEscapeKey(() => setShowDevMenu(false), showDevMenu);
 
   const statusLabel = {
     online: 'ÇEVRİMİÇİ',

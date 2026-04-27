@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useEscapeKey } from '@/lib/hooks/use-escape-key';
 import type { Preset, PresetInput } from '@/lib/actions/options';
 import { toast } from '@/components/ui/toast';
 
@@ -24,6 +25,9 @@ function newLocalId() {
 }
 
 export function PresetFormModal({ initial, onSubmit, onClose, saving }: Props) {
+  // ESC ile kapama (kayıt sırasında değil)
+  useEscapeKey(onClose, !saving);
+
   const [name_tr, setNameTr] = useState(initial?.name.tr || '');
   const [name_en, setNameEn] = useState(initial?.name.en || '');
   const [type, setType] = useState<'single' | 'multi'>(initial?.type || 'single');

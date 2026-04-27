@@ -17,6 +17,7 @@
  */
 
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEscapeKey } from '@/lib/hooks/use-escape-key';
 import {
   getZReport,
   type CashSession,
@@ -103,20 +104,17 @@ export function DaySummaryWizard({
     return r.preset;
   }, []);
 
-  // ESC handling + scroll kilidi
+  // ESC ile kapama (handleCloseAttempt çağır - confirm dialog gösterir)
+  useEscapeKey(handleCloseAttempt, open);
+
+  // Scroll kilidi
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') handleCloseAttempt();
-    };
-    window.addEventListener('keydown', onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
-      window.removeEventListener('keydown', onKey);
       document.body.style.overflow = prev;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   // Açıldığında state sıfırla (cache korunur, sadece UI state)

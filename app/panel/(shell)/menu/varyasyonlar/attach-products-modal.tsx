@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import { useEscapeKey } from '@/lib/hooks/use-escape-key';
 import type { LocalizedText } from '@/types/database';
 import type { Preset } from '@/lib/actions/options';
 import { toast } from '@/components/ui/toast';
@@ -34,6 +35,9 @@ export function AttachProductsModal({
   onClose,
   saving,
 }: Props) {
+  // ESC ile kapama
+  useEscapeKey(onClose, !saving);
+
   // İlk değer: zaten bağlı olan ürünleri seçili olarak başlat
   const [selected, setSelected] = useState<Set<string>>(
     () => new Set(preset.product_ids || [])

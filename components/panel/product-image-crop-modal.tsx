@@ -2,6 +2,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useState, useRef, useEffect } from 'react';
+import { useEscapeKey } from '@/lib/hooks/use-escape-key';
 import ReactCrop, {
   type Crop,
   type PixelCrop,
@@ -27,6 +28,9 @@ export function ProductImageCropModal({ imageFile, onCropped, onClose }: Props) 
   const [completedCrop, setCompletedCrop] = useState<PixelCrop | null>(null);
   const [loading, setLoading] = useState(false);
   const imgRef = useRef<HTMLImageElement>(null);
+
+  // ESC ile kapama (kırpma sırasında değil)
+  useEscapeKey(onClose, !loading);
 
   // File → dataURL
   useEffect(() => {

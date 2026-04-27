@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useEscapeKey } from '@/lib/hooks/use-escape-key';
 import { toast } from '@/components/ui/toast';
 
 interface Props {
@@ -34,6 +35,9 @@ export function AiMonogramModal({ businessName, onSelect, onClose }: Props) {
     limit: number;
     resetsIn?: number;
   } | null>(null);
+
+  // ESC ile kapama (loading sırasında değil)
+  useEscapeKey(onClose, !loading);
 
   // Modal açıldığında rate limit'i çek
   useEffect(() => {

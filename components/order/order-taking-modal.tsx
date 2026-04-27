@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useEscapeKey } from '@/lib/hooks/use-escape-key';
 import { toast } from '@/components/ui/toast';
 import {
   getPosMenu,
@@ -67,6 +68,9 @@ export function OrderTakingModal({
   const [cart, setCart] = useState<CartItem[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [noteEditingKey, setNoteEditingKey] = useState<string | null>(null);
+
+  // ESC ile kapama (submit sırasında değil)
+  useEscapeKey(onClose, !submitting);
 
   // Menü yükle
   useEffect(() => {
