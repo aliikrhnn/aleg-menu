@@ -1547,7 +1547,7 @@ export async function listTablesForMove(): Promise<{
 
 export async function splitItemsFromMultipleOrders(input: {
   itemIds: string[];
-  targetTableId: string;
+  targetTableId: string | null; // null ise masasız sipariş (hızlı satış parsiyel)
   cashierId: string;
 }): Promise<{
   success: boolean;
@@ -1563,14 +1563,16 @@ export async function splitItemsFromMultipleOrders(input: {
       return { success: false, error: 'En az bir ürün seç' };
     }
 
-    // Hedef masa güvenliği
-    const { data: targetTable } = await admin
-      .from('tables')
-      .select('id, business_id')
-      .eq('id', input.targetTableId)
-      .maybeSingle();
-    if (!targetTable || targetTable.business_id !== businessId) {
-      return { success: false, error: 'Hedef masa bulunamadı' };
+    // Hedef masa güvenliği (null ise atla — masasız split)
+    if (input.targetTableId) {
+      const { data: targetTable } = await admin
+        .from('tables')
+        .select('id, business_id')
+        .eq('id', input.targetTableId)
+        .maybeSingle();
+      if (!targetTable || targetTable.business_id !== businessId) {
+        return { success: false, error: 'Hedef masa bulunamadı' };
+      }
     }
 
     // Taşınacak kalemleri topla — hangi siparişlerden olduğu önemli
@@ -1694,8 +1696,10 @@ export async function splitItemsFromMultipleOrders(input: {
       }
     }
 
-    // Hedef masa occupied
-    await admin.from('tables').update({ status: 'occupied' }).eq('id', input.targetTableId);
+    // Hedef masa occupied (null ise atla — masasız split)
+    if (input.targetTableId) {
+      await admin.from('tables').update({ status: 'occupied' }).eq('id', input.targetTableId);
+    }
 
     // Kaynak masalar — başka aktif sipariş yoksa boşalt
     const sourceTableIds = [...new Set(

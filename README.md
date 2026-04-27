@@ -1,143 +1,105 @@
-# 🎯 HIZLI SATIŞ HESAPPANEL
+# 🔧 HIZLI SATIŞ FIX — Header + Parsiyel Ödeme Bug
 
-Hızlı satış akışı tamamen HesapPanel'e geçti. **QuickSaleLanding ekranı kalır**
-(yani "Yeni Satış" başlat butonu) — sadece tıklayınca eski composer yerine
-**HesapPanel** açılır.
+İki sorun çözüldü:
 
-**3 dosya · Migration yok.**
+## 🐛 Sorun 1 — Header "Masa Hızlı Satış" Yazıyordu
 
-## ✨ Yeni Akış
+**Önce:** `Masa Hızlı Satış` (yanlış görünüm)
+**Sonra:** Sadece `Hızlı Satış` (quickSale modu için temiz başlık)
 
-```
-Kasa → Hızlı Satış sekmesi
-  ↓
-[QuickSaleLanding] - "Yeni Satış" butonu (KORUNDU ✅)
-  ↓ tıkla
-[HesapPanel - Hızlı Satış Modu]
-  ├─ Sol: KALEMLER  (boş başlar)
-  ├─ Orta: ÖDEME    (Nakit/Kart, indirim, parçalı)
-  └─ Sağ: MENÜ      (kategoriler + ürünler)
+Bu önceki "Hızlı Satış HesapPanel" paketinde zaten kodda vardı ama
+push edilmemiş olabilir — bu paket'te dahil.
 
-→ Sağdan ürün tıkla → arka planda createManualOrder → kalem solda görünür
-→ Birkaç ürün ekle → toplam güncellenir
-→ Nakit/Kart seç → Öde → tamamlanır
-```
+## 🐛 Sorun 2 — Parsiyel Ödeme "Hedef masa bulunamadı"
 
-## 🎨 Hızlı Satış Modunda HesapPanel
+**Önce:** Hızlı satışta kalem seçip "Seçili Öde" → backend
+`splitItemsFromMultipleOrders({ targetTableId: '__quick__' })` çağırıyordu
+→ "__quick__" UUID değil → "Hedef masa bulunamadı" hatası.
 
-Eskisinden farklar:
-- ✅ **Header**: "YENİ SATIŞ — Hızlı Satış" (eski: "HESAP AL — Masa X")
-- ✅ **Alt yazı**: "TOPLAM" (eski: "MASA TOPLAM")
-- ✅ **Açık Hesap butonu gizli** (`hideOnAccount`) — cari kullanıcı yok
-- ✅ **Yöntem grid'i**: 2 sütun (Nakit + Kart) — 3 yerine
-- ✅ **Empty state**: "🛒 Sağdaki menüden ürün ekleyin"
-- ✅ **Mobile default tab**: Boşken otomatik "+ Ürün" sekmesinde başlar
-- ✅ **Menü açık**: `hideMenu={false}` — hızlı satışta gerekli
+**Sonra:** Backend `targetTableId: string | null` destekliyor.
+Frontend hızlı satışta `null` geçiyor → masasız split sipariş yaratılır.
 
-## 🔧 Teknik Detaylar
+## ✅ Değişiklikler
 
-### MenuPicker — `quickSale` prop
-```typescript
-quickSale?: boolean;  // true ise tableId yerine null kullanır
-```
+### Backend (`lib/actions/tables-status.ts`)
+- `splitItemsFromMultipleOrders`: `targetTableId: string | null` desteklendi
+  - Null ise hedef masa kontrolü atlanır
+  - Null ise yeni siparişin `table_id` null kalır (masasız)
+  - Null ise tables.update çağrısı yapılmaz
 
-`createManualOrder({ tableId: null, orderType: 'pickup' })` ile masasız sipariş.
+### Frontend (`components/order/hesap-panel.tsx`)
+- 4 yerde `splitItemsFromMultipleOrders` çağrısı: `targetTableId: quickSale ? null : tableId`
+- Header zaten `quickSale ? 'YENİ SATIŞ — Hızlı Satış' : 'HESAP AL — Masa X'`
 
-### onAdded callback signature
-```typescript
-onAdded: (newOrderId?: string) => void;
-```
-Yeni sipariş yaratıldığında `orderId` döner — kasa-board bunu state'e ekler.
+### MenuPicker (zaten önceki pakette var)
+- `quickSale` prop ile `createManualOrder({ tableId: null })`
 
-### HesapPanel — `quickSale` prop
-```typescript
-quickSale?: boolean;  // tüm hızlı satış UI tweaks
-```
-
-### Kasa-board — Yeni state
-```typescript
-const [quickSaleOpen, setQuickSaleOpen] = useState(false);
-const [quickSaleOrders, setQuickSaleOrders] = useState<TableOrderDetail[]>([]);
-```
-
-`autoPayOrder` state kaldırıldı — artık ilk başta HesapPanel açılıyor.
-
-## 📦 Dosyalar (3)
+## 📦 Dosyalar (4)
 
 ```
-components/order/menu-picker.tsx       🔄 quickSale prop + onAdded(newOrderId)
-components/order/hesap-panel.tsx       🔄 quickSale UI mods
-app/kasa/kasa-board.tsx               🔄 handleQuickSale → HesapPanel
+lib/actions/tables-status.ts          🔄 splitItemsFromMultipleOrders null support
+components/order/hesap-panel.tsx      🔄 4 yerde quickSale ? null check
+components/order/menu-picker.tsx      📋 (önceki paketten - tutarlılık için)
+app/kasa/kasa-board.tsx              📋 (önceki paketten - tutarlılık için)
 ```
 
 ## 🚀 Push
 
 ```powershell
-Expand-Archive -Path hizli-satis-hesappanel.zip -DestinationPath . -Force
+Expand-Archive -Path hizli-satis-fix.zip -DestinationPath . -Force
 
-git add . && git commit -m "feat(kasa): hızlı satış HesapPanel akışı (composer kaldırıldı)" && git push
+git add . && git commit -m "fix(kasa): hızlı satış parsiyel ödeme + header" && git push
 ```
 
 ## 🧪 Test Senaryoları
 
-### A) Boş Hızlı Satış Akışı
-1. Kasa → "Hızlı Satış" sekme
-2. **"Yeni Satış"** butonu (QuickSaleLanding) ✅ kalmış
-3. Tıkla → ✅ HesapPanel açılır
-   - Header: "YENİ SATIŞ — Hızlı Satış"
-   - Sol: "🛒 Sağdaki menüden ürün ekleyin"
-   - Orta: TOPLAM ₺0, Nakit/Kart yöntem (Açık Hes yok)
-   - Sağ: Menü (kategoriler + ürünler)
+### A) Header
+1. Kasa → Hızlı Satış → "Yeni Satış"
+2. ✅ Üst başlık: "YENİ SATIŞ — _Hızlı Satış_" (Masa prefix YOK)
+3. ✅ Alt yazı: "TOPLAM" (MASA TOPLAM YOK)
 
-### B) Ürün Ekleme
-1. Sağdan kategori seç → ürün tıkla
-2. ✅ Sağ alt cart'a düşer (sepet)
-3. "Ekle" tıkla → arka planda `createManualOrder` çalışır
-4. ✅ Sol "KALEMLER" listesinde ürün görünür
-5. ✅ Orta "TOPLAM" güncellenir
-6. ✅ Toast: "1 ürün eklendi"
+### B) Parsiyel Ödeme (Bug Fix)
+1. Hızlı satış aç → 2-3 ürün ekle (toplam ₺245)
+2. 1 kalem seç (₺115)
+3. ✅ "SEÇİLİ ÖDEME · 1 KALEM" görünür
+4. **"Seçili Öde · ₺115"** tıkla
+5. **Onay**: "Ayır ve Öde"
+6. ✅ Toast: "₺115 ödendi" (eski: "Hedef masa bulunamadı" hatası)
+7. ✅ O kalem listede ödendi olarak işaretlenir
+8. Geri kalan ₺130 ödenmemiş kalır → tekrar parsiyel olabilir
 
-### C) Birden Fazla Ürün
-1. Aynı şekilde başka ürün ekle (varyantlı veya değil)
-2. ✅ Aynı sipariş üzerinde birikiyor (yeni order yaratmıyor — addItemsToOrder)
-3. Hayır, **şu anda her ekleme yeni bir order yaratabilir** ⚠️
+### C) Tüm Ödeme
+1. Aynı satış'ta tüm kalemleri öde (Nakit/Kart)
+2. ✅ Sipariş kapanır
 
-### D) Ödeme
-1. Birkaç ürün eklendi, toplam ₺X
-2. Nakit veya Kart seç
-3. "Öde" → ✅ ödeme alındı
-4. ✅ Modal kapanır, listede sipariş görünür
+## 💡 Mantık
 
-### E) İndirim / İkram
-1. Ürün(ler) ekle
-2. "🏷 İndirim" → %10 ver
-3. ✅ Toplam düşer
-4. "★ İkram" (kalem seç) → ✅ kalem ikram olur
+### Backend `splitItemsFromMultipleOrders` Yeni Davranış
 
-### F) Parçalı Ödeme
-1. Birkaç ürün ekle (toplam ₺200)
-2. "💸 Parçalı" → ₺100 nakit, ₺100 kart
-3. ✅ İki ödeme kaydı oluşur
+```typescript
+// Önce
+targetTableId: string  // mutlaka geçerli UUID
 
-## ⚠️ Bilinen Davranış
+// Sonra
+targetTableId: string | null  // null = masasız sipariş yaratır
+```
 
-Hızlı satışta her "Ekle" tıklaması **yeni bir order** yaratabilir (mevcut
-açık order yoksa). Bu bilinçli — hızlı satışta her sepet ayrı bir satış.
-Eğer aynı satış'a daha fazla ürün eklemek istersen MenuPicker zaten
-`unpaidOrders[0]?.id` kullanıyor → ilk satış'a ekler.
+Hızlı satışta kullanıcı kalemler seçtiğinde **arka planda** yeni bir
+`table_id: null` order yaratılır. Bu yeni order ödenir, kaynak order'da
+kalanlar için kullanıcı devam edebilir.
 
-Pratikte:
-- 1. ürün → Order A yaratılır
-- 2. ürün → Order A'ya eklenir (targetOrderId set)
-- 3. ürün → Order A'ya eklenir
-- Öde → Order A paid
+### `__quick__` Placeholder Artık Sorun Değil
+
+Frontend'de `tableId='__quick__'` HesapPanel için sadece **görsel/UI** placeholder
+(MenuPicker ve UI tarafından kullanılır). Backend'e gönderilmiyor — `quickSale`
+flag'i ile bypass ediliyor.
 
 ## 🗺️ Durum
 
 | | |
 |---|---|
-| Kasa Overhaul | ✅ |
-| **Hızlı Satış HesapPanel** | **✅ TESLİM** |
+| Hızlı Satış HesapPanel | ✅ |
+| **Header + Parsiyel Fix** | **✅ TESLİM** |
 | UX Paket 3 (Kod kalitesi) | 🔜 |
 
 ---

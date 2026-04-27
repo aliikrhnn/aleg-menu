@@ -315,7 +315,7 @@ export function HesapPanel({
     const itemIds = selectedFlatItems.map((fi) => fi.item.id);
     const splitR = await splitItemsFromMultipleOrders({
       itemIds,
-      targetTableId: tableId,
+      targetTableId: quickSale ? null : tableId,
       cashierId,
     });
     if (!splitR.success || !splitR.newOrderId) {
@@ -429,7 +429,7 @@ export function HesapPanel({
         const itemIds = selectedFlatItems.map((fi) => fi.item.id);
         const splitR = await splitItemsFromMultipleOrders({
           itemIds,
-          targetTableId: tableId,
+          targetTableId: quickSale ? null : tableId,
           cashierId,
         });
         if (!splitR.success || !splitR.newOrderId) {
@@ -514,7 +514,7 @@ export function HesapPanel({
         const itemIds = selectedFlatItems.map((fi) => fi.item.id);
         const splitR = await splitItemsFromMultipleOrders({
           itemIds,
-          targetTableId: tableId,
+          targetTableId: quickSale ? null : tableId,
           cashierId,
         });
         if (!splitR.success || !splitR.newOrderId) {
@@ -533,7 +533,7 @@ export function HesapPanel({
         });
         const splitR = await splitItemsFromMultipleOrders({
           itemIds: allItemIds,
-          targetTableId: tableId,
+          targetTableId: quickSale ? null : tableId,
           cashierId,
         });
         if (!splitR.success || !splitR.newOrderId) {
