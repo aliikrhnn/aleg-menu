@@ -1775,35 +1775,73 @@ export async function closeOrderOnAccount(input: {
   error?: string;
 }> {
   try {
+    // Input validation
+    if (!input.orderId) {
+      return { success: false, error: 'Sipariş ID boş (orderId yok)' };
+    }
+    if (!input.customerId) {
+      return { success: false, error: 'Kullanıcı seçilmedi' };
+    }
+    if (!input.cashierId) {
+      return { success: false, error: 'Kasiyer bilgisi yok' };
+    }
+
     const { businessId, memberId } = await requireBusinessAccess();
     const admin = createAdminClient();
 
-    // Sipariş güvenliği
-    const { data: order } = await admin
+    // Sipariş güvenliği — detaylı hata
+    const { data: order, error: orderErr } = await admin
       .from('orders')
       .select('id, business_id, payment_status, total, order_no')
       .eq('id', input.orderId)
       .maybeSingle();
 
-    if (!order || order.business_id !== businessId) {
-      return { success: false, error: 'Sipariş bulunamadı' };
+    if (orderErr) {
+      return { success: false, error: `Sipariş query hatası: ${orderErr.message}` };
+    }
+    if (!order) {
+      return {
+        success: false,
+        error: `Sipariş bulunamadı (ID: ${input.orderId.slice(0, 8)}…). Sayfayı yenileyin.`,
+      };
+    }
+    if (order.business_id !== businessId) {
+      return {
+        success: false,
+        error: 'Sipariş başka bir işletmeye ait',
+      };
     }
     if (order.payment_status === 'paid') {
-      return { success: false, error: 'Sipariş zaten ödenmiş' };
+      return {
+        success: false,
+        error: `Sipariş #${order.order_no} zaten ödenmiş. Sayfayı yenileyin.`,
+      };
+    }
+    if (order.payment_status === 'refunded') {
+      return {
+        success: false,
+        error: `Sipariş #${order.order_no} iade edildi`,
+      };
     }
 
     // Cari kullanıcı güvenliği
-    const { data: customer } = await admin
+    const { data: customer, error: custErr } = await admin
       .from('customers')
       .select('id, business_id, name, is_active')
       .eq('id', input.customerId)
       .maybeSingle();
 
-    if (!customer || customer.business_id !== businessId) {
-      return { success: false, error: 'Kullanıcı bulunamadı' };
+    if (custErr) {
+      return { success: false, error: `Kullanıcı query hatası: ${custErr.message}` };
+    }
+    if (!customer) {
+      return { success: false, error: 'Seçilen kullanıcı bulunamadı' };
+    }
+    if (customer.business_id !== businessId) {
+      return { success: false, error: 'Kullanıcı başka işletmeye ait' };
     }
     if (!customer.is_active) {
-      return { success: false, error: 'Kullanıcı pasif' };
+      return { success: false, error: `${customer.name} pasif kullanıcı` };
     }
 
     const totalAmount = Number(order.total);
