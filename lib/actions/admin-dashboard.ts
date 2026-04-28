@@ -410,7 +410,13 @@ export async function startImpersonation(businessId: string): Promise<{
 
   if (!biz) throw new Error('İşletme bulunamadı');
 
-  await supabase.rpc('log_audit', {
+  // log_audit() Supabase generated types'a henüz eklenmedi (yeni migration).
+  // Tipler regenerate edilene kadar cast ile çağırıyoruz.
+  // TODO: `npx supabase gen types` çalıştırınca bu cast kaldırılabilir.
+  await (supabase.rpc as unknown as (
+    fn: string,
+    params: Record<string, unknown>,
+  ) => Promise<{ error: unknown }>)('log_audit', {
     p_action: 'admin.impersonate',
     p_target_type: 'business',
     p_target_id: businessId,
