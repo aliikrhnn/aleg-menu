@@ -647,6 +647,45 @@ export async function completePrintJob(
   }
 }
 
+/**
+ * Print job'u atomik olarak "claim" eder (kilitler).
+ *
+ * Sadece status='pending' olan bir job'u 'printing' yapabilir.
+ * İki sekme/cihaz aynı anda dener → sadece BİRİ başarılı olur.
+ *
+ * @returns claimed: true → bu sekme job'u almıştır, basabilir
+ * @returns claimed: false → başka bir sekme zaten almış, atla
+ */
+export async function claimPrintJob(
+  jobId: string
+): Promise<{ claimed: boolean; error?: string }> {
+  try {
+    const { businessId } = await requireBusinessAccess();
+    const admin = createAdminClient();
+
+    // Atomic update: sadece status='pending' ise 'printing'e çek
+    // .eq('status', 'pending') ile race condition korunur
+    const { data, error } = await admin
+      .from('print_jobs')
+      .update({ status: 'printing' })
+      .eq('id', jobId)
+      .eq('business_id', businessId)
+      .eq('status', 'pending')
+      .select('id')
+      .maybeSingle();
+
+    if (error) return { claimed: false, error: error.message };
+    // data varsa update başarılı → biz aldık
+    // data null ise zaten başkası almış → atla
+    return { claimed: !!data };
+  } catch (err) {
+    return {
+      claimed: false,
+      error: err instanceof Error ? err.message : 'Bilinmeyen hata',
+    };
+  }
+}
+
 // Yazıcı test sonucunu kaydet
 export async function recordPrinterTest(
   printerId: string,

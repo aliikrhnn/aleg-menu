@@ -16,6 +16,7 @@ export function AdvancedTab({ printers }: { printers: Printer[] }) {
     loadData();
     const iv = setInterval(loadAgents, 30000); // her 30sn güncelle
     return () => clearInterval(iv);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function loadData() {

@@ -276,7 +276,7 @@ export function KasaBoard({ initialOrders, businessId }: Props) {
       canceled = true;
       clearInterval(interval);
     };
-  }, []);
+  }, [playOrderSound]);
 
   // Realtime subscribe - INSERT yeni sipariş
   useEffect(() => {
@@ -339,7 +339,7 @@ export function KasaBoard({ initialOrders, businessId }: Props) {
         // yoksay
       }
     };
-  }, [businessId]);
+  }, [businessId, playOrderSound]);
 
   // Browser notification izni iste (kasa sayfası ilk açılışta)
   useEffect(() => {
@@ -394,7 +394,7 @@ export function KasaBoard({ initialOrders, businessId }: Props) {
       canceled = true;
       clearInterval(interval);
     };
-  }, []);
+  }, [playCallSound]);
 
   // Realtime subscribe - varsa anlık (polling fallback olarak yedekler)
   useEffect(() => {
@@ -468,7 +468,7 @@ export function KasaBoard({ initialOrders, businessId }: Props) {
         // yoksay
       }
     };
-  }, [businessId]);
+  }, [businessId, playCallSound]);
 
   const handleResolveCall = useCallback(async (callId: string) => {
     setActiveCalls((prev) => prev.filter((c) => c.id !== callId));

@@ -352,6 +352,7 @@ export function HesapPanel({
     cashierId,
     paymentMethod,
     onChanged,
+    quickSale,
   ]);
 
   // ============================================================
@@ -486,6 +487,7 @@ export function HesapPanel({
       cashierId,
       onChanged,
       onClose,
+      quickSale,
     ]
   );
 
@@ -592,6 +594,7 @@ export function HesapPanel({
       cashierId,
       onChanged,
       onClose,
+      quickSale,
     ]
   );
 

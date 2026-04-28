@@ -63,9 +63,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   // Cleanup
   useEffect(() => {
+    const timers = timersRef.current;
     return () => {
-      timersRef.current.forEach((t) => window.clearTimeout(t));
-      timersRef.current.clear();
+      timers.forEach((t) => window.clearTimeout(t));
+      timers.clear();
     };
   }, []);
 

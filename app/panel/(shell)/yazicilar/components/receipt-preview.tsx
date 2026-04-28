@@ -175,6 +175,7 @@ function CashierReceipt({
       {/* Logo + başlık */}
       {settings.show_logo && business.logo_url && (
         <div className="text-center mb-2">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={business.logo_url}
             alt={business.name}
