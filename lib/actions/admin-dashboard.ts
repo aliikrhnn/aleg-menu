@@ -172,7 +172,7 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
     .from('v_admin_dashboard')
     .select('*')
     .single();
-  const metricsRow = metricsRowRaw as DashboardMetricsRow | null;
+  const metricsRow = metricsRowRaw as unknown as DashboardMetricsRow | null;
 
   const metrics: AdminDashboardData['metrics'] = {
     total_businesses: Number(metricsRow?.total_businesses || 0),
@@ -194,8 +194,8 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
     supabase.from('v_admin_business_growth_12m').select('*'),
     supabase.from('v_admin_mrr_growth_12m').select('*'),
   ]);
-  const growthRows = (growthRowsRaw || []) as GrowthRow[];
-  const revRows = (revRowsRaw || []) as RevenueRow[];
+  const growthRows = (growthRowsRaw || []) as unknown as GrowthRow[];
+  const revRows = (revRowsRaw || []) as unknown as RevenueRow[];
 
   const trends = {
     businesses: growthRows.map((r) => Number(r.count)),
@@ -205,7 +205,7 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
   const { data: signupRowsRaw } = await supabase
     .from('v_admin_signups_7d')
     .select('*');
-  const signupRows = (signupRowsRaw || []) as SignupRow[];
+  const signupRows = (signupRowsRaw || []) as unknown as SignupRow[];
 
   const signups7d = signupRows.map((r) => ({
     day: r.day,
@@ -220,7 +220,7 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
     )
     .order('ts', { ascending: false })
     .limit(8);
-  const auditRows = (auditRowsRaw || []) as AuditRow[];
+  const auditRows = (auditRowsRaw || []) as unknown as AuditRow[];
 
   const businessIds = [
     ...new Set(
@@ -235,7 +235,7 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
       .from('businesses')
       .select('id, name')
       .in('id', businessIds);
-    const bizRows = (bizRowsRaw || []) as BusinessNameRow[];
+    const bizRows = (bizRowsRaw || []) as unknown as BusinessNameRow[];
     bizRows.forEach((b) => businessMap.set(b.id, b.name));
   }
 
@@ -271,7 +271,7 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
     .from('v_admin_pending_payments')
     .select('*')
     .limit(5);
-  const pendingRows = (pendingRowsRaw || []) as PendingRow[];
+  const pendingRows = (pendingRowsRaw || []) as unknown as PendingRow[];
 
   const pendingPayments = pendingRows.map((r) => ({
     id: r.id,
@@ -288,7 +288,7 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
     .from('v_admin_city_dist')
     .select('*')
     .limit(15);
-  const cityRows = (cityRowsRaw || []) as CityRow[];
+  const cityRows = (cityRowsRaw || []) as unknown as CityRow[];
 
   const cities = cityRows.map((r) => ({
     city: r.city,
@@ -299,7 +299,7 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
     .from('v_admin_funnel_30d')
     .select('*')
     .single();
-  const funnelRow = funnelRowRaw as FunnelRow | null;
+  const funnelRow = funnelRowRaw as unknown as FunnelRow | null;
 
   const funnel = {
     signups: Number(funnelRow?.signups || 0),
@@ -353,10 +353,10 @@ export async function getAdminStats(): Promise<AdminStatsData> {
     supabase.from('v_admin_city_dist').select('*'),
   ]);
 
-  const m = mRaw as DashboardMetricsRow | null;
-  const g = (gRaw || []) as GrowthRow[];
-  const r = (rRaw || []) as RevenueRow[];
-  const c = (cRaw || []) as CityRow[];
+  const m = mRaw as unknown as DashboardMetricsRow | null;
+  const g = (gRaw || []) as unknown as GrowthRow[];
+  const r = (rRaw || []) as unknown as RevenueRow[];
+  const c = (cRaw || []) as unknown as CityRow[];
 
   const metrics: AdminStatsData['metrics'] = {
     total_businesses: Number(m?.total_businesses || 0),
