@@ -11,6 +11,7 @@ import { TableDetailModal } from './table-detail-modal';
 import { HesapPanel } from '@/components/order/hesap-panel';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
 import { PrinterStatusWidget } from '@/components/panel/printer-status-widget';
+import { AgentStatusBadge } from '@/components/panel/agent-status-badge';
 import {
   getOrderAsDetail,
   type TableOrderDetail,
@@ -642,6 +643,7 @@ export function KasaBoard({ initialOrders, businessId }: Props) {
         </div>
 
         <div className="flex items-center gap-2">
+          <AgentStatusBadge businessId={businessId} context="kasa" />
           <PrinterStatusWidget />
 
           {/* Tam ekran toggle */}

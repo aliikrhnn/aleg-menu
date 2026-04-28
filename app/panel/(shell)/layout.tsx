@@ -67,6 +67,7 @@ export default async function PanelShellLayout({
             full_name: membership.full_name,
           }}
           businessStatus={business?.subscription_status}
+          businessId={membership.business_id}
         />
         <main className="flex-1 overflow-y-auto">{children}</main>
       </div>

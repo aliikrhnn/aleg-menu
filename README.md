@@ -1,107 +1,126 @@
-# 🔧 HIZLI SATIŞ FIX — Header + Parsiyel Ödeme Bug
+# 🟢 AGENT STATUS WEB BADGE
 
-İki sorun çözüldü:
+Web tarafında **Agent durum göstergesi** + **akıllı koruma**.
 
-## 🐛 Sorun 1 — Header "Masa Hızlı Satış" Yazıyordu
+Print Agent çalışıyorken panel/kasa sekmeleri **otomatik fark eder**,
+yazıcıyı **agent'a bırakır**, çift fiş riskini sıfırlar.
 
-**Önce:** `Masa Hızlı Satış` (yanlış görünüm)
-**Sonra:** Sadece `Hızlı Satış` (quickSale modu için temiz başlık)
+**6 dosya · Migration yok.**
 
-Bu önceki "Hızlı Satış HesapPanel" paketinde zaten kodda vardı ama
-push edilmemiş olabilir — bu paket'te dahil.
+## ✨ Özellikler
 
-## 🐛 Sorun 2 — Parsiyel Ödeme "Hedef masa bulunamadı"
+### 1. AgentStatusBadge
+Topbar'da küçük chip:
+- 🟢 **AGENT AKTİF** — agent online (yeşil)
+- 🟡 **AGENT KAPALI** — agent kayıtlı ama offline (sarı, çakışma uyarısı)
+- ⚫ **AGENT YOK** — hiç agent kayıtlı değil (gri)
 
-**Önce:** Hızlı satışta kalem seçip "Seçili Öde" → backend
-`splitItemsFromMultipleOrders({ targetTableId: '__quick__' })` çağırıyordu
-→ "__quick__" UUID değil → "Hedef masa bulunamadı" hatası.
+Mouse üzerine getirince popup:
+> "Background print agent çalışıyor (1 cihaz). Yazıcı işlemleri agent
+> tarafından yönetilir — bu kasa sekmesi yazdırma yapmaz. Çift fiş çıkmaz."
 
-**Sonra:** Backend `targetTableId: string | null` destekliyor.
-Frontend hızlı satışta `null` geçiyor → masasız split sipariş yaratılır.
+### 2. useAgentStatus Hook
+- 30 saniyede bir DB check
+- Realtime (printer_agents UPDATE event) ile heartbeat anlık görür
+- 90 saniye threshold (agent.js heartbeat 30 sn'de bir → 3 misli marj)
 
-## ✅ Değişiklikler
+### 3. PrintQueueListener Korumalı
+Agent online ise sekme **HİÇ** yazdırmaya çalışmaz:
 
-### Backend (`lib/actions/tables-status.ts`)
-- `splitItemsFromMultipleOrders`: `targetTableId: string | null` desteklendi
-  - Null ise hedef masa kontrolü atlanır
-  - Null ise yeni siparişin `table_id` null kalır (masasız)
-  - Null ise tables.update çağrısı yapılmaz
+```typescript
+async function processJob(jobId, isRetry = false) {
+  // 🛡️ Agent online ise atla
+  if (hasOnlineAgentRef.current) return;
 
-### Frontend (`components/order/hesap-panel.tsx`)
-- 4 yerde `splitItemsFromMultipleOrders` çağrısı: `targetTableId: quickSale ? null : tableId`
-- Header zaten `quickSale ? 'YENİ SATIŞ — Hızlı Satış' : 'HESAP AL — Masa X'`
+  // ... claim, print
+}
+```
 
-### MenuPicker (zaten önceki pakette var)
-- `quickSale` prop ile `createManualOrder({ tableId: null })`
-
-## 📦 Dosyalar (4)
+## 📦 Dosyalar (6)
 
 ```
-lib/actions/tables-status.ts          🔄 splitItemsFromMultipleOrders null support
-components/order/hesap-panel.tsx      🔄 4 yerde quickSale ? null check
-components/order/menu-picker.tsx      📋 (önceki paketten - tutarlılık için)
-app/kasa/kasa-board.tsx              📋 (önceki paketten - tutarlılık için)
+lib/hooks/use-agent-status.ts          ✨ Yeni - agent online dinleme
+components/panel/agent-status-badge.tsx ✨ Yeni - chip + tooltip
+components/panel/print-queue-listener.tsx 🔄 agent koruması
+components/panel/topbar.tsx            🔄 badge yerleşim
+app/panel/(shell)/layout.tsx           🔄 businessId geç
+app/kasa/kasa-board.tsx               🔄 kasa'ya da badge
 ```
 
 ## 🚀 Push
 
 ```powershell
-Expand-Archive -Path hizli-satis-fix.zip -DestinationPath . -Force
+Expand-Archive -Path agent-status-web.zip -DestinationPath . -Force
 
-git add . && git commit -m "fix(kasa): hızlı satış parsiyel ödeme + header" && git push
+git add . && git commit -m "feat(printer): agent status badge + smart fallback" && git push
 ```
 
 ## 🧪 Test Senaryoları
 
-### A) Header
-1. Kasa → Hızlı Satış → "Yeni Satış"
-2. ✅ Üst başlık: "YENİ SATIŞ — _Hızlı Satış_" (Masa prefix YOK)
-3. ✅ Alt yazı: "TOPLAM" (MASA TOPLAM YOK)
+### A) Agent v2 Kapalı + Panel Açık
+1. Tray'den agent'ı kapat (🚪 Çıkış)
+2. Panel'i aç
+3. ✅ Topbar'da: 🟡 **AGENT KAPALI** (sarı)
+4. Mouse üzerine: "Bu sekme Bluetooth ile yazdıracak..."
+5. (Bluetooth yoksa zaten yazıcı çalışmaz)
 
-### B) Parsiyel Ödeme (Bug Fix)
-1. Hızlı satış aç → 2-3 ürün ekle (toplam ₺245)
-2. 1 kalem seç (₺115)
-3. ✅ "SEÇİLİ ÖDEME · 1 KALEM" görünür
-4. **"Seçili Öde · ₺115"** tıkla
-5. **Onay**: "Ayır ve Öde"
-6. ✅ Toast: "₺115 ödendi" (eski: "Hedef masa bulunamadı" hatası)
-7. ✅ O kalem listede ödendi olarak işaretlenir
-8. Geri kalan ₺130 ödenmemiş kalır → tekrar parsiyel olabilir
+### B) Agent v2 Açık + Panel Açık
+1. Tray ikonu yeşil (online)
+2. Panel'i aç
+3. ✅ Topbar'da: 🟢 **AGENT AKTİF** (yeşil)
+4. Mouse üzerine: "Background print agent çalışıyor..."
+5. Sipariş ver → **sadece agent** yazdırır (sekme bypass)
+6. ✅ TEK FİŞ
 
-### C) Tüm Ödeme
-1. Aynı satış'ta tüm kalemleri öde (Nakit/Kart)
-2. ✅ Sipariş kapanır
+### C) Çoklu Sekme + Agent Açık
+1. Agent açık (tray'de yeşil)
+2. **2 panel sekmesi** + **1 kasa sekmesi** aç
+3. Hepsinde topbar'da: 🟢 **AGENT AKTİF**
+4. Sipariş ver → sadece agent yazdırır
+5. ✅ TEK FİŞ (3 sekme bile olsa)
+
+### D) Agent Kapanırsa
+1. Agent açık → sipariş ver → ✅ tek fiş
+2. Agent'ı tray'den kapat
+3. Badge'ler 30 saniye içinde 🟡'ya döner
+4. Sonraki sipariş → **sekme yazdırır** (Bluetooth varsa)
 
 ## 💡 Mantık
 
-### Backend `splitItemsFromMultipleOrders` Yeni Davranış
+### Heartbeat Akışı
+```
+Agent v2 (her 30 sn)
+  → printer_agents.last_seen_at = NOW()
 
-```typescript
-// Önce
-targetTableId: string  // mutlaka geçerli UUID
+useAgentStatus hook (her 30 sn + realtime)
+  → SELECT WHERE last_seen_at > NOW() - 90s
+  → Online sayısını state'e yazar
 
-// Sonra
-targetTableId: string | null  // null = masasız sipariş yaratır
+AgentStatusBadge → state.hasOnlineAgent
+  → 🟢 / 🟡 / ⚫ icon ve renk
+
+PrintQueueListener → hasOnlineAgentRef
+  → if true: return (yazdırma!)
 ```
 
-Hızlı satışta kullanıcı kalemler seçtiğinde **arka planda** yeni bir
-`table_id: null` order yaratılır. Bu yeni order ödenir, kaynak order'da
-kalanlar için kullanıcı devam edebilir.
-
-### `__quick__` Placeholder Artık Sorun Değil
-
-Frontend'de `tableId='__quick__'` HesapPanel için sadece **görsel/UI** placeholder
-(MenuPicker ve UI tarafından kullanılır). Backend'e gönderilmiyor — `quickSale`
-flag'i ile bypass ediliyor.
+### Neden 90 saniye?
+- Agent her 30 saniyede heartbeat
+- Network gecikmesi + tray donması ihtimali için **3x marj**
+- Agent gerçekten kapanınca 60-90 sn içinde sekme tekrar yazdırır
 
 ## 🗺️ Durum
 
 | | |
 |---|---|
 | Hızlı Satış HesapPanel | ✅ |
-| **Header + Parsiyel Fix** | **✅ TESLİM** |
+| Agent v2.0 (Tray + Dashboard) | ✅ |
+| **Web AgentStatusBadge** | **✅ TESLİM** |
 | UX Paket 3 (Kod kalitesi) | 🔜 |
+| Süper admin paneli | 🔜 |
 
 ---
 
-Push → test et → çalışırsa söyle 🚀
+Push → test et → çoklu sekme deneyimini gör 🎯
+
+Test ipucu: Agent açıkken iki panel sekmesi aç, sipariş ver, fişin
+SADECE BİR KEZ çıktığını gör. Bu artık yapısal olarak garanti altında.

@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
+import { AgentStatusBadge } from '@/components/panel/agent-status-badge';
 
 interface PanelTopbarProps {
   user: {
@@ -11,9 +12,10 @@ interface PanelTopbarProps {
     full_name?: string | null;
   };
   businessStatus?: string;
+  businessId?: string;
 }
 
-export function PanelTopbar({ user, businessStatus }: PanelTopbarProps) {
+export function PanelTopbar({ user, businessStatus, businessId }: PanelTopbarProps) {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -67,6 +69,13 @@ export function PanelTopbar({ user, businessStatus }: PanelTopbarProps) {
       </div>
 
       <div className="flex-1" />
+
+      {/* Print Agent durum göstergesi */}
+      {businessId && (
+        <div className="hidden md:block mr-2">
+          <AgentStatusBadge businessId={businessId} context="panel" />
+        </div>
+      )}
 
       {businessStatus === 'trial' && (
         <div

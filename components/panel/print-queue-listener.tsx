@@ -16,6 +16,7 @@ import { createBrowserClient } from '@supabase/ssr';
 import {
   getPrintJobDetails,
   completePrintJob,
+  claimPrintJob,
 } from '@/lib/actions/printers';
 import {
   buildKitchenTicket,
@@ -29,10 +30,15 @@ import {
   isWebBluetoothSupported,
 } from '@/lib/printer/bluetooth-client';
 import { toast } from '@/components/ui/toast';
+import { useAgentStatus } from '@/lib/hooks/use-agent-status';
 
 export function PrintQueueListener({ businessId }: { businessId: string }) {
   const processedJobs = useRef<Set<string>>(new Set());
   const isProcessing = useRef(false);
+  const agentStatus = useAgentStatus(businessId);
+  // Ref ile dinamik takip (closure'da güncel değer)
+  const hasOnlineAgentRef = useRef(false);
+  hasOnlineAgentRef.current = agentStatus.hasOnlineAgent;
 
   useEffect(() => {
     if (!businessId || !isWebBluetoothSupported()) return;
@@ -43,8 +49,25 @@ export function PrintQueueListener({ businessId }: { businessId: string }) {
     );
 
     async function processJob(jobId: string, isRetry = false) {
+      // 🛡️ AGENT KORUMASI — agent online ise tarayıcı job almasın
+      // (Bluetooth print agent uygulaması zaten yapacak, çift fiş olmasın)
+      if (hasOnlineAgentRef.current) {
+        return;
+      }
+
       if (processedJobs.current.has(jobId) && !isRetry) return;
       processedJobs.current.add(jobId);
+
+      // Atomic claim — başka sekme/cihaz da aynı anda almaya çalışıyorsa
+      // sadece biri başarılı olur. pending → printing (DB seviyesinde lock)
+      // Retry durumunda zaten alınmış job için tekrar denenir, claim atlanır.
+      if (!isRetry) {
+        const claim = await claimPrintJob(jobId);
+        if (!claim.claimed) {
+          // Başka bir sekme/cihaz zaten almış — bu sekme atlar
+          return;
+        }
+      }
 
       const result = await getPrintJobDetails(jobId);
       if (!result.success || !result.data) {
