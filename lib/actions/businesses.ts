@@ -121,6 +121,7 @@ export async function createBusiness(input: CreateBusinessInput): Promise<Create
         slug,
         name: input.business_name,
         city: input.city,
+        business_type: input.business_type,
         email: input.owner_email,
         phone: input.owner_phone,
         plan_id: input.plan_id,
