@@ -32,10 +32,8 @@ export async function POST(req: NextRequest) {
       success: true,
       redirectTo: result.redirectTo,
     });
-  } catch (e: any) {
-    return NextResponse.json(
-      { error: e?.message || 'Bir hata oluştu' },
-      { status: 500 },
-    );
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : 'Bir hata oluştu';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

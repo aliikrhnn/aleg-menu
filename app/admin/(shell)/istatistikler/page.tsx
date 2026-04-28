@@ -1,18 +1,12 @@
 import { getAdminStats } from '@/lib/actions/admin-dashboard';
 import {
   Eyebrow,
-  SerifTitle,
   Sparkline,
   Money,
   SerifNum,
   TurkiyeMap,
   PageHeader,
 } from '@/components/admin/primitives';
-
-const monthShort = (iso: string) => {
-  const d = new Date(iso);
-  return d.toLocaleDateString('tr-TR', { month: 'short' }).toLowerCase();
-};
 
 export default async function StatsPage() {
   const { metrics, growth12m, revenue12m, cities } = await getAdminStats();

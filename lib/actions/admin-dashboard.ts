@@ -3,7 +3,64 @@
 import { createClient } from '@/lib/supabase/server';
 
 // ============================================================
-// Types
+// Internal Row Types — Supabase'den dönen view satırları
+// ============================================================
+
+type DashboardMetricsRow = {
+  total_businesses: number | string | null;
+  active_subscriptions: number | string | null;
+  trial_count: number | string | null;
+  paid_count: number | string | null;
+  at_risk_count: number | string | null;
+  new_today: number | string | null;
+  new_7d: number | string | null;
+  new_30d: number | string | null;
+  mrr: number | string | null;
+  this_month_paid: number | string | null;
+  pending_count: number | string | null;
+  pending_amount: number | string | null;
+  churn_risk_count: number | string | null;
+};
+
+type GrowthRow = { month: string; count: number | string };
+type RevenueRow = { month: string; revenue: number | string };
+type SignupRow = { day: string; count: number | string; label_short: string | null };
+type CityRow = { city: string; count: number | string };
+type FunnelRow = {
+  signups: number | string | null;
+  started_trial: number | string | null;
+  converted: number | string | null;
+  churned: number | string | null;
+};
+
+type AuditRow = {
+  id: number | string;
+  ts: string;
+  actor_email: string | null;
+  actor_name: string | null;
+  is_system: boolean | null;
+  action: string;
+  target_label: string | null;
+  business_id: string | null;
+  meta: Record<string, unknown> | null;
+  tone: string | null;
+};
+
+type BusinessNameRow = { id: string; name: string };
+
+type PendingRow = {
+  id: string;
+  invoice_no: string;
+  business_id: string;
+  business_name: string;
+  business_slug: string;
+  amount: number | string;
+  days_overdue: number | string | null;
+  logo: string | null;
+};
+
+// ============================================================
+// Public Types
 // ============================================================
 
 export type AdminDashboardData = {
@@ -27,14 +84,11 @@ export type AdminDashboardData = {
     pending_amount: number;
     churn_risk_count: number;
   };
-  // Trend dizileri (son 12 ay)
   trends: {
     businesses: number[];
     revenue: number[];
   };
-  // Son 7 gün signup grafiği
   signups7d: Array<{ day: string; count: number; label: string }>;
-  // Aktivite akışı (son 8)
   activity: Array<{
     id: number;
     ts: string;
@@ -48,7 +102,6 @@ export type AdminDashboardData = {
     meta: Record<string, unknown>;
     is_system: boolean;
   }>;
-  // Bekleyen ödemeler (en kritik 5)
   pendingPayments: Array<{
     id: string;
     invoice_no: string;
@@ -59,9 +112,7 @@ export type AdminDashboardData = {
     days_overdue: number;
     logo: string;
   }>;
-  // Şehir dağılımı (TurkiyeMap için)
   cities: Array<{ city: string; count: number }>;
-  // Funnel (30 gün)
   funnel: {
     signups: number;
     started_trial: number;
@@ -71,7 +122,7 @@ export type AdminDashboardData = {
 };
 
 // ============================================================
-// Helper — yaş formatı: "12dk", "2sa", "Dün", "3g"
+// Helper — yaş formatı
 // ============================================================
 function formatAge(ts: string | Date): string {
   const date = typeof ts === 'string' ? new Date(ts) : ts;
@@ -117,11 +168,11 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
   const { user, admin } = await requireSuperAdmin();
   const supabase = createClient();
 
-  // 1) Ana metric'ler — view'dan tek satır
-  const { data: metricsRow } = await supabase
+  const { data: metricsRowRaw } = await supabase
     .from('v_admin_dashboard')
     .select('*')
     .single();
+  const metricsRow = metricsRowRaw as DashboardMetricsRow | null;
 
   const metrics: AdminDashboardData['metrics'] = {
     total_businesses: Number(metricsRow?.total_businesses || 0),
@@ -139,73 +190,90 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
     churn_risk_count: Number(metricsRow?.churn_risk_count || 0),
   };
 
-  // 2) Trend serileri (12 ay)
-  const [{ data: growthRows }, { data: revRows }] = await Promise.all([
+  const [{ data: growthRowsRaw }, { data: revRowsRaw }] = await Promise.all([
     supabase.from('v_admin_business_growth_12m').select('*'),
     supabase.from('v_admin_mrr_growth_12m').select('*'),
   ]);
+  const growthRows = (growthRowsRaw || []) as GrowthRow[];
+  const revRows = (revRowsRaw || []) as RevenueRow[];
 
   const trends = {
-    businesses: (growthRows || []).map((r: any) => Number(r.count)),
-    revenue: (revRows || []).map((r: any) => Number(r.revenue)),
+    businesses: growthRows.map((r) => Number(r.count)),
+    revenue: revRows.map((r) => Number(r.revenue)),
   };
 
-  // 3) 7 gün signup grafiği
-  const { data: signupRows } = await supabase
+  const { data: signupRowsRaw } = await supabase
     .from('v_admin_signups_7d')
     .select('*');
+  const signupRows = (signupRowsRaw || []) as SignupRow[];
 
-  const signups7d = (signupRows || []).map((r: any) => ({
+  const signups7d = signupRows.map((r) => ({
     day: r.day,
     count: Number(r.count),
     label: r.label_short || '',
   }));
 
-  // 4) Activity feed
-  const { data: auditRows } = await supabase
+  const { data: auditRowsRaw } = await supabase
     .from('platform_audit_logs')
-    .select('id, ts, actor_email, actor_name, is_system, action, target_label, business_id, meta, tone')
+    .select(
+      'id, ts, actor_email, actor_name, is_system, action, target_label, business_id, meta, tone',
+    )
     .order('ts', { ascending: false })
     .limit(8);
+  const auditRows = (auditRowsRaw || []) as AuditRow[];
 
-  // İşletme adlarını ayrı çekelim (eğer business_id varsa)
   const businessIds = [
     ...new Set(
-      (auditRows || [])
-        .map((r: any) => r.business_id)
-        .filter((id: string | null) => !!id),
+      auditRows
+        .map((r) => r.business_id)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0),
     ),
   ];
   const businessMap = new Map<string, string>();
   if (businessIds.length) {
-    const { data: bizRows } = await supabase
+    const { data: bizRowsRaw } = await supabase
       .from('businesses')
       .select('id, name')
       .in('id', businessIds);
-    bizRows?.forEach((b: any) => businessMap.set(b.id, b.name));
+    const bizRows = (bizRowsRaw || []) as BusinessNameRow[];
+    bizRows.forEach((b) => businessMap.set(b.id, b.name));
   }
 
-  const activity = (auditRows || []).map((r: any) => ({
-    id: Number(r.id),
-    ts: r.ts,
-    age: formatAge(r.ts),
-    actor: r.is_system ? '[system]' : r.actor_name || r.actor_email || 'Bilinmeyen',
-    action: r.action,
-    target_label: r.target_label,
-    business_id: r.business_id,
-    business_name: r.business_id ? businessMap.get(r.business_id) || null : null,
-    tone: (r.tone || 'muted') as AdminDashboardData['activity'][number]['tone'],
-    meta: r.meta || {},
-    is_system: !!r.is_system,
-  }));
+  type ActivityTone = AdminDashboardData['activity'][number]['tone'];
+  const VALID_TONES: ActivityTone[] = [
+    'ok', 'warn', 'danger', 'super', 'muted', 'gold', 'olive',
+  ];
 
-  // 5) Bekleyen ödemeler (en eski 5)
-  const { data: pendingRows } = await supabase
+  const activity: AdminDashboardData['activity'] = auditRows.map((r) => {
+    const tone: ActivityTone = VALID_TONES.includes(r.tone as ActivityTone)
+      ? (r.tone as ActivityTone)
+      : 'muted';
+    return {
+      id: Number(r.id),
+      ts: r.ts,
+      age: formatAge(r.ts),
+      actor: r.is_system
+        ? '[system]'
+        : r.actor_name || r.actor_email || 'Bilinmeyen',
+      action: r.action,
+      target_label: r.target_label,
+      business_id: r.business_id,
+      business_name: r.business_id
+        ? businessMap.get(r.business_id) || null
+        : null,
+      tone,
+      meta: (r.meta || {}) as Record<string, unknown>,
+      is_system: !!r.is_system,
+    };
+  });
+
+  const { data: pendingRowsRaw } = await supabase
     .from('v_admin_pending_payments')
     .select('*')
     .limit(5);
+  const pendingRows = (pendingRowsRaw || []) as PendingRow[];
 
-  const pendingPayments = (pendingRows || []).map((r: any) => ({
+  const pendingPayments = pendingRows.map((r) => ({
     id: r.id,
     invoice_no: r.invoice_no,
     business_id: r.business_id,
@@ -216,22 +284,22 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
     logo: r.logo || '?',
   }));
 
-  // 6) Şehir dağılımı
-  const { data: cityRows } = await supabase
+  const { data: cityRowsRaw } = await supabase
     .from('v_admin_city_dist')
     .select('*')
     .limit(15);
+  const cityRows = (cityRowsRaw || []) as CityRow[];
 
-  const cities = (cityRows || []).map((r: any) => ({
+  const cities = cityRows.map((r) => ({
     city: r.city,
     count: Number(r.count),
   }));
 
-  // 7) Funnel (30g)
-  const { data: funnelRow } = await supabase
+  const { data: funnelRowRaw } = await supabase
     .from('v_admin_funnel_30d')
     .select('*')
     .single();
+  const funnelRow = funnelRowRaw as FunnelRow | null;
 
   const funnel = {
     signups: Number(funnelRow?.signups || 0),
@@ -240,7 +308,6 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
     churned: Number(funnelRow?.churned || 0),
   };
 
-  // İsim/eposta
   const fullName = admin.full_name || user.email?.split('@')[0] || 'Admin';
   const firstName = fullName.split(' ')[0];
 
@@ -261,7 +328,7 @@ export async function getAdminDashboard(): Promise<AdminDashboardData> {
 }
 
 // ============================================================
-// İstatistikler ekranı — daha geniş veri
+// İstatistikler ekranı
 // ============================================================
 export type AdminStatsData = {
   metrics: AdminDashboardData['metrics'];
@@ -274,14 +341,22 @@ export async function getAdminStats(): Promise<AdminStatsData> {
   await requireSuperAdmin();
   const supabase = createClient();
 
-  const [{ data: m }, { data: g }, { data: r }, { data: c }] = await Promise.all(
-    [
-      supabase.from('v_admin_dashboard').select('*').single(),
-      supabase.from('v_admin_business_growth_12m').select('*'),
-      supabase.from('v_admin_mrr_growth_12m').select('*'),
-      supabase.from('v_admin_city_dist').select('*'),
-    ],
-  );
+  const [
+    { data: mRaw },
+    { data: gRaw },
+    { data: rRaw },
+    { data: cRaw },
+  ] = await Promise.all([
+    supabase.from('v_admin_dashboard').select('*').single(),
+    supabase.from('v_admin_business_growth_12m').select('*'),
+    supabase.from('v_admin_mrr_growth_12m').select('*'),
+    supabase.from('v_admin_city_dist').select('*'),
+  ]);
+
+  const m = mRaw as DashboardMetricsRow | null;
+  const g = (gRaw || []) as GrowthRow[];
+  const r = (rRaw || []) as RevenueRow[];
+  const c = (cRaw || []) as CityRow[];
 
   const metrics: AdminStatsData['metrics'] = {
     total_businesses: Number(m?.total_businesses || 0),
@@ -299,20 +374,17 @@ export async function getAdminStats(): Promise<AdminStatsData> {
     churn_risk_count: Number(m?.churn_risk_count || 0),
   };
 
-  const growth12m = (g || []).map((row: any) => ({
+  const growth12m = g.map((row) => ({
     month: row.month,
     count: Number(row.count),
   }));
-  const revenue12m = (r || []).map((row: any) => ({
+  const revenue12m = r.map((row) => ({
     month: row.month,
     revenue: Number(row.revenue),
   }));
 
-  const totalCities = (c || []).reduce(
-    (sum: number, row: any) => sum + Number(row.count),
-    0,
-  );
-  const cities = (c || []).map((row: any) => ({
+  const totalCities = c.reduce((sum, row) => sum + Number(row.count), 0);
+  const cities = c.map((row) => ({
     city: row.city,
     count: Number(row.count),
     pct: totalCities > 0 ? (Number(row.count) / totalCities) * 100 : 0,
@@ -322,7 +394,7 @@ export async function getAdminStats(): Promise<AdminStatsData> {
 }
 
 // ============================================================
-// Login as business (impersonate) — destek için kritik
+// Login as business (impersonate)
 // ============================================================
 export async function startImpersonation(businessId: string): Promise<{
   redirectTo: string;
@@ -330,7 +402,6 @@ export async function startImpersonation(businessId: string): Promise<{
   const { user } = await requireSuperAdmin();
   const supabase = createClient();
 
-  // İşletmeyi al
   const { data: biz } = await supabase
     .from('businesses')
     .select('id, name, slug')
@@ -339,7 +410,6 @@ export async function startImpersonation(businessId: string): Promise<{
 
   if (!biz) throw new Error('İşletme bulunamadı');
 
-  // Audit log'a kaydet
   await supabase.rpc('log_audit', {
     p_action: 'admin.impersonate',
     p_target_type: 'business',
@@ -350,8 +420,6 @@ export async function startImpersonation(businessId: string): Promise<{
     p_tone: 'super',
   });
 
-  // İşletmenin paneline yönlendir (gerçek impersonation token üretimi
-  // sonraki paketin işi — şimdilik sadece slug'a yönlendiriyoruz)
   return {
     redirectTo: `/panel?_imp=${biz.id}`,
   };

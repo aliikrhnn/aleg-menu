@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { getAdminDashboard } from '@/lib/actions/admin-dashboard';
+import { getAdminDashboard, type AdminDashboardData } from '@/lib/actions/admin-dashboard';
 import {
   Eyebrow,
   SerifTitle,
@@ -11,7 +11,6 @@ import {
   LogoTile,
   TurkiyeMap,
   BarChart,
-  PageHeader,
   FilterChip,
 } from '@/components/admin/primitives';
 
@@ -78,8 +77,6 @@ export default async function AdminDashboardPage() {
     funnel.started_trial > 0
       ? Math.round((funnel.converted / funnel.started_trial) * 100)
       : 0;
-  const churnRate =
-    funnel.signups > 0 ? Math.round((funnel.churned / funnel.signups) * 100) : 0;
 
   return (
     <div className="px-8 py-8 max-w-[1400px] mx-auto grid gap-6">
@@ -524,20 +521,13 @@ function FunnelStep({
   );
 }
 
+type ActivityItem = AdminDashboardData['activity'][number];
+
 function ActivityRow({
   a,
   last,
 }: {
-  a: ReturnType<typeof Object.create> & {
-    id: number;
-    age: string;
-    actor: string;
-    action: string;
-    target_label: string | null;
-    business_name: string | null;
-    tone: string;
-    is_system: boolean;
-  };
+  a: ActivityItem;
   last: boolean;
 }) {
   const actionLabel = humanizeAction(a.action);
@@ -576,7 +566,7 @@ function ActivityRow({
           · {actionLabel}
         </span>
       </div>
-      <Pill tone={(a.tone as any) || 'muted'}>{a.action.split('.')[0]}</Pill>
+      <Pill tone={a.tone}>{a.action.split('.')[0]}</Pill>
     </div>
   );
 }
