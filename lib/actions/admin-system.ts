@@ -2,6 +2,46 @@
 
 import { createClient } from '@/lib/supabase/server'
 
+// Untyped Supabase client - Database tipinde henüz olmayan tablolar (support_tickets, 
+// platform_announcements, platform_settings) için tip kontrolünü esnetir.
+// Yeni tablolar Database types'a eklendiğinde bu cast kaldırılabilir.
+type UntypedSupabase = {
+  from: (table: string) => {
+    select: (cols?: string, opts?: { count?: 'exact' | 'planned' | 'estimated'; head?: boolean }) => UntypedQuery
+    insert: (values: Record<string, unknown>, opts?: Record<string, unknown>) => UntypedQuery
+    update: (values: Record<string, unknown>) => UntypedQuery
+    delete: () => UntypedQuery
+    upsert: (values: Record<string, unknown>) => UntypedQuery
+  }
+  rpc: (fn: string, params?: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>
+  auth: {
+    getUser: () => Promise<{ data: { user: { id: string; email?: string } | null }; error: unknown }>
+  }
+}
+type UntypedQuery = {
+  select: (cols?: string, opts?: { count?: 'exact' | 'planned' | 'estimated'; head?: boolean }) => UntypedQuery
+  insert: (values: Record<string, unknown>) => UntypedQuery
+  update: (values: Record<string, unknown>) => UntypedQuery
+  delete: () => UntypedQuery
+  eq: (col: string, val: unknown) => UntypedQuery
+  neq: (col: string, val: unknown) => UntypedQuery
+  gt: (col: string, val: unknown) => UntypedQuery
+  gte: (col: string, val: unknown) => UntypedQuery
+  lt: (col: string, val: unknown) => UntypedQuery
+  lte: (col: string, val: unknown) => UntypedQuery
+  is: (col: string, val: unknown) => UntypedQuery
+  in: (col: string, val: unknown[]) => UntypedQuery
+  or: (filter: string) => UntypedQuery
+  ilike: (col: string, val: string) => UntypedQuery
+  order: (col: string, opts?: { ascending?: boolean }) => UntypedQuery
+  limit: (n: number) => UntypedQuery
+  range: (from: number, to: number) => UntypedQuery
+  single: () => Promise<{ data: unknown; error: { message: string } | null }>
+  maybeSingle: () => Promise<{ data: unknown; error: { message: string } | null }>
+  then: <T>(resolve: (val: { data: unknown; count: number | null; error: { message: string } | null }) => T) => Promise<T>
+}
+
+
 export interface SystemHealth {
   total_businesses: number
   active_businesses: number
@@ -23,7 +63,7 @@ export interface SystemSignal {
 }
 
 async function requireSuperAdmin() {
-  const supabase = createClient()
+  const supabase = createClient() as unknown as UntypedSupabase
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -39,7 +79,7 @@ async function requireSuperAdmin() {
 
 export async function getSystemHealth() {
   await requireSuperAdmin()
-  const supabase = createClient()
+  const supabase = createClient() as unknown as UntypedSupabase
   const { data, error } = await supabase.from('v_admin_system_health').select('*').single()
   if (error) throw new Error(error.message)
   const h = data as unknown as SystemHealth
@@ -79,7 +119,7 @@ export async function getSystemHealth() {
 
 export async function getRecentSystemActivity(limit = 20) {
   await requireSuperAdmin()
-  const supabase = createClient()
+  const supabase = createClient() as unknown as UntypedSupabase
   const { data, error } = await supabase
     .from('platform_audit_logs')
     .select('id, ts, action, actor_email, target_label, tone')

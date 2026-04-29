@@ -3,6 +3,46 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
+// Untyped Supabase client - Database tipinde henüz olmayan tablolar (support_tickets, 
+// platform_announcements, platform_settings) için tip kontrolünü esnetir.
+// Yeni tablolar Database types'a eklendiğinde bu cast kaldırılabilir.
+type UntypedSupabase = {
+  from: (table: string) => {
+    select: (cols?: string, opts?: { count?: 'exact' | 'planned' | 'estimated'; head?: boolean }) => UntypedQuery
+    insert: (values: Record<string, unknown>, opts?: Record<string, unknown>) => UntypedQuery
+    update: (values: Record<string, unknown>) => UntypedQuery
+    delete: () => UntypedQuery
+    upsert: (values: Record<string, unknown>) => UntypedQuery
+  }
+  rpc: (fn: string, params?: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>
+  auth: {
+    getUser: () => Promise<{ data: { user: { id: string; email?: string } | null }; error: unknown }>
+  }
+}
+type UntypedQuery = {
+  select: (cols?: string, opts?: { count?: 'exact' | 'planned' | 'estimated'; head?: boolean }) => UntypedQuery
+  insert: (values: Record<string, unknown>) => UntypedQuery
+  update: (values: Record<string, unknown>) => UntypedQuery
+  delete: () => UntypedQuery
+  eq: (col: string, val: unknown) => UntypedQuery
+  neq: (col: string, val: unknown) => UntypedQuery
+  gt: (col: string, val: unknown) => UntypedQuery
+  gte: (col: string, val: unknown) => UntypedQuery
+  lt: (col: string, val: unknown) => UntypedQuery
+  lte: (col: string, val: unknown) => UntypedQuery
+  is: (col: string, val: unknown) => UntypedQuery
+  in: (col: string, val: unknown[]) => UntypedQuery
+  or: (filter: string) => UntypedQuery
+  ilike: (col: string, val: string) => UntypedQuery
+  order: (col: string, opts?: { ascending?: boolean }) => UntypedQuery
+  limit: (n: number) => UntypedQuery
+  range: (from: number, to: number) => UntypedQuery
+  single: () => Promise<{ data: unknown; error: { message: string } | null }>
+  maybeSingle: () => Promise<{ data: unknown; error: { message: string } | null }>
+  then: <T>(resolve: (val: { data: unknown; count: number | null; error: { message: string } | null }) => T) => Promise<T>
+}
+
+
 export type AnnouncementCategory = 'info' | 'maintenance' | 'feature' | 'warning' | 'critical'
 export type AnnouncementStatus = 'draft' | 'scheduled' | 'published' | 'cancelled'
 export type AnnouncementTargetType = 'all' | 'plan' | 'business' | 'city'
@@ -30,7 +70,7 @@ export interface AdminAnnouncement {
 
 // Permission check
 async function requireSuperAdmin() {
-  const supabase = createClient()
+  const supabase = createClient() as unknown as UntypedSupabase
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -45,7 +85,7 @@ async function requireSuperAdmin() {
 }
 
 async function logAudit(
-  client: ReturnType<typeof createClient>,
+  client: UntypedSupabase,
   action: string,
   targetId: string | null,
   targetLabel: string | null,
@@ -53,10 +93,7 @@ async function logAudit(
   tone: string,
 ) {
   try {
-    await (client.rpc as unknown as (
-      fn: string,
-      params: Record<string, unknown>,
-    ) => Promise<{ error: unknown }>)('log_audit', {
+    await client.rpc('log_audit', {
       p_action: action,
       p_target_type: 'announcement',
       p_target_id: targetId,
@@ -80,7 +117,7 @@ interface ListAnnouncementsParams {
 
 export async function listAnnouncements(params: ListAnnouncementsParams = {}) {
   await requireSuperAdmin()
-  const supabase = createClient()
+  const supabase = createClient() as unknown as UntypedSupabase
   const { q, status = 'all', category = 'all', limit = 100, offset = 0 } = params
 
   let query = supabase.from('v_admin_announcements_list').select('*', { count: 'exact' })
@@ -102,7 +139,7 @@ export async function listAnnouncements(params: ListAnnouncementsParams = {}) {
 
 export async function getAnnouncement(id: string) {
   await requireSuperAdmin()
-  const supabase = createClient()
+  const supabase = createClient() as unknown as UntypedSupabase
   const { data, error } = await supabase
     .from('v_admin_announcements_list')
     .select('*')
@@ -127,7 +164,7 @@ export async function createAnnouncement(input: {
   const { user, admin } = await requireSuperAdmin()
   if (!input.title.trim() || !input.body.trim()) throw new Error('Başlık ve içerik zorunlu')
 
-  const supabase = createClient()
+  const supabase = createClient() as unknown as UntypedSupabase
 
   const status: AnnouncementStatus =
     input.publishNow ? 'published' : input.publishAt ? 'scheduled' : 'draft'
@@ -162,7 +199,7 @@ export async function createAnnouncement(input: {
 
 export async function publishAnnouncement(id: string) {
   await requireSuperAdmin()
-  const supabase = createClient()
+  const supabase = createClient() as unknown as UntypedSupabase
   const { error } = await supabase
     .from('platform_announcements')
     .update({ status: 'published', publish_at: new Date().toISOString() })
@@ -177,7 +214,7 @@ export async function publishAnnouncement(id: string) {
 
 export async function cancelAnnouncement(id: string) {
   await requireSuperAdmin()
-  const supabase = createClient()
+  const supabase = createClient() as unknown as UntypedSupabase
   const { error } = await supabase
     .from('platform_announcements')
     .update({ status: 'cancelled' })
@@ -192,7 +229,7 @@ export async function cancelAnnouncement(id: string) {
 
 export async function deleteAnnouncement(id: string) {
   await requireSuperAdmin()
-  const supabase = createClient()
+  const supabase = createClient() as unknown as UntypedSupabase
   const { error } = await supabase.from('platform_announcements').delete().eq('id', id)
   if (error) throw new Error(error.message)
 

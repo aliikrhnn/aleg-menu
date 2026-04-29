@@ -3,6 +3,46 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
+// Untyped Supabase client - Database tipinde henüz olmayan tablolar (support_tickets, 
+// platform_announcements, platform_settings) için tip kontrolünü esnetir.
+// Yeni tablolar Database types'a eklendiğinde bu cast kaldırılabilir.
+type UntypedSupabase = {
+  from: (table: string) => {
+    select: (cols?: string, opts?: { count?: 'exact' | 'planned' | 'estimated'; head?: boolean }) => UntypedQuery
+    insert: (values: Record<string, unknown>, opts?: Record<string, unknown>) => UntypedQuery
+    update: (values: Record<string, unknown>) => UntypedQuery
+    delete: () => UntypedQuery
+    upsert: (values: Record<string, unknown>) => UntypedQuery
+  }
+  rpc: (fn: string, params?: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>
+  auth: {
+    getUser: () => Promise<{ data: { user: { id: string; email?: string } | null }; error: unknown }>
+  }
+}
+type UntypedQuery = {
+  select: (cols?: string, opts?: { count?: 'exact' | 'planned' | 'estimated'; head?: boolean }) => UntypedQuery
+  insert: (values: Record<string, unknown>) => UntypedQuery
+  update: (values: Record<string, unknown>) => UntypedQuery
+  delete: () => UntypedQuery
+  eq: (col: string, val: unknown) => UntypedQuery
+  neq: (col: string, val: unknown) => UntypedQuery
+  gt: (col: string, val: unknown) => UntypedQuery
+  gte: (col: string, val: unknown) => UntypedQuery
+  lt: (col: string, val: unknown) => UntypedQuery
+  lte: (col: string, val: unknown) => UntypedQuery
+  is: (col: string, val: unknown) => UntypedQuery
+  in: (col: string, val: unknown[]) => UntypedQuery
+  or: (filter: string) => UntypedQuery
+  ilike: (col: string, val: string) => UntypedQuery
+  order: (col: string, opts?: { ascending?: boolean }) => UntypedQuery
+  limit: (n: number) => UntypedQuery
+  range: (from: number, to: number) => UntypedQuery
+  single: () => Promise<{ data: unknown; error: { message: string } | null }>
+  maybeSingle: () => Promise<{ data: unknown; error: { message: string } | null }>
+  then: <T>(resolve: (val: { data: unknown; count: number | null; error: { message: string } | null }) => T) => Promise<T>
+}
+
+
 type Json = Record<string, unknown>
 
 export type SupportTicketStatus = 'open' | 'in_progress' | 'waiting_user' | 'resolved' | 'closed'
@@ -63,7 +103,7 @@ export interface AdminSupportMetrics {
 
 // Permission check
 async function requireSuperAdmin() {
-  const supabase = createClient()
+  const supabase = createClient() as unknown as UntypedSupabase
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -79,7 +119,7 @@ async function requireSuperAdmin() {
 
 // Audit helper
 async function logAudit(
-  client: ReturnType<typeof createClient>,
+  client: UntypedSupabase,
   action: string,
   targetId: string | null,
   targetLabel: string | null,
@@ -88,10 +128,7 @@ async function logAudit(
   tone: string,
 ) {
   try {
-    await (client.rpc as unknown as (
-      fn: string,
-      params: Record<string, unknown>,
-    ) => Promise<{ error: unknown }>)('log_audit', {
+    await client.rpc('log_audit', {
       p_action: action,
       p_target_type: 'support_ticket',
       p_target_id: targetId,
@@ -118,7 +155,7 @@ interface ListSupportTicketsParams {
 
 export async function listSupportTickets(params: ListSupportTicketsParams = {}) {
   const { user } = await requireSuperAdmin()
-  const supabase = createClient()
+  const supabase = createClient() as unknown as UntypedSupabase
   const { q, status = 'all', priority = 'all', category = 'all', assignee = 'all', limit = 100, offset = 0 } = params
 
   let query = supabase.from('v_admin_support_tickets_list').select('*', { count: 'exact' })
@@ -149,7 +186,7 @@ export async function listSupportTickets(params: ListSupportTicketsParams = {}) 
 
 export async function getSupportMetrics(): Promise<AdminSupportMetrics> {
   await requireSuperAdmin()
-  const supabase = createClient()
+  const supabase = createClient() as unknown as UntypedSupabase
   const { data, error } = await supabase.from('v_admin_support_metrics').select('*').single()
   if (error) throw new Error(error.message)
   return data as unknown as AdminSupportMetrics
@@ -157,7 +194,7 @@ export async function getSupportMetrics(): Promise<AdminSupportMetrics> {
 
 export async function getSupportTicket(id: string) {
   await requireSuperAdmin()
-  const supabase = createClient()
+  const supabase = createClient() as unknown as UntypedSupabase
   const { data: ticket, error: tErr } = await supabase
     .from('v_admin_support_tickets_list')
     .select('*')
@@ -186,7 +223,7 @@ export async function replySupportTicket(input: {
   const { user, admin } = await requireSuperAdmin()
   if (!input.body.trim()) throw new Error('Mesaj boş olamaz')
 
-  const supabase = createClient()
+  const supabase = createClient() as unknown as UntypedSupabase
   const { error } = await supabase.from('support_ticket_messages').insert({
     ticket_id: input.ticketId,
     author_id: user.id,
@@ -212,7 +249,7 @@ export async function updateSupportTicketStatus(input: {
   status: SupportTicketStatus
 }) {
   await requireSuperAdmin()
-  const supabase = createClient()
+  const supabase = createClient() as unknown as UntypedSupabase
   const patch: Record<string, unknown> = { status: input.status }
   if (input.status === 'resolved') patch.resolved_at = new Date().toISOString()
   if (input.status === 'closed') patch.closed_at = new Date().toISOString()
@@ -240,7 +277,7 @@ export async function assignSupportTicket(input: {
   assigneeId: string | null
 }) {
   await requireSuperAdmin()
-  const supabase = createClient()
+  const supabase = createClient() as unknown as UntypedSupabase
   const { error } = await supabase
     .from('support_tickets')
     .update({ assignee_id: input.assigneeId })
@@ -259,7 +296,7 @@ export async function updateSupportTicketPriority(input: {
   priority: SupportTicketPriority
 }) {
   await requireSuperAdmin()
-  const supabase = createClient()
+  const supabase = createClient() as unknown as UntypedSupabase
   const { error } = await supabase
     .from('support_tickets')
     .update({ priority: input.priority })
@@ -293,9 +330,14 @@ export async function createSupportTicketAsAdmin(input: {
   const { user, admin } = await requireSuperAdmin()
   if (!input.subject.trim() || !input.body.trim()) throw new Error('Konu ve mesaj zorunlu')
 
-  const supabase = createClient()
+  const supabase = createClient() as unknown as UntypedSupabase
 
-  const { data: noData, error: noErr } = await supabase.rpc('generate_support_ticket_no')
+  const { data: noData, error: noErr } = await (
+    supabase.rpc as unknown as (
+      fn: string,
+      params?: Record<string, unknown>,
+    ) => Promise<{ data: string | null; error: { message: string } | null }>
+  )('generate_support_ticket_no')
   if (noErr) throw new Error(noErr.message)
 
   let businessName: string | null = null

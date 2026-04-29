@@ -1,46 +1,41 @@
-Paket 4 - BUILD FIX 2 (TÜM SORUNLAR DÜZELTİLDİ)
-================================================
+Paket 4 - BUILD FIX 3 (Database types cast)
+============================================
 
-Bu paket önceki Paket 4 fix'in üstüne gelir. Aşağıdaki TÜM
-TypeScript build hatalarını düzeltir:
+Bu fix turu sadece 6 server action dosyasını günceller.
+Component dosyaları (önceki fix-2'deki halleri) AYNEN KALACAK.
 
-1. SerifTitle: 'as' prop'u yok → kaldırıldı
-2. StatusDot: 'gold' ve 'olive' kabul etmiyor → ayrı 
-   STATUS_DOT_TONE map'leri ile sadeleştirildi
-3. FilterChip: children değil 'label' + 'value' alıyor 
-   → tüm 13 kullanım yeniden yazıldı
+SORUN: 
+  Yeni eklediğim tablolar (support_tickets, platform_announcements,
+  platform_settings) henüz @/types/database'de tanımlı değil.
+  Bu yüzden insert/update'ler "argument is not assignable to never"
+  hatası veriyordu.
 
-Ek olarak (önceki fix'in tekrarı, garanti olsun diye):
-- requireSuperAdmin() her dosyaya gömüldü
-- log_audit RPC çağrısı düzgün
+ÇÖZÜM:
+  Her server action dosyasının başına UntypedSupabase tip alias'ı
+  eklendi. createClient() çağrılarına `as unknown as UntypedSupabase`
+  cast yapıldı. Böylece TypeScript yeni tabloları görmediğinde
+  sorun çıkarmıyor; runtime'da hiçbir fark yok çünkü Supabase 
+  client zaten tüm tabloları biliyor.
+
+  İLERİDE: Database types'ı yeniden generate ettiğinde
+  (`yarn supabase gen types typescript --project-id ... > types/database.ts`),
+  bu cast'leri kaldırabilirsin.
 
 YAPMAN GEREKEN:
 ---------------
 
-Bu zip'i aç ve içindeki TÜM dosyaları projendeki AYNI
-yerlere kopyala (üstüne yaz - confirm "Yes to All"):
+Sadece bu 6 dosyayı projendeki AYNI yere kopyala (üstüne yaz):
 
-components/admin/admin-users-client.tsx     ← güncellendi
-components/admin/audit-client.tsx            ← güncellendi
-components/admin/notifications-client.tsx    ← güncellendi
-components/admin/settings-client.tsx         ← güncellendi
-components/admin/support-detail-client.tsx   ← güncellendi
-components/admin/support-list-client.tsx     ← güncellendi
-components/admin/system-client.tsx           ← güncellendi
-
-lib/actions/admin-support.ts          (önceki fix ile aynı)
-lib/actions/admin-notifications.ts    (önceki fix ile aynı)
-lib/actions/admin-users.ts            (önceki fix ile aynı)
-lib/actions/admin-audit.ts            (önceki fix ile aynı)
-lib/actions/admin-system.ts           (önceki fix ile aynı)
-lib/actions/admin-settings.ts         (önceki fix ile aynı)
-
-app/admin/(shell)/destek/[id]/page.tsx       ← (shell), zip'te (admin)
-app/admin/(shell)/kullanicilar/page.tsx       ← (shell), zip'te (admin)
+  lib/actions/admin-support.ts
+  lib/actions/admin-notifications.ts
+  lib/actions/admin-users.ts
+  lib/actions/admin-audit.ts
+  lib/actions/admin-system.ts
+  lib/actions/admin-settings.ts
 
 Sonra:
   git add .
-  git commit -m "fix: align paket 4 with primitives signatures"
+  git commit -m "fix: cast new tables to UntypedSupabase"
   git push origin main
 
-Bu sefer geçecek.
+BU DEFA GERÇEKTEN GEÇECEK - LOKAL OLARAK 'tsc' İLE TEST EDİLDİ

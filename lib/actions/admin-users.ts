@@ -3,6 +3,46 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
+// Untyped Supabase client - Database tipinde henüz olmayan tablolar (support_tickets, 
+// platform_announcements, platform_settings) için tip kontrolünü esnetir.
+// Yeni tablolar Database types'a eklendiğinde bu cast kaldırılabilir.
+type UntypedSupabase = {
+  from: (table: string) => {
+    select: (cols?: string, opts?: { count?: 'exact' | 'planned' | 'estimated'; head?: boolean }) => UntypedQuery
+    insert: (values: Record<string, unknown>, opts?: Record<string, unknown>) => UntypedQuery
+    update: (values: Record<string, unknown>) => UntypedQuery
+    delete: () => UntypedQuery
+    upsert: (values: Record<string, unknown>) => UntypedQuery
+  }
+  rpc: (fn: string, params?: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>
+  auth: {
+    getUser: () => Promise<{ data: { user: { id: string; email?: string } | null }; error: unknown }>
+  }
+}
+type UntypedQuery = {
+  select: (cols?: string, opts?: { count?: 'exact' | 'planned' | 'estimated'; head?: boolean }) => UntypedQuery
+  insert: (values: Record<string, unknown>) => UntypedQuery
+  update: (values: Record<string, unknown>) => UntypedQuery
+  delete: () => UntypedQuery
+  eq: (col: string, val: unknown) => UntypedQuery
+  neq: (col: string, val: unknown) => UntypedQuery
+  gt: (col: string, val: unknown) => UntypedQuery
+  gte: (col: string, val: unknown) => UntypedQuery
+  lt: (col: string, val: unknown) => UntypedQuery
+  lte: (col: string, val: unknown) => UntypedQuery
+  is: (col: string, val: unknown) => UntypedQuery
+  in: (col: string, val: unknown[]) => UntypedQuery
+  or: (filter: string) => UntypedQuery
+  ilike: (col: string, val: string) => UntypedQuery
+  order: (col: string, opts?: { ascending?: boolean }) => UntypedQuery
+  limit: (n: number) => UntypedQuery
+  range: (from: number, to: number) => UntypedQuery
+  single: () => Promise<{ data: unknown; error: { message: string } | null }>
+  maybeSingle: () => Promise<{ data: unknown; error: { message: string } | null }>
+  then: <T>(resolve: (val: { data: unknown; count: number | null; error: { message: string } | null }) => T) => Promise<T>
+}
+
+
 export interface AdminTeamMember {
   user_id: string
   full_name: string | null
@@ -15,7 +55,7 @@ export interface AdminTeamMember {
 }
 
 async function requireSuperAdmin() {
-  const supabase = createClient()
+  const supabase = createClient() as unknown as UntypedSupabase
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -30,7 +70,7 @@ async function requireSuperAdmin() {
 }
 
 async function logAudit(
-  client: ReturnType<typeof createClient>,
+  client: UntypedSupabase,
   action: string,
   targetId: string | null,
   targetLabel: string | null,
@@ -38,10 +78,7 @@ async function logAudit(
   tone: string,
 ) {
   try {
-    await (client.rpc as unknown as (
-      fn: string,
-      params: Record<string, unknown>,
-    ) => Promise<{ error: unknown }>)('log_audit', {
+    await client.rpc('log_audit', {
       p_action: action,
       p_target_type: 'super_admin',
       p_target_id: targetId,
@@ -57,7 +94,7 @@ async function logAudit(
 
 export async function listAdminTeam() {
   await requireSuperAdmin()
-  const supabase = createClient()
+  const supabase = createClient() as unknown as UntypedSupabase
   const { data, error } = await supabase
     .from('v_admin_super_admins_list')
     .select('*')
@@ -69,10 +106,15 @@ export async function listAdminTeam() {
 export async function inviteSuperAdmin(input: { email: string; fullName: string }) {
   await requireSuperAdmin()
 
-  const supabase = createClient()
+  const supabase = createClient() as unknown as UntypedSupabase
 
   // Kullanıcı zaten var mı diye email'le ara - lookup_user_by_email RPC
-  const { data: existing } = await supabase.rpc('lookup_user_by_email', {
+  const { data: existing } = await (
+    supabase.rpc as unknown as (
+      fn: string,
+      params: Record<string, unknown>,
+    ) => Promise<{ data: string | null; error: { message: string } | null }>
+  )('lookup_user_by_email', {
     p_email: input.email.trim().toLowerCase(),
   })
 
@@ -102,7 +144,7 @@ export async function removeSuperAdmin(userId: string) {
   const { user } = await requireSuperAdmin()
   if (user.id === userId) throw new Error('Kendi adminliğinizi kaldıramazsınız')
 
-  const supabase = createClient()
+  const supabase = createClient() as unknown as UntypedSupabase
 
   const { count } = await supabase.from('super_admins').select('*', { count: 'exact', head: true })
   if ((count ?? 0) <= 1) throw new Error('En az bir süper admin kalmalı')
