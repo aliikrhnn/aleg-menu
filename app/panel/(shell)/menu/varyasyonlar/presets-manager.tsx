@@ -119,7 +119,7 @@ export function PresetsManager({ initialPresets, products, categories }: Props) 
     } else {
       msg = `${removed} üründen kaldırıldı`;
     }
-    toast.error(msg);
+    toast.success(msg);
     setAttachModal({ open: false, preset: null });
     router.refresh();
   }

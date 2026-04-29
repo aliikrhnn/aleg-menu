@@ -6,6 +6,26 @@ import { closeOrderAndMaybeFreeTable } from './payments';
 import { revalidatePath } from 'next/cache';
 
 // ============================================================
+// Lokalize alan okuyucu — name/description gibi alanlar
+// JSONB i18n obje veya düz string olabilir; null safe.
+// typeof null === 'object' olduğu için ayrıca null kontrolü şart.
+// ============================================================
+function pickLocalized(
+  raw: unknown,
+  fallback: string = ''
+): string {
+  if (raw == null) return fallback;
+  if (typeof raw === 'string') return raw;
+  if (typeof raw === 'object') {
+    const obj = raw as { tr?: unknown; en?: unknown };
+    if (typeof obj.tr === 'string' && obj.tr) return obj.tr;
+    if (typeof obj.en === 'string' && obj.en) return obj.en;
+    return fallback;
+  }
+  return String(raw);
+}
+
+// ============================================================
 // İzin kontrolü
 // ============================================================
 async function requireBusinessAccess() {
@@ -329,12 +349,7 @@ export async function getPosMenu(): Promise<{
       const arr = variantsByProduct.get(v.product_id) || [];
       arr.push({
         id: v.id,
-        name:
-          typeof v.name === 'object'
-            ? (v.name as { tr?: string; en?: string }).tr ||
-              (v.name as { tr?: string; en?: string }).en ||
-              ''
-            : String(v.name || ''),
+        name: pickLocalized(v.name),
         price_delta: Number(v.price_delta || 0),
       });
       variantsByProduct.set(v.product_id, arr);
@@ -345,12 +360,7 @@ export async function getPosMenu(): Promise<{
     (presetResp.data || []).forEach((pr) => {
       presetMap.set(pr.id, {
         preset_id: pr.id,
-        preset_name:
-          typeof pr.name === 'object'
-            ? (pr.name as { tr?: string; en?: string }).tr ||
-              (pr.name as { tr?: string; en?: string }).en ||
-              ''
-            : String(pr.name || ''),
+        preset_name: pickLocalized(pr.name),
         type: pr.type as 'single' | 'multi',
         required: !!pr.required,
         sort_order: pr.sort_order || 0,
@@ -364,12 +374,7 @@ export async function getPosMenu(): Promise<{
       if (!preset) return;
       preset.values.push({
         id: v.id,
-        name:
-          typeof v.name === 'object'
-            ? (v.name as { tr?: string; en?: string }).tr ||
-              (v.name as { tr?: string; en?: string }).en ||
-              ''
-            : String(v.name || ''),
+        name: pickLocalized(v.name),
         price_delta: Number(v.price_delta || 0),
         is_default: !!v.is_default,
       });
@@ -388,40 +393,30 @@ export async function getPosMenu(): Promise<{
     // Kategori adlarını flat TR string yap
     const categories: CategoryForPos[] = (catResp.data || []).map((c) => ({
       id: c.id,
-      name:
-        typeof c.name === 'object'
-          ? (c.name as { tr?: string; en?: string }).tr ||
-            (c.name as { tr?: string; en?: string }).en ||
-            ''
-          : String(c.name || ''),
+      name: pickLocalized(c.name),
       sort_order: c.sort_order || 0,
       hero_icon: c.hero_icon || null,
       badge: c.badge || null,
     }));
 
-    const products: ProductForPos[] = (prodResp.data || []).map((p) => ({
-      id: p.id,
-      name:
-        typeof p.name === 'object'
-          ? (p.name as { tr?: string; en?: string }).tr ||
-            (p.name as { tr?: string; en?: string }).en ||
-            ''
-          : String(p.name || ''),
-      description:
-        typeof p.description === 'object'
-          ? (p.description as { tr?: string; en?: string }).tr || null
-          : p.description || null,
-      price: Number(p.price),
-      category_id: p.category_id,
-      status: p.status,
-      hero_image_url: p.hero_image_url,
-      hero_icon: p.hero_icon,
-      badge: p.badge,
-      print_station: p.print_station,
-      dietary_tags: p.dietary_tags || [],
-      variants: variantsByProduct.get(p.id) || [],
-      option_presets: presetsByProduct.get(p.id) || [],
-    }));
+    const products: ProductForPos[] = (prodResp.data || []).map((p) => {
+      const desc = pickLocalized(p.description, '');
+      return {
+        id: p.id,
+        name: pickLocalized(p.name),
+        description: desc || null,
+        price: Number(p.price),
+        category_id: p.category_id,
+        status: p.status,
+        hero_image_url: p.hero_image_url,
+        hero_icon: p.hero_icon,
+        badge: p.badge,
+        print_station: p.print_station,
+        dietary_tags: p.dietary_tags || [],
+        variants: variantsByProduct.get(p.id) || [],
+        option_presets: presetsByProduct.get(p.id) || [],
+      };
+    });
 
     return { success: true, categories, products };
   } catch (err) {

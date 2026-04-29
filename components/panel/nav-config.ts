@@ -53,7 +53,7 @@ export const PANEL_NAV: PanelNavGroup[] = [
     items: [
       { id: 'tables', label: 'Masalar', href: '/masalar', icon: '◍' },
       { id: 'stations', label: 'İstasyonlar', href: '/istasyonlar', icon: '⊙' },
-      { id: 'cashiers', label: 'Kasiyerler', href: '/kasiyerler', icon: '👤' },
+      { id: 'cashiers', label: 'Personeller', href: '/kasiyerler', icon: '👤' },
       { id: 'cari', label: 'Cari Hesaplar', href: '/cari-hesaplar', icon: '📒' },
       { id: 'call_buttons', label: 'Çağrı Butonları', href: '/cagrilar', icon: '✆' },
       { id: 'team', label: 'Ekip', href: '/ekip', icon: '◐', comingSoon: true },

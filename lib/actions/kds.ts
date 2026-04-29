@@ -108,8 +108,29 @@ export async function getKitchenOrders(): Promise<{
       return { success: false, error: error.message };
     }
 
+    // İstasyonları her zaman çek — sipariş olmasa bile sayfa açılabilmeli
+    const { data: stationsData } = await admin
+      .from('stations')
+      .select('id, name, slug, icon, color, sort_order')
+      .eq('business_id', businessId)
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true });
+
+    const stationsList: KitchenStation[] = (stationsData || []).map((s) => ({
+      id: s.id as string,
+      name: s.name as string,
+      slug: (s.slug as string) || (s.id as string).slice(0, 8),
+      icon: (s.icon as string) || '●',
+      color: (s.color as string) || '#C4553A',
+    }));
+
     if (!orders || orders.length === 0) {
-      return { success: true, orders: [], stations: [], businessId };
+      return {
+        success: true,
+        orders: [],
+        stations: stationsList,
+        businessId,
+      };
     }
 
     const orderIds = orders.map((o) => o.id);
@@ -134,22 +155,6 @@ export async function getKitchenOrders(): Promise<{
     (products || []).forEach((p) => {
       productStationMap.set(p.id, (p.station_id as string | null) || null);
     });
-
-    // İstasyonları çek
-    const { data: stationsData } = await admin
-      .from('stations')
-      .select('id, name, slug, icon, color, sort_order')
-      .eq('business_id', businessId)
-      .eq('is_active', true)
-      .order('sort_order', { ascending: true });
-
-    const stationsList: KitchenStation[] = (stationsData || []).map((s) => ({
-      id: s.id as string,
-      name: s.name as string,
-      slug: (s.slug as string) || (s.id as string).slice(0, 8),
-      icon: (s.icon as string) || '●',
-      color: (s.color as string) || '#C4553A',
-    }));
 
     const itemsByOrder = new Map<string, KitchenOrder['items']>();
     (items || []).forEach((item) => {
