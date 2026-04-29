@@ -1,121 +1,132 @@
-# Aleg Süper Admin — Paket 2: İşletmeler Komple
+# Aleg Süper Admin — Paket 3: Billing
 
-## Bu pakette neler var?
+Bu paket: Planlar, Faturalar (liste + detay), Ödemeler, Bekleyen Ödemeler — toplam 5 sayfa, yeni `platform_payments` tablosu, 6 yeni view.
 
-Süper admin panelinin **işletme yönetimi** modülü baştan sona yenilendi.
+## ⚠️ Kurulum sırası
 
-### Yeni özellikler
+### 1) Migration ÖNCE çalıştır
 
-1. **Liste sayfası** (`/isletmeler`)
-   - Tablo ↔ Kart view toggle
-   - Bulk select + bulk action bar (askıya al / plan değiştir / iptal)
-   - 4 filtre: arama / durum / plan / şehir + filter chips
-   - CSV indir butonu
-   - MRR, sipariş 30g, son giriş kolonları
-   - Son giriş 7 gün geçtiyse warn rengi
-
-2. **Detay sayfası** (`/isletmeler/[id]`)
-   - 6 tab: Özet · Kullanıcılar · Abonelik · Faturalar · Aktivite · Ayarlar
-   - Header'da 4 metric (Plan / MRR / Sipariş 30G / Son giriş)
-   - Son 30 gün ciro sparkline
-   - Onayla / Askıya al / Geri aç / Plan değiştir / Panele gir butonları
-   - Kullanıcılar tab'ı `business_members` view'ından çekiyor
-
-3. **Yeni işletme wizard'ı** (`/isletmeler/yeni`)
-   - 5-step (İşletme / Sahip / Plan / Modüller / Özet)
-   - Sağda canlı önizleme paneli
-   - 6 işletme tipi (kafe/restoran/bar/fırın/fast food/diğer)
-   - 8 modül toggle (menu zorunlu)
-   - Başarı ekranında geçici şifre gösterimi
-
-4. **Onay bekleyenler** (`/isletmeler/bekleyen`)
-   - `subscription_status = 'pending_approval'` olan işletmeler
-   - Hızlı onayla butonu (14 gün trial başlatır)
-
-## Migration ne yapıyor?
-
-`migrations/0031_admin_paket_2.sql`:
-
-- `businesses` tablosuna 4 kolon eklendi:
-  - `last_login_at` — son giriş zamanı (auth.users sync trigger ile)
-  - `approved_at` — onay zamanı
-  - `suspended_at` — askı zamanı
-  - `suspended_reason` — askı sebebi
-- `subscription_status` check güncellendi: `pending_approval` eklendi
-- `auth.users` UPDATE trigger → `businesses.last_login_at` otomatik sync
-- `v_admin_dashboard` güncellendi (gerçek churn risk + pending count)
-- 3 yeni view eklendi:
-  - `v_admin_business_list` — liste sayfası için zengin veri
-  - `v_admin_business_revenue_30d` — detay sparkline için
-  - `v_admin_business_members` — kullanıcılar tab'ı için
-
-## Kurulum
-
-### 1. Migration'ı çalıştır
-Supabase Studio → SQL Editor → `migrations/0031_admin_paket_2.sql` içeriğini yapıştır → Run.
-
-### 2. Dosyaları kopyala
-```
-lib/actions/admin-businesses.ts          # YENİ
-lib/actions/businesses.ts                # GÜNCELLE (business_type insert eklendi)
-components/admin/business-list-client.tsx # YENİ
-components/admin/business-detail-client.tsx # YENİ
-components/admin/pending-businesses-client.tsx # YENİ
-components/admin/new-business-wizard.tsx # YENİ
-app/admin/(shell)/isletmeler/page.tsx    # GÜNCELLE
-app/admin/(shell)/isletmeler/[id]/page.tsx # GÜNCELLE
-app/admin/(shell)/isletmeler/yeni/page.tsx # GÜNCELLE
-app/admin/(shell)/isletmeler/yeni/form.tsx # ARTIK GEREKSİZ — silebilirsin (yeni wizard component'a taşındı)
-app/admin/(shell)/isletmeler/bekleyen/page.tsx # YENİ
-```
-
-### 3. Eski form'u sil
-`app/admin/(shell)/isletmeler/yeni/form.tsx` artık kullanılmıyor (yeni wizard `components/admin/new-business-wizard.tsx`'te).
-
-### 4. Lint + build
 ```bash
-npm run lint
-npm run build
+# Supabase Studio → SQL Editor → yapıştır → Run
+migrations/0033_billing_module.sql
 ```
 
-### 5. Push
-Pre-push hook lint+build çalıştırır, hatalar varsa söyler.
+Bu migration:
+- ✅ `platform_payments` tablosunu oluşturur (RLS aktif, sadece super admin)
+- ✅ `platform_invoices` için auto-`paid_at` trigger ekler (status=paid olunca)
+- ✅ 6 view oluşturur: `v_admin_invoices_list`, `v_admin_payments_list`, `v_admin_pending_invoices`, `v_admin_billing_metrics`, `v_admin_payments_monthly`, `v_admin_plan_subscriber_count`
+
+Tamamlandığında console'da 4 satır NOTICE göreceksin.
+
+### 2) Dosyaları yerleştir
+
+```
+lib/actions/admin-billing.ts                                 → YENİ
+components/admin/plans-client.tsx                            → YENİ
+components/admin/invoices-list-client.tsx                    → YENİ
+components/admin/invoice-detail-client.tsx                   → YENİ
+components/admin/payments-list-client.tsx                    → YENİ
+components/admin/pending-invoices-client.tsx                 → YENİ
+app/admin/(shell)/planlar/page.tsx                           → YENİ
+app/admin/(shell)/faturalar/page.tsx                         → YENİ
+app/admin/(shell)/faturalar/[id]/page.tsx                    → YENİ
+app/admin/(shell)/odemeler/page.tsx                          → YENİ
+app/admin/(shell)/odemeler/bekleyen/page.tsx                 → YENİ
+```
+
+Hepsi yeni — eski dosya silmen gerekmiyor.
+
+### 3) Push
+
+```bash
+git add .
+git commit -m "feat(admin): paket 3 — billing modülü"
+git push
+```
+
+Pre-push hook lint + build koşacak. Migration uygulanmadan push'larsan TypeScript şikayet etmez ama runtime'da view'ler bulunamaz.
+
+## Sayfa rehberi
+
+### `/planlar`
+Plan CRUD + sıralama + arşiv. Yeni işletmelerin seçebileceği ücretlendirme planlarını burada yönetiyorsun.
+- Üst panel: aktif plan / abone / MRR
+- Yukarı-aşağı oklarıyla sıralama (drag-drop yok, basit ve hızlı)
+- Modal'da: slug, ad, açıklama, aylık/yıllık fiyat, özellikler (chip listesi), max şube/ürün/ekip limitleri
+- Arşivleme: yeni işletmeler seçemez, mevcut aboneler etkilenmez
+- Plan başına abone/trial sayısı + MRR katkısı kartta
+
+### `/faturalar`
+- 4 üst metrik: bu ay tahsil edilen (MoM yüzde), bekleyen tutar, vade geçmiş tutar, bu ay ödeme sayısı
+- Filtreler: arama, durum, işletme
+- Tablo: fatura no, işletme (logo + isim), tutar, durum (retry rozetli), dönem, vade (gecikmiş kırmızı)
+- Toplu seçim → hatırlatma gönder (audit log + retry_count++)
+- CSV indir (UTF-8 BOM'lu, Excel uyumlu)
+- + Manuel fatura modal (işletme, tutar, dönem, vade, not)
+
+### `/faturalar/[id]`
+- Header: fatura no, tutar (büyük), durum, gecikme/vade pillsları, retry sayısı
+- 4 metrik strip: vade, ödeme tarihi, yöntem, oluşturma
+- İşletme kartı (link) + tahsilat özeti (fatura/tahsil edilen/kalan)
+- Ödeme hareketleri listesi (her satır: yöntem, TX ID, tarih, kim kaydetti, tutar)
+- Aksiyonlar: ✓ Ödendi işaretle (otomatik payment kaydı oluşur), + Manuel ödeme kaydet, ✗ İptal et (sebep alanı)
+
+### `/odemeler`
+- Üst: son 12 ay sparkline (gold renk) + bu ay tahsil + bekleyen
+- Filtreler: arama, yöntem, durum
+- Tablo: tarih, işletme, fatura, tutar, yöntem, durum, TX
+
+### `/odemeler/bekleyen`
+- 3 grup, vurgulu border:
+  - **Vade geçmiş** (kırmızı) — acil
+  - **Vade yaklaşıyor** (sarı) — 7 gün
+  - **Sonraki dönem** (gri) — 7+ gün
+- Grup başlığında: "Bu grubu seç" butonu
+- Toplu hatırlatma + satır bazlı ✓ Ödendi quick action
 
 ## Test senaryoları
 
-**Liste:**
-- [ ] `/isletmeler` açılıyor, işletmeler MRR ile listeleniyor
-- [ ] Tablo/Kart toggle çalışıyor
-- [ ] Filtreler URL'ye yansıyor (refresh sonrası kalıyor)
-- [ ] Bulk select → askıya al modal açılıyor → 1 sebep yazılabiliyor
-- [ ] CSV indir Excel'de Türkçe karakterleri doğru gösteriyor
+### Plan CRUD
+1. `/planlar` aç → Yeni plan: ad="Standart", slug="standart", aylık=499, 3 özellik ekle, max ürün 100
+2. Liste → Düzenle → fiyatı 599 yap → Kaydet
+3. Yukarı/aşağı oklarla sırayı değiştir, sayfayı yenile → sıra korundu mu?
+4. Arşivle → Pill "ARŞİV" gözükmeli, yeni kayıt formunda görünmemeli (paket 2'deki wizard)
+5. Geri aç → tekrar aktif
 
-**Detay:**
-- [ ] `/isletmeler/[id]` 6 tab açılıyor
-- [ ] Sparkline son 30 gün ciroyu gösteriyor (eğer sipariş varsa)
-- [ ] "Panele gir" butonu impersonate API'ye gidiyor
-- [ ] Plan değiştir → modal'dan plan seç → güncelleniyor
-- [ ] Askıya al → tabel anında pill rengi değişiyor
+### Manuel fatura + ödendi
+1. `/faturalar` → + Manuel fatura → bir işletme seç, 1500 TRY, 14 gün vade
+2. Listede gözüktü mü? Vade tarihi sarı (yaklaşıyor) mu?
+3. Detaya tıkla → ✓ Ödendi işaretle → Yöntem=Havale → onayla
+4. Detayda: ödeme hareketleri listesinde 1500 TRY havale kaydı + Pill yeşil
+5. `/odemeler` → ödeme listesinde gözüktü mü? Aylık grafikte tutar arttı mı?
 
-**Yeni:**
-- [ ] `/isletmeler/yeni` wizard açılıyor
-- [ ] Step1: İşletme tipi 6 kart, biri seçili olmalı
-- [ ] Slug auto-generate çalışıyor, manuel yazılırsa kilitleniyor
-- [ ] Sağda önizleme her input'ta güncelleniyor
-- [ ] Step5 özet doğru bilgiyi gösteriyor
-- [ ] Oluşturma sonrası geçici şifre ekranı çıkıyor
+### Vade gruplandırma
+1. Vade tarihi 5 gün önce olan bir fatura bırak (manuel oluşturduğunda dueAt'i geriye al)
+2. `/odemeler/bekleyen` aç → "Vade geçmiş" kırmızı grupta görünmeli, "Xg" yazmalı
 
-**Bekleyen:**
-- [ ] `/isletmeler/bekleyen` boşsa "✓ Yok" mesajı
-- [ ] Onayla → işletme listede `trial` olarak görünüyor
+### Toplu hatırlatma
+1. `/odemeler/bekleyen` → 2-3 fatura seç → Hatırlatma gönder
+2. Her fatura için retry_count +1 olmalı (listede ⟳ rozet)
+3. Audit log'da `invoice.reminder_sent` görünmeli
 
-## Sorun çıkarsa
+### CSV
+1. `/faturalar` → CSV indir
+2. Excel'de aç → Türkçe karakterler düzgün, başlıklar var
 
-- **"v_admin_business_list yok"** → Migration çalışmadı, önce 0031 SQL'i çalıştır
-- **"Stepper component bulunamadı"** → `components/admin/primitives.tsx` mevcut olmalı (Paket 1'den)
-- **"createBusiness business_type kabul etmiyor"** → `lib/actions/businesses.ts` patch'lendi mi kontrol et
-- **last_login_at hep null görünüyor** → Trigger sadece UPDATE'te tetikleniyor; manuel sync için:
-  ```sql
-  UPDATE businesses b SET last_login_at = u.last_sign_in_at
-  FROM auth.users u WHERE u.id = b.owner_user_id;
-  ```
+## Şema notları
+
+`platform_payments` constraint'leri:
+- `status IN ('succeeded','pending','failed','refunded')`
+- `payment_method IN ('card','bank_transfer','cash','manual','other')`
+- `invoice_id` SET NULL (fatura silinirse ödeme kalır, audit için)
+- `business_id` CASCADE (işletme silinirse ödemeler de silinir)
+- `recorded_by` SET NULL (admin kullanıcı silinirse)
+
+`v_admin_invoices_list` türetilen alanlar:
+- `business_logo`: işletme adının ilk 2 harfi (Türkçe karakter desteği)
+- `days_overdue`: bekleyen + vade geçmiş ise gün sayısı
+- `due_soon`: bekleyen + vade 7 gün içinde
+
+## Sonraki paket
+
+Paket 4 (son): Support tickets, Notifications, Users (admin team), Audit logs, System status, Settings, ⌘K command palette.
