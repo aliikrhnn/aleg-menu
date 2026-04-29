@@ -24,7 +24,6 @@ export const PANEL_NAV: PanelNavGroup[] = [
     group: 'GÜNLÜK',
     items: [
       { id: 'dashboard', label: 'Ana Sayfa', href: '/', icon: '◇' },
-      { id: 'pos', label: 'Sipariş Akışı', href: '/pos', icon: '◉' },
       {
         id: 'kasa',
         label: 'Kasa Uygulaması',

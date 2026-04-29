@@ -1,131 +1,68 @@
-ALEG TUR 4E — Dashboard güzelleştirme (5. ve son pas: LatestReview + QuickActions + Greeting)
-==============================================================================================
+ALEG TUR 4F — Sidebar'dan "Sipariş Akışı" menüsü kaldırıldı
+=============================================================
 
-Dashboard'ın son üç parçası canlandırıldı. Bu paketten sonra
-"canlı nefes alan dashboard" hedefi tamamlanmış oluyor.
-
-
-YENİLİKLER
-==========
-
-[1] LatestReview kart — review'a göre tonlanıyor
-    • Olumlu (4-5★) → soft green background + sağ üstte yeşil glow halka
-      (3.6s loop pulse)
-    • Olumsuz (1-2★) → soft gold/uyarı tonu (dikkat çekiyor)
-    • Nötr (3★) → standart card
-    • Yıldızlar mount'ta SIRAYLA doluyor — her biri 90ms gecikme,
-      spring scale + rotate effect
-    • Boş yıldızlar yumuşak fade-in
-    • "Cevap bekliyor" sağda mono uppercase ok ile
-    • Mini pulse dot başlık yanında (cevaplanmamış varsa)
-    • Yorum metni: italic serif, sol kenarda subtle accent border
-    • Comment mount animation (0.5s gecikme, fade up)
-
-[2] LatestReview empty state
-    • 5 yıldız placeholder, sırayla yumuşak nefes (her biri 0.15s shift)
-    • "QR'ı okuttuğunda buradan görebilirsin" italic serif
-
-[3] QuickActions kart
-    • Background: accent → gold gradient (subtle)
-    • Sağ üstte sparkle radial pulse (4s loop)
-    • Başlıkta ⚡ ikonu — periyodik "şimşek" animasyonu (2.6s'de bir
-      kıvrılıyor)
-    • Kartlar mount'ta staggered (60ms aralıkla aşağıdan kayarak)
-    • Hover MICRO ANIMATIONS:
-      - Plus ikonu: scale + 90° rotate
-      - Rotate ikonları (◉ ◌): 180° spin
-      - Slide ikonu (↗): köşeye doğru slide + scale
-
-[4] Greeting iyileştirmeleri
-    • Selama göre EMOJİ eklendi:
-      - Sabah → ☀️
-      - Gündüz → ☕
-      - Akşam → 🌅
-      - Gece → 🌙
-    • Emoji yumuşak bob animasyonu (4s loop, ±2° rotate)
-    • Mount'ta tüm container fade-in (translateY -4)
-    • Subtext de gecikmeli fade-in (200ms sonra)
-    • Letter spacing 0.14em → 0.16em (Brutalist Spice ile uyum)
+İşletme paneli sol menüsündeki "Sipariş Akışı" (◉ /pos) öğesi
+silindi. Artık sidebar'da görünmeyecek.
 
 
-ÖNCESİ vs SONRASI
-=================
+NEDEN
+=====
 
-ÖNCE: Statik kartlar, basit hover scale, yıldızlar tek seferde
-SONRA: Her kart kendi içinde mikro animasyon, mount staggered,
-       review tonuna göre kart rengi değişiyor
+Kullanıcı isteği — bu sayfa zaten Kasa ve Garson uygulamaları
+ile büyük ölçüde örtüşüyordu, sidebar'da fazladan yer kaplıyordu.
+
+
+NE OLDU
+=======
+
+components/panel/nav-config.ts
+
+  ÖNCE (GÜNLÜK grubu):
+    • Ana Sayfa
+    • Sipariş Akışı     ← SİLİNDİ
+    • Kasa Uygulaması
+    • Garson Uygulaması
+
+  SONRA (GÜNLÜK grubu):
+    • Ana Sayfa
+    • Kasa Uygulaması
+    • Garson Uygulaması
+
+
+NE OLMADI (kasten)
+==================
+
+  • /panel/pos rotası HÂLÂ erişilebilir (sayfa silinmedi)
+    → Dashboard'daki "POS" hızlı aksiyon butonu çalışmaya devam eder
+    → Live Ops kartındaki "POS" butonu hâlâ aktif
+
+  • Eğer ileride /pos rotasını da silmek istersen, ek olarak şunları
+    güncelleyeceğim:
+      - app/panel/(shell)/pos/ klasörü
+      - hero-metrics.tsx LivePulseCard'taki href="/panel/pos"
+      - live-ops.tsx ActionButton "POS"
 
 
 KURULUM
 =======
 
-3 dosyayı kopyala (üzerine yaz):
+1 dosyayı kopyala (üzerine yaz):
 
-  app/panel/(shell)/dashboard/latest-review.tsx
-  app/panel/(shell)/dashboard/quick-actions.tsx
-  app/panel/(shell)/dashboard/greeting.tsx
+  components/panel/nav-config.ts
 
 
 PUSH
 ====
 
   git add .
-  git commit -m "feat: tur 4e - latest review animated, quick actions micro, greeting emoji"
+  git commit -m "chore: remove sipariş akışı from sidebar"
   git push origin main
 
 
 TEST
 ====
 
-[A] Greeting:
-    1. Sayfayı yenile, üst kısma bak
-    2. ✅ "Günaydın, Ali ☀️" → emoji yanda yumuşak sallanmalı
-    3. Tüm container fade-in olmalı (1 sn'lik)
-
-[B] LatestReview - Olumlu yorum:
-    1. 5 yıldız bir yorum gönder
-    2. ✅ Kart yeşilimsi tonda, sağ üstte glow halka
-    3. Yıldızlar SIRAYLA pop-pop-pop! mount'ta
-    4. Yorum sol kenarda accent border ile italic serif
-
-[C] LatestReview - Olumsuz yorum:
-    1. 2 yıldız bir yorum gönder
-    2. ✅ Kart altın/sarımtırak tonda
-    3. Olumsuzluk bilgisi diskret ama görünür
-
-[D] LatestReview - Boş:
-    1. Hiç değerlendirme yok
-    2. ✅ 5 placeholder yıldız sırayla nefes alıyor
-    3. "QR'ı okuttuğunda..." italic serif
-
-[E] QuickActions:
-    1. Karta bak — başlıkta ⚡ ikonu var
-    2. ✅ Sayfaya geldiğinde 4 buton sırayla (60ms) aşağıdan geliyor
-    3. "Ürün ekle" üzerine hover → "+" 90° dönerken büyüyor
-    4. "QR kodları" üzerine hover → ◉ döner
-    5. "Menüyü aç" üzerine hover → ↗ köşeye kayarak büyür
-
-
-TÜM TUR 4 ÖZETİ (Dashboard güzelleştirme)
-==========================================
-
-  ✅ Tur 4A — Hero Metrikler (sparkline'lı, big+pulse+small)
-  ✅ Tur 4B — LiveOps (akış görselleştirmesi, workload meter)
-  ✅ Tur 4C — HourlyChart (custom SVG, animasyonlu, hover snap)
-  ✅ Tur 4D — TopProducts (champion card + animated rank list)
-  ✅ Tur 4E — LatestReview + QuickActions + Greeting
-
-5 paste, dashboard'ın tüm parçaları "canlı nefes alır" hâle geldi.
-
-
-SIRADAKİ
-========
-
-Test edip onayladığında Tur 4 tamamlanmış olur. Ondan sonra
-gerçek kullanım esnasında yeni isteklerle yola devam ederiz.
-
-Olası sıradaki büyük işler:
-  • Süper admin paneli tasarımı (henüz pending)
-  • Dashboard'da realtime push (Supabase subscription)
-  • Empty state ipuçlarını genişletme (yeni işletmeler için)
-  • Onboarding wizard
+  1. Panele gir, sol menüye bak
+  2. ✅ "Sipariş Akışı" artık görünmemeli
+  3. GÜNLÜK grubu: Ana Sayfa → Kasa → Garson olmalı
+  4. URL ile /panel/pos açarsan sayfa hâlâ çalışıyor (kasten)
