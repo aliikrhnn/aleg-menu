@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { getRecentPrintJobs, type PrintJob } from '@/lib/actions/printers';
 import { getAgents, deleteAgent, type AgentInfo } from '@/lib/actions/agents';
+import { getAgentSetupInfo } from '@/lib/actions/agent-setup';
 import type { Printer } from '@/lib/actions/printers';
 import { toast } from '@/components/ui/toast';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
@@ -11,6 +12,7 @@ export function AdvancedTab({ printers }: { printers: Printer[] }) {
   const [jobs, setJobs] = useState<PrintJob[]>([]);
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showSetup, setShowSetup] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -92,42 +94,39 @@ export function AdvancedTab({ printers }: { printers: Printer[] }) {
                 yazılımı
               </p>
             </div>
-            <a
-              href="#agent-kurulum"
-              onClick={(e) => {
-                e.preventDefault();
-                toast.error(
-                  'Agent kurulumu için:\n\n' +
-                    '1. aleg-printer-agent.zip dosyasını kafedeki Windows PC\'ye kopyala\n' +
-                    '2. Klasörü aç, kur.bat dosyasına çift tıkla\n' +
-                    '3. Wizard sorduğunda Supabase URL + Service Key + İşletme ID gir\n' +
-                    '4. baslat.bat ile başlat\n' +
-                    '5. Otomatik başlatma için otomatik-baslat-ekle.bat çalıştır\n\n' +
-                    'Detaylı kılavuz için agent ZIP içindeki README.txt\'ye bak.'
-                );
-              }}
-              className="text-[12px] font-semibold px-3 py-1.5 rounded-[8px] hover:bg-[var(--paper-2)]"
+            <button
+              type="button"
+              onClick={() => setShowSetup(true)}
+              className="text-[12px] font-semibold px-3 py-1.5 rounded-[8px] hover:bg-[var(--paper-2)] transition-colors"
               style={{ color: 'var(--accent)' }}
             >
               Kurulum rehberi →
-            </a>
+            </button>
           </div>
 
           {agents.length === 0 ? (
             <div
-              className="p-4 rounded-[10px] text-center"
+              className="p-5 rounded-[10px] text-center"
               style={{
                 background: 'var(--paper-2)',
                 color: 'var(--ink-3)',
               }}
             >
-              <div className="text-[13px]">
+              <div className="text-[13px] font-medium" style={{ color: 'var(--ink-2)' }}>
                 Henüz agent kurulmamış
               </div>
-              <div className="text-[11px] mt-1">
+              <div className="text-[11px] mt-1 mb-3">
                 Network yazıcı eklediniz ama hiçbir bilgisayarda agent çalışmıyor.
                 Yazdırma işlemleri bekleyecek.
               </div>
+              <button
+                type="button"
+                onClick={() => setShowSetup(true)}
+                className="text-[12px] font-semibold px-4 py-2 rounded-[8px] hover:opacity-90 transition-opacity"
+                style={{ background: 'var(--accent)', color: '#FAF5EA' }}
+              >
+                Agent&apos;ı kur ↓
+              </button>
             </div>
           ) : (
             <div className="space-y-2">
@@ -250,6 +249,9 @@ export function AdvancedTab({ printers }: { printers: Printer[] }) {
           </div>
         )}
       </div>
+
+      {/* Agent kurulum modal */}
+      {showSetup && <AgentSetupModal onClose={() => setShowSetup(false)} />}
     </div>
   );
 }
@@ -479,6 +481,332 @@ function AgentCard({
         title="Agent kaydını sil"
       >
         Sil
+      </button>
+    </div>
+  );
+}
+
+// ============================================================
+// AGENT KURULUM MODAL
+// ============================================================
+function AgentSetupModal({ onClose }: { onClose: () => void }) {
+  const [info, setInfo] = useState<{
+    business_id: string;
+    business_name: string;
+    supabase_url: string;
+    panel_url: string;
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getAgentSetupInfo().then((r) => {
+      if (r.success && r.data) setInfo(r.data);
+      setLoading(false);
+    });
+  }, []);
+
+  const copyToClipboard = (text: string, label: string) => {
+    navigator.clipboard.writeText(text).then(
+      () => toast.success(`${label} kopyalandı`),
+      () => toast.error('Kopyalanamadı')
+    );
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto"
+      style={{ background: 'rgba(0,0,0,0.5)' }}
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-2xl rounded-[var(--r)] overflow-hidden my-8"
+        style={{ background: 'var(--card)' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div
+          className="px-6 py-5 flex items-start justify-between"
+          style={{
+            background:
+              'color-mix(in srgb, var(--accent) 6%, var(--card))',
+            borderBottom:
+              '1px solid color-mix(in srgb, var(--accent) 12%, var(--line))',
+          }}
+        >
+          <div>
+            <div
+              className="text-accent uppercase mb-1"
+              style={{
+                fontFamily: 'var(--f-mono)',
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: '0.18em',
+              }}
+            >
+              KURULUM REHBERİ
+            </div>
+            <h2
+              style={{
+                fontFamily: 'var(--f-serif)',
+                fontStyle: 'italic',
+                fontSize: 26,
+                fontWeight: 400,
+                letterSpacing: '-0.02em',
+                lineHeight: 1.1,
+              }}
+            >
+              Aleg Yazıcı Agent
+            </h2>
+            <p className="text-[13px] text-ink-2 mt-1.5 max-w-sm leading-relaxed">
+              Network yazıcılar için kafedeki bilgisayarda çalışan köprü
+              yazılımı. 5 dakikada kurulum.
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-ink-3 hover:text-ink p-1 -mr-2 -mt-2"
+            aria-label="Kapat"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M6 6L18 18M6 18L18 6"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+            </svg>
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="px-6 py-6 space-y-5">
+          {/* Adım 1: ZIP indir */}
+          <SetupStep
+            n={1}
+            title="Agent ZIP'ini indir"
+            desc="Kafedeki Windows bilgisayara aktar"
+          >
+            <a
+              href="/downloads/aleg-printer-agent.zip"
+              download
+              className="inline-flex items-center gap-2 h-11 px-5 rounded-[var(--r-sm)] font-semibold text-[13px] hover:opacity-90 transition-opacity"
+              style={{ background: 'var(--accent)', color: '#FAF5EA' }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M12 4v12m0 0l-4-4m4 4l4-4M4 20h16"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              aleg-printer-agent.zip indir
+            </a>
+            <p className="text-[11px] text-ink-3 mt-2">
+              ~2 MB · Windows 10/11
+            </p>
+          </SetupStep>
+
+          {/* Adım 2: Kur */}
+          <SetupStep
+            n={2}
+            title="ZIP'i aç ve kur.bat&apos;ı çalıştır"
+            desc="Çift tıkla — wizard açılır"
+          >
+            <div
+              className="p-3 rounded-[8px] text-[12px]"
+              style={{ background: 'var(--paper-2)', color: 'var(--ink-2)' }}
+            >
+              <div className="font-mono">
+                aleg-printer-agent\
+                <br />
+                ├─ kur.bat ← <span className="text-accent">çift tıkla</span>
+                <br />
+                ├─ baslat.bat
+                <br />
+                ├─ otomatik-baslat-ekle.bat
+                <br />
+                └─ README.txt
+              </div>
+            </div>
+          </SetupStep>
+
+          {/* Adım 3: Bilgileri gir */}
+          <SetupStep
+            n={3}
+            title="Wizard&apos;a bu bilgileri yapıştır"
+            desc="Bilgisayardaki kurulum sihirbazı 3 şey soracak"
+          >
+            {loading ? (
+              <div className="text-[13px] text-ink-3">Yükleniyor…</div>
+            ) : info ? (
+              <div className="space-y-2">
+                <CredentialRow
+                  label="İşletme ID"
+                  value={info.business_id}
+                  onCopy={() =>
+                    copyToClipboard(info.business_id, 'İşletme ID')
+                  }
+                />
+                <CredentialRow
+                  label="Supabase URL"
+                  value={info.supabase_url}
+                  onCopy={() =>
+                    copyToClipboard(info.supabase_url, 'Supabase URL')
+                  }
+                />
+                <div
+                  className="p-3 rounded-[8px] text-[12px] flex gap-2"
+                  style={{
+                    background:
+                      'color-mix(in srgb, var(--gold, #B08A3E) 10%, var(--card))',
+                    border:
+                      '1px solid color-mix(in srgb, var(--gold, #B08A3E) 25%, var(--line))',
+                    color: 'var(--ink-2)',
+                  }}
+                >
+                  <span className="text-[14px]">⚠</span>
+                  <div>
+                    <div
+                      className="font-semibold mb-0.5"
+                      style={{ color: 'var(--ink)' }}
+                    >
+                      Service Role Key
+                    </div>
+                    <p className="leading-relaxed">
+                      Bu key Supabase Dashboard&apos;dan alınmalı (güvenlik).{' '}
+                      <span className="font-mono">
+                        Settings → API → service_role
+                      </span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-[13px] text-danger">
+                Bilgiler alınamadı, sayfayı yenile.
+              </div>
+            )}
+          </SetupStep>
+
+          {/* Adım 4: Başlat */}
+          <SetupStep
+            n={4}
+            title="baslat.bat&apos;ı çalıştır"
+            desc="Agent başladıktan sonra bu sayfayı yenile — kart görünecek"
+          >
+            <p
+              className="text-[12px] leading-relaxed"
+              style={{ color: 'var(--ink-2)' }}
+            >
+              Otomatik başlatma istersen{' '}
+              <span className="font-mono text-[11px]">
+                otomatik-baslat-ekle.bat
+              </span>{' '}
+              çalıştır — Windows açıldığında agent kendiliğinden başlar.
+            </p>
+          </SetupStep>
+        </div>
+
+        {/* Footer */}
+        <div
+          className="px-6 py-4 flex items-center justify-between gap-3"
+          style={{
+            borderTop: '1px solid var(--line)',
+            background: 'var(--paper-2)',
+          }}
+        >
+          <p className="text-[11px] text-ink-3">
+            Detaylı kılavuz: ZIP içindeki README.txt
+          </p>
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-10 px-5 rounded-[var(--r-sm)] font-semibold text-[13px] hover:bg-[var(--card)] transition-colors"
+            style={{ color: 'var(--ink-2)' }}
+          >
+            Kapat
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SetupStep({
+  n,
+  title,
+  desc,
+  children,
+}: {
+  n: number;
+  title: string;
+  desc: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex gap-4">
+      <div
+        className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
+        style={{
+          background: 'var(--accent)',
+          color: '#FAF5EA',
+          fontFamily: 'var(--f-mono)',
+          fontSize: 13,
+          fontWeight: 700,
+        }}
+      >
+        {n}
+      </div>
+      <div className="flex-1 pt-0.5">
+        <div className="text-[15px] font-semibold mb-0.5">{title}</div>
+        <div className="text-[12px] text-ink-3 mb-3">{desc}</div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function CredentialRow({
+  label,
+  value,
+  onCopy,
+}: {
+  label: string;
+  value: string;
+  onCopy: () => void;
+}) {
+  return (
+    <div
+      className="flex items-center gap-3 px-3 py-2.5 rounded-[8px]"
+      style={{ background: 'var(--paper-2)' }}
+    >
+      <div className="flex-1 min-w-0">
+        <div
+          className="text-[10px] uppercase mb-0.5"
+          style={{
+            fontFamily: 'var(--f-mono)',
+            fontWeight: 700,
+            letterSpacing: '0.1em',
+            color: 'var(--ink-3)',
+          }}
+        >
+          {label}
+        </div>
+        <div
+          className="font-mono text-[12px] truncate"
+          style={{ color: 'var(--ink)' }}
+        >
+          {value || '—'}
+        </div>
+      </div>
+      <button
+        onClick={onCopy}
+        className="text-[11px] font-semibold px-3 py-1.5 rounded-[6px] hover:bg-[var(--card)] transition-colors flex-shrink-0"
+        style={{ color: 'var(--accent)' }}
+      >
+        Kopyala
       </button>
     </div>
   );

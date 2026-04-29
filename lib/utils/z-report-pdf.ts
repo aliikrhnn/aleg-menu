@@ -1089,35 +1089,67 @@ export async function generateZReportPdf(
     }
     y += 6;
 
+    // İş saatleri aralığını otomatik tespit et
+    // En erken aktif saatten 1 saat önce, en geç aktif saatten 1 saat sonraya kadar
+    // Minimum 8 saat göster (görsel denge için)
+    const activeHours = report.by_hour.map((h) => h.hour);
+    const minHour = Math.max(0, Math.min(...activeHours) - 1);
+    const maxHour = Math.min(23, Math.max(...activeHours) + 1);
+    let rangeStart = minHour;
+    let rangeEnd = maxHour;
+    if (rangeEnd - rangeStart < 7) {
+      // Aralığı genişlet — ortalayı bul, ±4 saat
+      const center = Math.round((rangeStart + rangeEnd) / 2);
+      rangeStart = Math.max(0, center - 4);
+      rangeEnd = Math.min(23, center + 4);
+    }
+
+    // Tüm aralık için tam liste oluştur (boş saatler 0 amount ile)
+    const amountByHour = new Map<number, number>();
+    report.by_hour.forEach((h) => amountByHour.set(h.hour, h.amount));
+    const fullHours: Array<{ hour: number; amount: number }> = [];
+    for (let h = rangeStart; h <= rangeEnd; h++) {
+      fullHours.push({ hour: h, amount: amountByHour.get(h) || 0 });
+    }
+
     const chartH = 30;
     setFill(pdf, COLORS.card);
     setDraw(pdf, COLORS.line);
     pdf.setLineWidth(0.3);
     pdf.roundedRect(MARGIN, y, CONTENT_W, chartH + 6, 2, 2, 'FD');
 
-    const maxAmount = Math.max(...report.by_hour.map((h) => h.amount), 1);
-    const barCount = report.by_hour.length;
+    const maxAmount = Math.max(...fullHours.map((h) => h.amount), 1);
+    const barCount = fullHours.length;
     const gap = 1;
     const innerW = CONTENT_W - 8;
     const barW = (innerW - gap * (barCount - 1)) / barCount;
 
-    for (let i = 0; i < report.by_hour.length; i++) {
-      const { hour, amount } = report.by_hour[i];
+    for (let i = 0; i < fullHours.length; i++) {
+      const { hour, amount } = fullHours[i];
       const isPeak = hour === report.peak_hour;
-      const h = Math.max(1, (amount / maxAmount) * chartH);
+      const isEmpty = amount === 0;
       const x = MARGIN + 4 + i * (barW + gap);
-      const barY = y + 4 + (chartH - h);
 
-      setFill(pdf, isPeak ? COLORS.accent : COLORS.ink2);
-      if (!isPeak) {
-        setFill(pdf, '#A89788'); // ink2'nin soluk hali
+      // Boş saatler için ince zemin çizgisi (referans)
+      if (isEmpty) {
+        setFill(pdf, COLORS.line);
+        pdf.rect(x, y + chartH + 3, barW, 0.5, 'F');
+      } else {
+        const h = Math.max(1, (amount / maxAmount) * chartH);
+        const barY = y + 4 + (chartH - h);
+
+        if (isPeak) {
+          setFill(pdf, COLORS.accent);
+        } else {
+          setFill(pdf, '#A89788'); // ink2'nin soluk hali
+        }
+        pdf.rect(x, barY, barW, h, 'F');
       }
-      pdf.rect(x, barY, barW, h, 'F');
 
       // Saat label
       pdf.setFont('helvetica', isPeak ? 'bold' : 'normal');
       pdf.setFontSize(6);
-      setText(pdf, isPeak ? COLORS.accent : COLORS.ink3);
+      setText(pdf, isPeak ? COLORS.accent : isEmpty ? COLORS.line : COLORS.ink3);
       pdf.text(
         String(hour).padStart(2, '0'),
         x + barW / 2,

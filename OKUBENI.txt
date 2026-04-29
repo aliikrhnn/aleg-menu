@@ -1,64 +1,85 @@
-ALEG TUR 1 — Test ekibi bug raporu fix paketi (29 Nisan 2026)
-================================================================
+ALEG TUR 2A — Bug #6 + #8 fix paketi
+=====================================
 
-Bu paket 6 bug'ı çözer (12 bug'dan ilki):
+Bu paket 2 bug'ı çözer:
 
-✅ #1  — Onboarding "QR ile test et" 404 → akıllı yönlendirme + güzel modal
-✅ #2  — Varyasyon eklendi mesajı "HATA" toast → "BAŞARILI" toast
-✅ #3  — Kasiyer yokken Kasa 404 → güzel empty state + yönlendirme
-✅ #4  — "Cannot read properties of null (reading 'tr')" hatası — null safe i18n
-✅ #7  — Hızlı Satış'ta menü yüklenmiyor (bug #4'ün ikincil etkisi - aynı fix)
-✅ #11 — "Kasiyerler" → "Personeller" (sidebar label)
-✅ #12 — İstasyon ekranları bar/mutfak/pastane açılmıyor — sipariş yokken bile stations dönüyor
+✅ #6 — Gün sonu PDF saat grafik kötü görünüyor
+✅ #8 — Yazıcı agent ZIP indirme + güzel kurulum modal'ı
 
 
-KURULUM
--------
+KURULUM (kod tarafı)
+--------------------
 
-Bu zip'i aç, içindeki 7 dosyayı projendeki AYNI yerlere kopyala 
-(üstüne yaz, "Yes to All"):
+Bu zip'i aç, içindeki 2 dosyayı projendeki AYNI yerlere kopyala (üstüne yaz):
 
-  lib/actions/tables-status.ts                                    (bug #4 + #7)
-  lib/actions/kds.ts                                              (bug #12)
-  app/panel/(shell)/menu/varyasyonlar/presets-manager.tsx         (bug #2)
-  components/panel/nav-config.ts                                  (bug #11)
-  app/panel/(shell)/dashboard/onboarding.tsx                      (bug #1)
-  app/kasa/page.tsx                                               (bug #3)
-  app/kasa/kasa-empty-state.tsx                                   (bug #3 - YENİ DOSYA)
+  lib/utils/z-report-pdf.ts                                  (bug #6)
+  app/panel/(shell)/yazicilar/tabs/advanced-tab.tsx          (bug #8)
+
+
+ÖNEMLİ — AGENT ZIP DOSYASINI KOY (#8 için)
+-------------------------------------------
+
+UI'da "Agent ZIP indir" butonu eklendi, ama dosyanın kendisi senin
+bilgisayarında. Şunu yap:
+
+  1. Mevcut "aleg-printer-agent.zip" dosyanı bul
+     (proje haricinde, geliştirme klasöründe olabilir)
+
+  2. Projenin içine kopyala:
+     C:\Users\aliik\OneDrive\Desktop\aleg-starter\public\downloads\
+     
+     (downloads klasörü yoksa oluştur)
+
+  3. Dosya adı tam olarak "aleg-printer-agent.zip" olmalı
+  
+  4. Eğer aleg-printer-agent.zip dosyası SENDE DE YOKSA:
+     UI çalışır ama indir butonuna tıklanınca 404 verir.
+     Önce ZIP'i hazırla, sonra UI'yi push et.
+
+
+DEĞİŞİKLİK ÖZETİ
+================
+
+#6 — PDF saat grafik
+--------------------
+ESKİ: Sadece sipariş olan saatler bar olarak çiziliyordu — tek bar
+      tüm canvas'ı kaplıyor, boş gibi görünüyordu.
+
+YENİ: 
+  - İş saatleri aralığını otomatik tespit ediyor (en erken-1 → en geç+1)
+  - Eğer 7 saatten az ise ortalayıp ±4 saat gösteriyor (görsel denge)
+  - Boş saatler ince gri çizgi olarak görünüyor (referans)
+  - Aktif saatler bar olarak, peak hour vurgulanmış
+  
+Sonuç: Tek bir 13:00 bar yerine, örneğin 09:00-17:00 aralığında
+       bütün saatler — sadece olanlar dolu, gerisi boş çizgi.
+
+
+#8 — Yazıcı Agent kurulum modal
+-------------------------------
+ESKİ: "Kurulum rehberi" tıklayınca toast.error pop-up'ı çıkıyordu
+      (dağınık metin, indirme yok, yapışkan değil)
+
+YENİ:
+  - Tıklayınca güzel bir modal açılıyor (4 adımlı kurulum)
+  - "Agent ZIP indir" butonu var (link: /downloads/aleg-printer-agent.zip)
+  - İşletme ID + Supabase URL kopyalanabilir kart olarak gösterilyor
+  - Service Role Key için uyarı kartı (Supabase'den alınmalı)
+  - "Henüz agent kurulmamış" empty state'inde de "Agent'ı kur" CTA'sı
 
 
 PUSH
 ----
 
   git add .
-  git commit -m "fix: tur 1 - 6 bugfix from test team report"
+  git commit -m "fix: tur 2a - PDF hourly chart + agent setup modal"
   git push origin main
 
 
-KALAN BUG'LAR (TUR 2'ye)
-------------------------
+KALAN BUG'LAR (TUR 2B'ye)
+-------------------------
 
-❓ #5a — Müşteri telefon: sipariş takibi (yeni özellik)
-❓ #5b — Müşteri telefon: ürün değerlendirme (yeni özellik, reviews tablosu mevcut)
-❓ #6  — Gün sonu PDF saat grafik (boş saatleri doldur, görsel iyileştir)
-❓ #8  — Yazıcı agent ZIP indirme (static dosya + UI)
-❓ #9  — Yetkisiz kasiyer kasa erişimi (replication adımı netleşmeli)
-❓ #10 — Kasa hızlı satışta cari ödeme (POS akışına cari select ekle)
-
-
-NOTLAR
-------
-
-* tables-status.ts'te yeni `pickLocalized` helper fonksiyonu eklendi.
-  i18n alanları (name, description) için null-safe okuma sağlar.
-  Bu helper'ı diğer dosyalarda da kullanmak isteyebilirsin.
-
-* kasa-empty-state.tsx YENİ bir dosya — projede daha önce yoktu.
-  app/kasa/ klasörüne ekle.
-
-* nav-config.ts'te sadece sidebar label değişti. Sayfa içindeki
-  "Kasiyer & Garson" başlığı (cashier-manager.tsx) AYNEN KALDI çünkü
-  rol bağlamı korunmalı (kasiyer rolü, garson rolü ayrı).
-
-* Bug #1 için: masa varsa subdomain'e gider, yoksa illüstrasyonlu modal
-  açar. Modal "Masa eklemeye git" CTA'sıyla /panel/masalar'a yönlendirir.
+❓ #5a — Müşteri sipariş takibi (yeni özellik, ~1.5h)
+❓ #5b — Müşteri ürün değerlendirme (~1h)
+❓ #10 — Kasa hızlı satışta cari ödeme (~2h)
+❓ #9  — Yetki bypass (replication adımı netleşmeli)
