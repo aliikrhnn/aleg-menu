@@ -328,17 +328,34 @@ export function WaiterBoard({ businessId }: Props) {
     }
   }, []);
 
-  const handleDeliverOrder = useCallback(async (orderId: string) => {
-    setActiveOrders((prev) => prev.filter((o) => o.id !== orderId));
-    const r = await markOrderDelivered(orderId);
-    if (!r.success) {
-      toast.error(r.error || 'İşlem başarısız');
-      const refresh = await getAllActiveOrders();
-      if (refresh.success) setActiveOrders(refresh.orders || []);
-    } else {
-      toast.success('Sipariş teslim edildi');
-    }
-  }, []);
+  const handleDeliverOrder = useCallback(
+    async (orderId: string) => {
+      // Sipariş hazır değilse (preparing/confirmed) garsonu uyar — yanlışlık olabilir
+      const order = activeOrders.find((o) => o.id === orderId);
+      if (order && order.status !== 'ready') {
+        const ok = await confirmDialog({
+          title: 'Hazır olmadan teslim et?',
+          body: `Bu sipariş henüz "${
+            order.status === 'preparing' ? 'Hazırlanıyor' : 'Alındı'
+          }" durumda. Mutfak hazır demeden teslim ettiğine emin misin?`,
+          confirmLabel: 'Evet, teslim ettim',
+          cancelLabel: 'Vazgeç',
+        });
+        if (!ok) return;
+      }
+
+      setActiveOrders((prev) => prev.filter((o) => o.id !== orderId));
+      const r = await markOrderDelivered(orderId);
+      if (!r.success) {
+        toast.error(r.error || 'İşlem başarısız');
+        const refresh = await getAllActiveOrders();
+        if (refresh.success) setActiveOrders(refresh.orders || []);
+      } else {
+        toast.success('Sipariş teslim edildi');
+      }
+    },
+    [activeOrders]
+  );
 
   // Açık masalar (active/new/ready durumları)
   const activeTables = useMemo(() => {
@@ -787,6 +804,11 @@ function OrdersTab({
       {orders.map((order) => {
         const expanded = expandedIds.has(order.id);
         const isReady = order.status === 'ready';
+        // Teslim edilebilir mi? ready VEYA hazırlanıyor/alındı (yoğun saat fallback)
+        const canDeliver =
+          isReady ||
+          order.status === 'preparing' ||
+          order.status === 'confirmed';
         const statusCfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.received;
 
         // Bekleme süresi - ready'de ready_at, diğerlerinde created_at
@@ -849,9 +871,17 @@ function OrdersTab({
                   {statusCfg.label}
                 </div>
 
+                {/* MASA ADI - serif italic, vurgulu */}
                 <div
                   className="text-ink"
-                  style={{ fontWeight: 600, fontSize: 16, lineHeight: 1.2 }}
+                  style={{
+                    fontFamily: 'var(--f-serif)',
+                    fontStyle: 'italic',
+                    fontSize: 22,
+                    fontWeight: 400,
+                    letterSpacing: '-0.01em',
+                    lineHeight: 1.05,
+                  }}
                 >
                   {getOrderDestinationDisplay(order)}
                 </div>
@@ -1009,8 +1039,8 @@ function OrdersTab({
                   </div>
                 )}
 
-                {/* Ready'de teslim et butonu */}
-                {isReady && (
+                {/* Teslim ettim butonu — ready güçlü, preparing/confirmed ikincil */}
+                {canDeliver && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -1018,14 +1048,23 @@ function OrdersTab({
                     }}
                     className="mt-3 w-full h-11 rounded-[10px] text-sm font-semibold transition-all active:scale-[0.98]"
                     style={{
-                      background: 'var(--accent)',
-                      color: '#FAF5EA',
+                      background: isReady
+                        ? 'var(--accent)'
+                        : 'color-mix(in srgb, var(--accent) 12%, var(--card))',
+                      color: isReady
+                        ? '#FAF5EA'
+                        : 'var(--accent)',
+                      border: isReady
+                        ? 'none'
+                        : '1px solid color-mix(in srgb, var(--accent) 30%, var(--line))',
                       fontFamily: 'var(--f-mono)',
                       letterSpacing: '0.06em',
                       textTransform: 'uppercase',
                     }}
                   >
-                    ✓ Teslim Ettim
+                    {isReady
+                      ? '✓ Teslim Ettim'
+                      : '⤴ Hazır olmadan teslim et'}
                   </button>
                 )}
               </div>

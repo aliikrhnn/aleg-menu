@@ -1,99 +1,118 @@
-ALEG TUR 3A — Müşteri değerlendirme akıllı yönlendirme
-========================================================
+ALEG TUR 3B — Garson + Sipariş Takip iyileştirmeleri
+======================================================
 
-Müşteri telefonundaki sipariş takip ekranındaki değerlendirme formuna
-"akıllı yönlendirme" eklendi (fiş ekranındakiyle aynı mantık):
+3 iyileştirme:
+  
+  ✅ 1. Müşteri sipariş takip sayfası refresh'te durumu korur
+  ✅ 2. Garson "hazırlanıyor" siparişleri için de teslim ettim diyebilir
+  ✅ 3. Garson ekranında masa adı vurgulu (italic serif, 22px)
 
-  • 4-5 yıldız → Google'a yönlendir (eğer ayar açıksa + place_id varsa)
-  • 1-3 yıldız → sadece işletme paneline düşsün (yorum + ad/tel formu)
+
+SORUN 1 — Müşteri sipariş takibi refresh'te başa dönüyor
+---------------------------------------------------------
+
+ESKİ DAVRANIŞ:
+  • Müşteri sipariş takip ekranında "Hazırlanıyor"u görüyor
+  • Sayfayı yeniliyor → server fetch tamamlanana kadar durum kaybolmuş gibi
+    görünüyor, "Son güncelleme: şimdi" başa dönüyor
+
+YENİ DAVRANIŞ:
+  • Her status güncellemesi localStorage'a kaydediliyor
+    (key: aleg-order-{orderId})
+  • Refresh'te initial state localStorage'dan yükleniyor → durum korunur
+  • Server'dan gelen veri ile akıllı merge: terminal durumlar (delivered/
+    cancelled) kaybolmaz
+  • "Son güncelleme: 2sn önce" sayacı kaldırıldı (sürekli sıfırlanıyordu)
+  • Yerine sabit reassurance: "Otomatik güncelleniyor — sayfayı kapatabilir
+    veya yenileyebilirsin"
+  • Pulse'lı küçük noktayla canlılık veriliyor
 
 
-YENİ AKIŞ
-=========
+SORUN 2 — Hazırlanıyor siparişlere "teslim ettim" yok
+------------------------------------------------------
 
-[1] RATING — Müşteri yıldıza tıklar
-    ↓
+ESKİ DAVRANIŞ:
+  • markOrderDelivered server action'ı sadece status='ready' kabul ediyordu
+  • Garson UI'sında sadece ready siparişlerde buton görünüyordu
+  • Yoğun saatte mutfak "hazır" işaretini atlamış olsa bile garson teslim
+    edemiyordu — sıkışıyor
+
+YENİ DAVRANIŞ:
+  • markOrderDelivered artık 'ready', 'preparing', 'confirmed' kabul ediyor
+    (sadece received/cancelled/delivered/closed reddediyor)
+  • Garson kartında her durumda buton var, ama ton farklı:
     
-    Eğer 4-5 yıldız VE smart_redirect AÇIK VE google_place_id VARSA:
+    Ready (mutfak hazır dedi):
+      → Güçlü accent buton "✓ Teslim Ettim"
     
-[2a] GOOGLE — "Bunu duymak harika!" + Google butonu
-     • "Google'da değerlendir" → Google'a yönlendirir
-     • "Sadece burada bırakmak istiyorum" → comment ekranına geç
-     
-    Diğer durumlarda (1-3 yıldız VEYA ayar kapalı VEYA place_id yok):
-    
-[2b] COMMENT — Yorum + ad + telefon formu
-     • Düşük yıldızda (1-3): "Ne oldu? Yardımcı olmamız için" prompt
-     • Yüksek yıldızda (4-5): "Yorumunu yaz (opsiyonel)"
-     ↓
-     
-[3] THANKS — "Teşekkürler! Geri bildiriminiz bizim için değerli."
+    Preparing/Confirmed (mutfak hazır demedi):
+      → İkincil ton, "⤴ Hazır olmadan teslim et"
+      → Tıklayınca confirm dialog: "Mutfak hazır demeden teslim ettiğine
+        emin misin?" — yanlışlık olmasın diye
+  • Toast: "Sipariş teslim edildi"
+
+
+SORUN 3 — Garson ekranında masa adı görünsün
+---------------------------------------------
+
+ESKİ DAVRANIŞ:
+  • Masa adı vardı ama statik 16px sans-serif, gözden kaçıyordu
+
+YENİ DAVRANIŞ:
+  • Italic serif, 22px, vurgulu — Brutalist Spice tasarımıyla uyumlu
+  • Sipariş kartında en görünür yer
+  • Pickup → "Paket", Delivery → "Kapıya" görünür
 
 
 KURULUM
 =======
 
-Bu zip'i aç, içindeki 2 dosyayı projendeki AYNI yerlere kopyala:
+3 dosyayı projede AYNI yerlere kopyala:
 
-  lib/actions/orders.ts                                           (getOrderTracking)
-  app/menu/[slug]/siparis/[orderId]/tracking-client.tsx           (yeni form)
-
-
-DEĞİŞİKLİK ÖZETİ
-================
-
-[1] lib/actions/orders.ts
-    • OrderTrackingData tipine review_smart_redirect ve google_place_id eklendi
-    • business sorgusunda receipt_settings çekiliyor (smart_redirect ve place_id orada)
-    
-[2] app/menu/[slug]/siparis/[orderId]/tracking-client.tsx
-    • ReviewForm tamamen yeniden yazıldı, akıllı yönlendirme akışı ile
-    • 4 adımlı state: rating → google/comment → thanks
-    • Google adımı: büyük yıldızlar + Google ikon + "Sadece burada bırak" alt seçeneği
-    • Comment adımı: düşük yıldızda farklı prompt
-    • Yıldız renkleri: var(--gold) — fiş ile tutarlı
-
-
-AYAR YÖNETİMİ
-=============
-
-Bu özellik İŞLETME PANELİNDEN açılır/kapanır:
-
-  Panel → Yazıcılar & Fiş → Fiş Tasarımı sekmesi
-  
-  • "Akıllı yönlendirme" toggle: 4-5 yıldızda Google'a yönlendir
-  • "Google Place ID": işletmenin Google Place ID'si
-
-
-TEST SENARYOLARI
-================
-
-[A] Smart redirect AÇIK + Place ID dolu:
-    1. Müşteri sipariş ver, "delivered" durumuna getir
-    2. Takip ekranında 5 yıldız tıkla
-    3. ✅ Google ekranı görünmeli
-    4. "Google'da değerlendir" → yeni sekmede Google
-    5. Review DB'ye redirected_to_google=true ile kaydolmalı
-
-[B] Smart redirect AÇIK + Place ID dolu:
-    1. 1-3 yıldız tıkla
-    2. ✅ Direkt yorum ekranı görünmeli (Google atlanıyor)
-
-[C] Smart redirect KAPALI:
-    1. 5 yıldız tıkla
-    2. ✅ Direkt yorum ekranı görünmeli (Google ekran asla görünmez)
+  lib/actions/waiter.ts                                     (markOrderDelivered)
+  app/garson/waiter-board.tsx                               (UI + onay dialog)
+  app/menu/[slug]/siparis/[orderId]/tracking-client.tsx     (localStorage + reassurance)
 
 
 PUSH
 ====
 
   git add .
-  git commit -m "feat: smart Google redirect on customer review (4-5 stars)"
+  git commit -m "feat: tur 3b - waiter delivery flexibility, tracking persistence"
   git push origin main
 
 
-NOT
-===
+TEST SENARYOLARI
+================
 
-Sıradaki: İşletme paneli dashboard'ı güzelleştirme. 
-Bunun için ayrı bir tur planlanacak.
+[A] Sipariş takip refresh:
+    1. Sipariş ver, status preparing'e geçsin
+    2. Müşteri telefonunda takip ekranı açık
+    3. Sayfayı yenile (Ctrl+F5)
+    4. ✅ "Hazırlanıyor" durumu kaybolmaz, animasyon başa dönmez
+
+[B] Garson "preparing" teslim:
+    1. Sipariş hazırlanıyor durumda (mutfak hazır demedi)
+    2. Garson sipariş kartını aç
+    3. ✅ "⤴ Hazır olmadan teslim et" butonu görünmeli (ikincil ton)
+    4. Tıkla → confirm dialog gelmeli
+    5. Onayla → sipariş delivered, toast başarılı
+
+[C] Garson "ready" teslim (normal akış):
+    1. Mutfak hazır dedi, status=ready
+    2. Garson kartı aç
+    3. ✅ "✓ Teslim Ettim" butonu güçlü accent ile
+    4. Tıkla → direkt teslim (onay yok, hızlı)
+
+[D] Masa adı görünümü:
+    1. Garson sipariş kartına bak
+    2. ✅ Masa adı italic serif, 22px, koyu vurgulu görünmeli
+    3. Paket sipariş → "Paket" yazmalı
+    4. Delivery → "Kapıya"
+
+
+SIRADAKİ
+========
+
+Dashboard güzelleştirmesi (Ali'nin sorduğu) — sonraki tur.
+Detay tasarım önerileri sunulup seçim yapılacak.

@@ -318,7 +318,11 @@ export async function getAllActiveOrders(): Promise<{
 }
 
 /**
- * Garson siparişi teslim etti - status: ready → delivered
+ * Garson siparişi teslim etti - status: ready/preparing → delivered
+ *
+ * Yoğun saatlerde mutfak "hazır"a basmadan da müşteriye gidebilir.
+ * Bu yüzden 'preparing' siparişleri de teslim edilebilir kabul edilir.
+ * Sadece received/cancelled/delivered/closed olanlar reddedilir.
  */
 export async function markOrderDelivered(orderId: string): Promise<{
   success: boolean;
@@ -337,10 +341,16 @@ export async function markOrderDelivered(orderId: string): Promise<{
     if (!order || order.business_id !== businessId) {
       return { success: false, error: 'Sipariş bulunamadı' };
     }
-    if (order.status !== 'ready') {
+    // Hem 'ready' hem 'preparing' siparişler teslim edilebilir
+    // ('confirmed' nadir bir aşama; o da kabul edilir)
+    if (
+      order.status !== 'ready' &&
+      order.status !== 'preparing' &&
+      order.status !== 'confirmed'
+    ) {
       return {
         success: false,
-        error: 'Sipariş hazır durumda değil',
+        error: 'Bu sipariş artık teslim edilemez',
       };
     }
 

@@ -116,21 +116,80 @@ export function TrackingClient({
   orderId,
   businessSlug,
 }: Props) {
-  const [data, setData] = useState<OrderTrackingData>(initialData);
+  // localStorage'dan son bilinen veriyi getir (refresh'te eski state'i koru)
+  // Server'dan dönen initialData ile karşılaştır, hangisi daha "ilerideyse" onu al
+  const [data, setData] = useState<OrderTrackingData>(() => {
+    if (typeof window === 'undefined') return initialData;
+    try {
+      const cached = window.localStorage.getItem(`aleg-order-${orderId}`);
+      if (!cached) return initialData;
+      const parsed = JSON.parse(cached) as OrderTrackingData;
+      // Cache farklı orderId'ye aitse veya eskiyse yoksay
+      if (parsed.id !== initialData.id) return initialData;
+      // Status sıralamasında daha ilerdeyse cache'i kullan (ör. cache=preparing,
+      // server=received gelirse status revert görünmesin)
+      const STATUS_RANK: Record<string, number> = {
+        received: 0,
+        confirmed: 1,
+        preparing: 2,
+        ready: 3,
+        delivered: 4,
+        cancelled: 5,
+      };
+      const cachedRank = STATUS_RANK[parsed.status] ?? 0;
+      const serverRank = STATUS_RANK[initialData.status] ?? 0;
+      // Server güncel, ama cache iptal/teslim gibi terminal durumdaysa onu koru
+      if (cachedRank > serverRank && cachedRank >= 4) return parsed;
+      return initialData;
+    } catch {
+      return initialData;
+    }
+  });
   const [lang] = useState<Lang>('tr'); // Default tr; menüden lang param gelmez
-  const [lastFetch, setLastFetch] = useState<number>(Date.now());
+
+  // Her data güncellemesinde localStorage'a kaydet — refresh'te durum korunur
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(
+        `aleg-order-${orderId}`,
+        JSON.stringify(data)
+      );
+      // Eski (24 saatten eski) sipariş cache'lerini temizle
+      const ALL_KEYS_PREFIX = 'aleg-order-';
+      const NOW = Date.now();
+      const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+      for (let i = window.localStorage.length - 1; i >= 0; i--) {
+        const k = window.localStorage.key(i);
+        if (!k || !k.startsWith(ALL_KEYS_PREFIX)) continue;
+        try {
+          const raw = window.localStorage.getItem(k);
+          if (!raw) continue;
+          const obj = JSON.parse(raw) as OrderTrackingData;
+          const created = new Date(obj.created_at).getTime();
+          if (NOW - created > ONE_DAY_MS) {
+            window.localStorage.removeItem(k);
+          }
+        } catch {
+          // bozuk cache'i temizle
+          window.localStorage.removeItem(k);
+        }
+      }
+    } catch {
+      /* localStorage kotası dolu olabilir, görmezden gel */
+    }
+  }, [data, orderId]);
 
   // Polling: status delivered/cancelled değilse her 5 saniyede bir güncelle
   useEffect(() => {
     if (data.status === 'delivered' || data.status === 'cancelled') {
-      // hala has_review değişmiş olabilir, daha yavaş poll
+      // Terminal durumda polling durdur
       return;
     }
     const interval = setInterval(async () => {
       const result = await getOrderTracking(orderId, businessSlug);
       if (result.success && result.data) {
         setData(result.data);
-        setLastFetch(Date.now());
       }
     }, 5000);
     return () => clearInterval(interval);
@@ -383,15 +442,34 @@ export function TrackingClient({
           </div>
         )}
 
-        {/* Last updated */}
+        {/* Otomatik güncelleme bilgisi + reassurance */}
         {!isDelivered && !isCancelled && (
           <div
-            className="mt-8 text-center text-[11px]"
+            className="mt-8 flex items-center justify-center gap-2 text-[11px]"
             style={{ color: 'var(--ink-3)' }}
           >
-            <RelativeTime ts={lastFetch} lang={lang} />
+            <span
+              className="inline-block rounded-full"
+              style={{
+                width: 6,
+                height: 6,
+                background: 'var(--accent)',
+                animation: 'tcDot 1.5s ease-in-out infinite',
+              }}
+            />
+            <span>
+              {lang === 'tr'
+                ? 'Otomatik güncelleniyor — sayfayı kapatabilir veya yenileyebilirsin'
+                : 'Auto-updating — you can close or reload this page'}
+            </span>
           </div>
         )}
+        <style>{`
+          @keyframes tcDot {
+            0%, 100% { opacity: 0.3; transform: scale(0.8); }
+            50% { opacity: 1; transform: scale(1); }
+          }
+        `}</style>
       </div>
     </div>
   );
@@ -966,26 +1044,5 @@ function GoogleIcon() {
         fill="#EA4335"
       />
     </svg>
-  );
-}
-
-// ============================================================
-// RELATIVE TIME (last update)
-// ============================================================
-function RelativeTime({ ts, lang }: { ts: number; lang: Lang }) {
-  const [tick, setTick] = useState(0);
-  useEffect(() => {
-    const i = setInterval(() => setTick((n) => n + 1), 1000);
-    return () => clearInterval(i);
-  }, []);
-  // tick used to refresh
-  void tick;
-
-  const sec = Math.max(0, Math.floor((Date.now() - ts) / 1000));
-  return (
-    <span>
-      {T.lastUpdate[lang]}:{' '}
-      {sec < 3 ? T.justNow[lang] : `${sec} ${T.secondsAgo[lang]}`}
-    </span>
   );
 }
