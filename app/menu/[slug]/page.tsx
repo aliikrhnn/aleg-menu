@@ -8,7 +8,11 @@ import type { LocalizedText } from '@/types/database';
 
 interface Props {
   params: { slug: string };
-  searchParams: { t?: string };
+  searchParams: {
+    t?: string;
+    preview_theme?: string;
+    preview_accent?: string;
+  };
 }
 
 // Cache: 60 saniye - menü sürekli aynı, değişiklik olunca sahip refresh tetikler
@@ -179,23 +183,50 @@ export default async function CustomerMenuPage({ params, searchParams }: Props) 
     : [];
 
   // Tema yükle ve CSS oluştur
+  // Önizleme parametreleri varsa onları kullan (panelden iframe ile çağrılırken)
+  const validPresets = ['brutalist', 'elite', 'modern', 'vintage', 'minimal'];
+  const previewPreset =
+    searchParams.preview_theme &&
+    validPresets.includes(searchParams.preview_theme)
+      ? (searchParams.preview_theme as
+          | 'brutalist'
+          | 'elite'
+          | 'modern'
+          | 'vintage'
+          | 'minimal')
+      : null;
+  const previewAccent =
+    searchParams.preview_accent === 'default'
+      ? null
+      : searchParams.preview_accent &&
+        /^[0-9A-Fa-f]{6}$/.test(searchParams.preview_accent)
+      ? `#${searchParams.preview_accent}`
+      : undefined; // undefined = "preview vermedi", DB'den oku
+
   const themeConfig = (business.menu_theme as {
     preset?: string;
     accent_override?: string | null;
   } | null) || null;
-  const resolvedTheme = resolveTheme(
-    themeConfig?.preset
-      ? {
-          preset: themeConfig.preset as
-            | 'brutalist'
-            | 'elite'
-            | 'modern'
-            | 'vintage'
-            | 'minimal',
-          accent_override: themeConfig.accent_override || null,
-        }
-      : null
-  );
+
+  const finalPreset =
+    previewPreset ||
+    (themeConfig?.preset && validPresets.includes(themeConfig.preset)
+      ? (themeConfig.preset as
+          | 'brutalist'
+          | 'elite'
+          | 'modern'
+          | 'vintage'
+          | 'minimal')
+      : 'brutalist');
+  const finalAccent =
+    previewAccent !== undefined
+      ? previewAccent
+      : themeConfig?.accent_override || null;
+
+  const resolvedTheme = resolveTheme({
+    preset: finalPreset,
+    accent_override: finalAccent,
+  });
   const themeCSS = buildThemeCSS(resolvedTheme, '[data-menu-theme]');
 
   return (

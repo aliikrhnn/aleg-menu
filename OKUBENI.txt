@@ -1,207 +1,118 @@
-ALEG TUR 5 — QR Menü Tema Kişiselleştirme
-==========================================
+ALEG TUR 5B — Tema Sorunları Düzeltmesi
+=========================================
 
-İşletme sahibi panelden 5 farklı tema seçebilir + accent rengi
-özelleştirebilir. Müşteri menüsü (slug.alegstudio.com) bu seçime
-göre render olur.
+İki kritik sorunu düzeltiyoruz:
 
-
-5 TEMA
-======
-
-1. BRUTALIST SPICE (default - şu an kullanıyoruz)
-   Paper #FAF5EA, Ink #2A1F18, Accent #C4553A
-   Bricolage + Instrument Serif italic
-   Sıcak, karakter dolu
-
-2. ELITE RESTORAN
-   Paper #1A1814 (koyu!), Ink #F2EAD8, Gold #C9A961
-   Playfair Display + Cormorant Garamond
-   Lüks fine dining, sert köşeler (4px radius)
-
-3. MODERN CAFE
-   Paper #FFFFFF, Ink #0A0A0A, Mint #4ABDAC
-   Inter + Crimson Pro + JetBrains Mono
-   Temiz, çağdaş, contemporary
-
-4. VINTAGE BISTRO
-   Paper #F8F0E3, Ink #3D2817, Deep red #8B2635
-   DM Serif Display + Lora + Courier Prime
-   Eski Paris kafesi havası, neredeyse köşeli (2px radius)
-
-5. MINIMAL SKANDINAV
-   Paper #FAFAFA, Ink #2C2C2C, Sage #B7C4A0
-   Inter (serif yerine de) - Söhne fallback
-   Soğuk, sade, Nordic, küçük harf eyebrow'lar
+1. ❌ Tema kaydedilmiyordu, panel ve müşteri menüsü eskiye dönüyordu
+2. 🎨 Önizleme jenerik fake mockup'tı, gerçek müşteri menüsü değildi
 
 
-ÖZEL ACCENT RENGİ
-=================
+SORUN 1: KAYIT ÇALIŞMIYORDU
+============================
 
-İşletme sahibi 10 önerilen renkten seçebilir VEYA özel hex girebilir
-(#RRGGBB). Bu seçim temanın varsayılan accent rengini override eder.
-Yani "Modern Cafe" tema + kendi marka rengi = işletmeye özel his.
+Kök sebep: settings-manager.tsx'teki handleSave fonksiyonu
+updateBusinessSettings'e menu_theme alanını GÖNDERMİYORDU.
+Backend kabul ediyordu ama frontend göndermiyordu.
 
-Önerilen renkler:
-  • Brutalist accent (#C4553A)
-  • Gold (#C9A961)
-  • Mint (#4ABDAC)
-  • Deep red (#8B2635)
-  • Sage (#B7C4A0)
-  • Ocean blue (#1F4E5F)
-  • Dusty purple (#7A5C9F)
-  • Terracotta (#D97757)
-  • Emerald (#0F766E)
-  • Amber brown (#92400E)
+Ek sebep: Cache invalidation eksikti. revalidatePath şunu çağırıyordu:
+  revalidatePath(`/menu/${businessId}`)
+Ama gerçek path /menu/${slug}. Yani cache hiç temizlenmiyordu.
+
+DÜZELTMELER:
+  ✅ handleSave artık menu_theme'i de updateBusinessSettings'e gönderiyor
+  ✅ Backend kayıttan sonra slug'ı çekip doğru path'i revalidate ediyor:
+       revalidatePath(`/menu/${slug}`)
+       revalidatePath(`/menu/${slug}`, 'layout')
 
 
-PANEL UI
-========
+SORUN 2: ÖNİZLEME GERÇEKÇİ DEĞİLDİ
+====================================
 
-Yeni tab: "Menü Teması" (Sipariş ile Bildirim Sesleri arası)
+Eski ThemePreview: jenerik fake mockup (3 ürün hardcoded, browser bar
+mock vs.) — gerçek menüyü göstermiyordu.
 
-3 adımlı flow:
-  Adım 1: Tema seç
-    • 5 büyük kart, gerçek tema renkleriyle mini önizleme
-    • Seçilende sağ üstte ✓ + ink border + scale
-  
-  Adım 2: Vurgu rengi
-    • "Varsayılan" + 10 renk + "Özel" butonu
-    • Özel'e tıklayınca color picker + hex input
-    • Seçilen renkte ink border + scale
-  
-  Adım 3: Önizleme
-    • Browser-style mockup (3 nokta + URL + tema adı)
-    • Gerçek tema renkleriyle örnek menü:
-      - Hero başlık + tagline + sipariş ver butonu
-      - "Kahveler" kategorisi (3 ürün)
-      - "Tatlılar" kategorisi (2 ürün)
-      - Footer
-    • Tema değiştirince anında güncelleniyor
+YENİ ÖNİZLEME:
+  • Gerçek müşteri menüsü iframe'de yükleniyor
+  • iPhone-style telefon mockup içinde (notch, status bar, gerçek
+    proporsiyon — 360x720 px)
+  • Tema değişince iframe otomatik yeniden yükleniyor
+  • Sağ panelde bilgi kartı (tema, vurgu rengi, URL)
+  • "Yeni sekmede aç" butonu → tam ekran inceleme
+  • İlk yüklemede spinner
 
-
-VERİ MODELİ
-===========
-
-Yeni kolon: businesses.menu_theme (jsonb)
-
-  {
-    "preset": "brutalist" | "elite" | "modern" | "vintage" | "minimal",
-    "accent_override": "#C4553A" | null
-  }
-
-Default: { preset: "brutalist", accent_override: null } (mevcut davranış)
+NASIL ÇALIŞIYOR:
+  • Müşteri menüsü page.tsx artık ?preview_theme=elite&preview_accent=AB1234
+    parametrelerini destekliyor
+  • Bu parametre VARSA → DB'deki tema yerine bunlar kullanılır (sadece
+    önizleme için, DB değişmez)
+  • Bu parametre YOKSA → DB'den okunur (normal müşteri ziyareti)
+  • iframe src="/menu/{slug}?preview_theme=...&preview_accent=..."
+  • Tema değişince state güncelleniyor → iframe key bump → yeniden yükleniyor
 
 
-MÜŞTERİ MENÜSÜ TARAFI
-=====================
+PREVIEW URL ÖRNEĞİ
+==================
 
-app/menu/[slug]/page.tsx içinde:
-  1. businesses.menu_theme okunur
-  2. resolveTheme() ile preset + accent çözülür
-  3. buildThemeCSS() ile [data-menu-theme] scope'lu CSS üretilir
-  4. <style> tag'iyle inject edilir
-  5. <div data-menu-theme="elite"> ile MenuView sarılır
+  /menu/aleg-cafe?preview_theme=elite&preview_accent=C9A961
 
-Sonuç: var(--paper), var(--ink), var(--accent), var(--f-serif) vb. tüm
-CSS değişkenleri tema'ya göre yazılır. MenuView ve içindeki tüm
-component'ler (cart-drawer, my-orders-panel, ürün kartları) otomatik
-olarak yeni tema renklerini ve fontlarını kullanır.
-
-Hiçbir component kodu değiştirilmedi — sadece CSS variable'lar.
-
-
-FONTLAR
-=======
-
-globals.css'e eklenen Google Fonts importları:
-  • Bricolage Grotesque (zaten vardı)
-  • Instrument Serif (Brutalist)
-  • Playfair Display + Cormorant Garamond (Elite)
-  • Inter + Crimson Pro + JetBrains Mono (Modern)
-  • DM Serif Display + Lora + Courier Prime (Vintage)
-  • Söhne yok → Inter fallback (Minimal)
+Tema = Elit Restoran, accent = Gold (#C9A961). DB değişmedi,
+sadece bu URL'de görünüyor. Müşteri normal menüye girince
+hâlâ DB'deki tema görünüyor.
 
 
 KURULUM
 =======
 
-ÖNCE Supabase'de migration çalıştır:
-  supabase/migrations/0032_menu_theme.sql
-  
-  (Supabase dashboard → SQL Editor → dosya içeriğini yapıştır → Run)
+5 dosya (hepsi ÜZERİNE YAZ):
 
-SONRA dosyaları kopyala:
-
-  YENİ:
-    lib/menu-themes.ts
-    app/panel/(shell)/ayarlar/tabs/theme-tab.tsx
-    app/panel/(shell)/ayarlar/tabs/theme-preview.tsx
-    supabase/migrations/0032_menu_theme.sql
-
-  GÜNCELLEME:
-    lib/actions/settings.ts (BusinessSettings tipi + validation)
-    app/panel/(shell)/ayarlar/settings-manager.tsx (yeni tab kaydı)
-    app/menu/[slug]/page.tsx (tema CSS inject)
-    app/globals.css (font importları)
+  lib/actions/settings.ts
+  app/panel/(shell)/ayarlar/tabs/theme-tab.tsx
+  app/panel/(shell)/ayarlar/tabs/theme-preview.tsx
+  app/panel/(shell)/ayarlar/settings-manager.tsx
+  app/menu/[slug]/page.tsx
 
 
 PUSH
 ====
 
   git add .
-  git commit -m "feat: tur 5 - menu theme system with 5 presets and accent override"
+  git commit -m "fix: tur 5b - theme save + realistic phone preview iframe"
   git push origin main
 
 
 TEST
 ====
 
-[A] Migration:
-    1. Supabase'de SQL Editor → 0032_menu_theme.sql içeriğini yapıştır → Run
-    2. ✅ businesses tablosunda menu_theme kolonu görünmeli
-    3. Mevcut tüm işletmelerde default değer atanmış olmalı
+[A] Kayıt çalışıyor mu:
+    1. Panel → Ayarlar → Menü Teması
+    2. "Elit Restoran" seç → Kaydet
+    3. Sayfa yenile (F5)
+    4. ✅ "Elit Restoran" hâlâ seçili kalmalı (DB'ye gitti)
+    5. {slug}.alegstudio.com'a git
+    6. ✅ Koyu tema + gold accent görünmeli
 
-[B] Panel - Tema seçimi:
-    1. Panel → Ayarlar → "Menü Teması" tab'ı
-    2. ✅ 5 tema kartı görünüyor (her biri kendi renkleriyle)
-    3. "Elit Restoran" seç
-    4. ✅ Seçilen kart ✓ ile işaretlendi, scale büyüdü
-    5. Önizleme bölümü siyah/gold tonlarda güncellendi
-    6. Sağ üstteki "Kaydet" butonuna bas
+[B] Canlı önizleme:
+    1. Panel → Ayarlar → Menü Teması
+    2. Önizleme bölümünde gerçek bir telefon mockup görmelisin
+    3. İçinde gerçek müşteri menün (kategoriler, ürünler vs.)
+    4. ✅ "Modern Cafe"ye tıkla → iframe yenilenmeli, beyaz/mint görünmeli
+    5. Vurgu rengi "Deep Red" → iframe yenilenmeli, butonlar kırmızı
+    6. "Yeni sekmede aç" → tam ekran preview
 
-[C] Müşteri menüsü:
-    1. {slug}.alegstudio.com aç
-    2. ✅ Elit tema renkleri uygulanmış (koyu arkaplan, gold detaylar)
-    3. Playfair Display fontu başlıklarda
-    4. Sipariş butonu, ürün kartları, sepet — hepsi yeni temada
+[C] Preview URL DB'yi değiştirmiyor:
+    1. Önizlemede tema değiştir AMA KAYDETME
+    2. {slug}.alegstudio.com aç
+    3. ✅ Hâlâ eski tema görünmeli (DB değişmedi)
 
-[D] Accent override:
-    1. Panel → Menü Teması
-    2. "Modern Cafe" seç
-    3. Vurgu rengi: "Deep red" tıkla
-    4. ✅ Önizlemede butonlar mint yerine kırmızı oldu
-    5. Kaydet → menüye git → buton kırmızı
-
-[E] Özel renk:
-    1. "Özel" butonuna tıkla
-    2. Color picker'dan istediğin rengi seç (örn #6366f1)
-    3. "Uygula" bas
-    4. ✅ Önizleme o renge dönmeli
-    5. Kaydet → menüde uygulanmalı
-
-[F] Geri dönüş:
-    1. "Varsayılan" daire'ye tıkla
-    2. ✅ Tema'nın orijinal accent'ine döner
+[D] Cache temizliği:
+    1. Tema kaydet
+    2. {slug}.alegstudio.com aç → yeni tema görünmeli
+    3. Hard reload yapmadan görünür olmalı (Next revalidatePath)
 
 
-SIRADAKİ
-========
+NOT
+====
 
-Tur 6: Basılı menü tasarımları
-  • 5 şablon × 3 boyut (A4 + A5 + Pláka 24x36)
-  • PDF + PNG indirme
-  • İşletme tabela basabilsin
-  • Üstte ürünler/fiyatlar, altta QR
-
-Bu Tur 5'i test edip onayladığında Tur 6'ya geçeriz.
+Tur 5'in temel akışı (5 tema, accent override, panel UI) zaten
+hazırdı — bu sadece düzeltme paketi. Migration ve menu-themes.ts
+yine gerekli, daha önce kurmadıysan onları da ekle.

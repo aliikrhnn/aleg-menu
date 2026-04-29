@@ -266,9 +266,20 @@ export async function updateBusinessSettings(
       return { success: false, error: error.message };
     }
 
+    // Müşteri menüsü cache'ini temizlemek için slug'ı çek
+    const { data: biz } = await admin
+      .from('businesses')
+      .select('slug')
+      .eq('id', businessId)
+      .maybeSingle();
+
     revalidatePath('/panel/ayarlar');
-    revalidatePath(`/menu/${businessId}`);
     revalidatePath('/panel', 'layout'); // isim değişirse sidebar güncellensin
+    if (biz?.slug) {
+      // Müşteri menüsü hem path bazlı hem subdomain üzerinden çağrılabilir
+      revalidatePath(`/menu/${biz.slug}`);
+      revalidatePath(`/menu/${biz.slug}`, 'layout');
+    }
 
     return { success: true };
   } catch (err) {

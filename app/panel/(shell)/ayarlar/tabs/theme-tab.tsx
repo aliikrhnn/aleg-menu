@@ -18,7 +18,8 @@ type Props = {
     preset: ThemePreset;
     accent_override: string | null;
   }) => void;
-  businessName: string;
+  slug: string;
+  rootDomain: string;
 };
 
 // Önerilen renk paleti
@@ -35,12 +36,16 @@ const SUGGESTED_COLORS = [
   '#92400E', // amber brown
 ];
 
-export function ThemeTab({ theme, onChange, businessName }: Props) {
+export function ThemeTab({
+  theme,
+  onChange,
+  slug,
+  rootDomain,
+}: Props) {
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [customColor, setCustomColor] = useState(
     theme.accent_override || '#C4553A'
   );
-  const resolved = resolveTheme(theme);
 
   const handleSelectPreset = (preset: ThemePreset) => {
     onChange({ preset, accent_override: theme.accent_override });
@@ -281,7 +286,12 @@ export function ThemeTab({ theme, onChange, businessName }: Props) {
           description="Müşteri menüsü bu şekilde görünecek. Kaydet'e basana kadar değişiklikler canlı olmaz."
         />
 
-        <ThemePreview theme={resolved} businessName={businessName} />
+        <ThemePreview
+          preset={theme.preset}
+          accentOverride={theme.accent_override}
+          slug={slug}
+          rootDomain={rootDomain}
+        />
       </section>
     </div>
   );

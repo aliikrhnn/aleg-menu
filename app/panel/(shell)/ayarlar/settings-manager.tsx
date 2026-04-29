@@ -154,6 +154,7 @@ export function SettingsManager({ initialSettings, rootDomain }: Props) {
       working_hours: settings.working_hours,
       order_config: settings.order_config,
       currency: settings.currency,
+      menu_theme: settings.menu_theme,
     });
     setSaving(false);
 
@@ -401,7 +402,8 @@ export function SettingsManager({ initialSettings, rootDomain }: Props) {
           <ThemeTab
             theme={settings.menu_theme}
             onChange={(t) => patch('menu_theme', t)}
-            businessName={settings.name}
+            slug={settings.slug}
+            rootDomain={rootDomain}
           />
         )}
 
