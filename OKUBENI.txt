@@ -1,108 +1,99 @@
-ALEG TUR 2D — Bug #9 ek fix (yetki bayrak kontrolü)
-====================================================
+ALEG TUR 3A — Müşteri değerlendirme akıllı yönlendirme
+========================================================
 
-Tur 2C'de yanlış bir bug üzerinde çalışmıştım: cashier vs waiter
-ayrımının zaten doğru çalıştığını fark etmedim (kasada zaten waiter
-listede gözükmüyor). 
+Müşteri telefonundaki sipariş takip ekranındaki değerlendirme formuna
+"akıllı yönlendirme" eklendi (fiş ekranındakiyle aynı mantık):
 
-Asıl bug ŞU İDİ:
-  • Kasiyer oluştururken "Gün kapatır" / "İade alabilir" toggle'ları
-    KAPALI olsa bile, o kasiyer kasaya girince yetkili gibi davranıyordu.
-  • can_close_day ve can_refund bayrakları DB'ye kaydediliyordu, 
-    localStorage'a kaydediliyordu, ama UI bunları HİÇ KONTROL ETMİYORDU.
+  • 4-5 yıldız → Google'a yönlendir (eğer ayar açıksa + place_id varsa)
+  • 1-3 yıldız → sadece işletme paneline düşsün (yorum + ad/tel formu)
 
 
-SORUN AKIŞI
-===========
+YENİ AKIŞ
+=========
 
-1. Admin kasiyer oluşturur, "Gün kapatır" toggle'ını KAPALI bırakır
-2. DB'de can_close_day = false kaydı var
-3. Kasiyer login olur, can_close_day = false localStorage'a kaydedilir
-4. AMA "GÜN SONU OLUŞTUR VE İNDİR" butonu HER KASİYERE açık
-5. Kasiyer butona basar, gün sonu wizard'ı açılır → bug
-
-
-ÇÖZÜM
-=====
-
-[1] register-panel.tsx — Gün Sonu butonu can_close_day kontrol ediyor
-    • Yetkisi varsa: normal "GÜN SONU OLUŞTUR VE İNDİR" butonu görünür
-    • Yetkisi yoksa: kilit ikonu + "Gün Sonu Yetkisi Yok / Bu işlem 
-      için yetkili bir kasiyere geç" mesajı görünür
-    • handleOpenWizard() defansif olarak da kontrol ediyor (toast hata)
-
-[2] cashier-session.tsx — useCanCloseDay() ve useCanRefund() helper
-    hook'ları eklendi. İlerideki yetki kontrolleri için kullanışlı.
-
-
-can_refund NOTU
-===============
-
-İade aksiyonu UI'sı henüz uygulamada YOK (sadece `refundPayment` server 
-action'ı var ama hiçbir yerde çağrılmıyor). Yani şu an can_refund 
-bayrağını kontrol edebilecek bir UI noktası bulunmuyor.
-
-İade UI'ı eklendiğinde useCanRefund() hook'u kullanılarak kontrol 
-ekleyebilirsin (zaten hazır).
+[1] RATING — Müşteri yıldıza tıklar
+    ↓
+    
+    Eğer 4-5 yıldız VE smart_redirect AÇIK VE google_place_id VARSA:
+    
+[2a] GOOGLE — "Bunu duymak harika!" + Google butonu
+     • "Google'da değerlendir" → Google'a yönlendirir
+     • "Sadece burada bırakmak istiyorum" → comment ekranına geç
+     
+    Diğer durumlarda (1-3 yıldız VEYA ayar kapalı VEYA place_id yok):
+    
+[2b] COMMENT — Yorum + ad + telefon formu
+     • Düşük yıldızda (1-3): "Ne oldu? Yardımcı olmamız için" prompt
+     • Yüksek yıldızda (4-5): "Yorumunu yaz (opsiyonel)"
+     ↓
+     
+[3] THANKS — "Teşekkürler! Geri bildiriminiz bizim için değerli."
 
 
-TUR 2C HALA GEÇERLİ
-====================
-
-Tur 2C'deki cashier vs waiter ayrımı YANLIŞ DEĞİLDİ — sadece test 
-ekibinin asıl şikayeti olan bug değildi. Yine de kalsın çünkü:
-
-  • Defense in depth — 2 farklı koruma katmanı var
-  • Stale session koruması (rolü değişmiş kasiyer otomatik logout)
-  • Server-side rol kontrolü (verifyCashierPin)
-  
-Yani Tur 2C dosyalarını GERİ ALMAYACAK, sadece Tur 2D ile bu 4 dosyayı
-EKLEYECEKSİN. Tur 2C dosyaları zaten push edildi.
-
-
-KURULUM (KOD TARAFI)
-=====================
+KURULUM
+=======
 
 Bu zip'i aç, içindeki 2 dosyayı projendeki AYNI yerlere kopyala:
 
-  app/kasa/register-panel.tsx        (Gün Sonu butonu yetki kontrolü)
-  lib/cashier-session.tsx            (yetki helper hook'ları)
+  lib/actions/orders.ts                                           (getOrderTracking)
+  app/menu/[slug]/siparis/[orderId]/tracking-client.tsx           (yeni form)
+
+
+DEĞİŞİKLİK ÖZETİ
+================
+
+[1] lib/actions/orders.ts
+    • OrderTrackingData tipine review_smart_redirect ve google_place_id eklendi
+    • business sorgusunda receipt_settings çekiliyor (smart_redirect ve place_id orada)
+    
+[2] app/menu/[slug]/siparis/[orderId]/tracking-client.tsx
+    • ReviewForm tamamen yeniden yazıldı, akıllı yönlendirme akışı ile
+    • 4 adımlı state: rating → google/comment → thanks
+    • Google adımı: büyük yıldızlar + Google ikon + "Sadece burada bırak" alt seçeneği
+    • Comment adımı: düşük yıldızda farklı prompt
+    • Yıldız renkleri: var(--gold) — fiş ile tutarlı
+
+
+AYAR YÖNETİMİ
+=============
+
+Bu özellik İŞLETME PANELİNDEN açılır/kapanır:
+
+  Panel → Yazıcılar & Fiş → Fiş Tasarımı sekmesi
+  
+  • "Akıllı yönlendirme" toggle: 4-5 yıldızda Google'a yönlendir
+  • "Google Place ID": işletmenin Google Place ID'si
+
+
+TEST SENARYOLARI
+================
+
+[A] Smart redirect AÇIK + Place ID dolu:
+    1. Müşteri sipariş ver, "delivered" durumuna getir
+    2. Takip ekranında 5 yıldız tıkla
+    3. ✅ Google ekranı görünmeli
+    4. "Google'da değerlendir" → yeni sekmede Google
+    5. Review DB'ye redirected_to_google=true ile kaydolmalı
+
+[B] Smart redirect AÇIK + Place ID dolu:
+    1. 1-3 yıldız tıkla
+    2. ✅ Direkt yorum ekranı görünmeli (Google atlanıyor)
+
+[C] Smart redirect KAPALI:
+    1. 5 yıldız tıkla
+    2. ✅ Direkt yorum ekranı görünmeli (Google ekran asla görünmez)
 
 
 PUSH
 ====
 
   git add .
-  git commit -m "fix: tur 2d - cashier permission flag check (can_close_day)"
+  git commit -m "feat: smart Google redirect on customer review (4-5 stars)"
   git push origin main
 
 
-TEST SENARYOLARI
-================
+NOT
+===
 
-1. Tam yetkili kasiyer:
-   • Kasiyer oluştururken "Gün kapatır" toggle AÇIK
-   • Kasada "GÜN SONU OLUŞTUR VE İNDİR" butonu görünür ✅
-
-2. Yetkisiz kasiyer:
-   • Kasiyer oluştururken "Gün kapatır" toggle KAPALI
-   • Kasada kilit ikonu + "Gün Sonu Yetkisi Yok" mesajı görünür ✅
-   • Buton görünmediği için tıklanamaz ✅
-
-3. Yetkilerin değiştirildiği senaryo:
-   • Kasiyer giriş yapmış, "Gün kapatır" yetkisi var
-   • Admin yetkiyi geri alır
-   • Kasiyer aynı sekmeyi yeniler → kilit ikonu görünür
-     (çünkü tekrar verifyCashierPin yapılırsa yeni yetki bayrakları
-     localStorage'a yazılır)
-
-
-12 BUG ÖZETİ — TÜM HEPSİ ÇÖZÜLDÜ ✅
-
-Tur 1:  #1, #2, #3, #4+#7, #11, #12  (6 bug)
-Tur 2A: #6, #8                        (2 bug)
-Tur 2B: #5a, #5b, #10                 (3 bug)
-Tur 2C: #9 (rol ayrımı - yan koruma)  (alt katman)
-Tur 2D: #9 (yetki bayrakları - asıl)  (üst katman)
-─────────────────────────────────────
-TOPLAM: 12/12
+Sıradaki: İşletme paneli dashboard'ı güzelleştirme. 
+Bunun için ayrı bir tur planlanacak.

@@ -311,6 +311,9 @@ export type OrderTrackingData = {
     slug: string;
   };
   has_review: boolean;
+  // Akıllı yönlendirme ayarları (4-5 yıldız → Google'a)
+  review_smart_redirect: boolean;
+  google_place_id: string;
 };
 
 export async function getOrderTracking(
@@ -344,13 +347,18 @@ export async function getOrderTracking(
     // Business kontrol — slug uyumlu mu (güvenlik)
     const { data: business } = await admin
       .from('businesses')
-      .select('id, name, slug')
+      .select('id, name, slug, receipt_settings')
       .eq('id', order.business_id)
       .maybeSingle();
 
     if (!business || (business.slug as string) !== businessSlug) {
       return { success: false, error: 'Sipariş bu işletmeye ait değil' };
     }
+
+    // Review ayarları receipt_settings içinden çıkar
+    const receiptSettings = (business.receipt_settings as Record<string, unknown> | null) || {};
+    const reviewSmartRedirect = Boolean(receiptSettings.review_smart_redirect);
+    const googlePlaceId = String(receiptSettings.google_place_id || '');
 
     // Masa adı
     let tableName: string | null = null;
@@ -400,6 +408,8 @@ export async function getOrderTracking(
           slug: business.slug as string,
         },
         has_review: !!existingReview,
+        review_smart_redirect: reviewSmartRedirect,
+        google_place_id: googlePlaceId,
       },
     };
   } catch (err) {
