@@ -1,0 +1,34 @@
+Paket 4 - Build Fix
+====================
+
+Önceki Paket 4 zip'i `@/lib/auth/super-admin` ve `@/lib/admin/audit`
+adlı yardımcı dosyaları varsayıyordu — sende yoklar.
+
+Bu fix paketi, mevcut projendeki pattern'ı (her dosyanın kendi
+requireSuperAdmin() ve logAudit() helper'ları) kullanacak şekilde
+TÜM 6 server action'ı + 2 sayfayı + 1 client component'i yeniden yazıyor.
+
+YAPMAN GEREKEN:
+---------------
+
+1. Bu zip'i aç
+2. İçindeki klasör yapısını projendeki AYNI yerlere kopyala 
+   (üstüne yaz):
+   
+   lib/actions/admin-support.ts
+   lib/actions/admin-notifications.ts
+   lib/actions/admin-users.ts
+   lib/actions/admin-audit.ts
+   lib/actions/admin-system.ts
+   lib/actions/admin-settings.ts
+   
+   app/admin/(shell)/destek/[id]/page.tsx     ← (shell), zip'te (admin)
+   app/admin/(shell)/kullanicilar/page.tsx     ← (shell), zip'te (admin)
+   
+   components/admin/admin-users-client.tsx
+
+3. git add . && git commit -m "fix paket 4" && git push origin main
+
+NOT: Önceki Paket 4'ten gelen şu dosyaları SİL (artık gereksiz):
+- lib/auth/super-admin.ts (eğer yarattıysan)
+- lib/admin/audit.ts (eğer yarattıysan)

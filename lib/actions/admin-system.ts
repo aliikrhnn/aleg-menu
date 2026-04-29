@@ -1,7 +1,6 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { getSuperAdminUser } from '@/lib/auth/super-admin'
 
 export interface SystemHealth {
   total_businesses: number
@@ -23,16 +22,28 @@ export interface SystemSignal {
   hint?: string
 }
 
-export async function getSystemHealth() {
-  const admin = await getSuperAdminUser()
-  if (!admin) throw new Error('UNAUTHORIZED')
+async function requireSuperAdmin() {
+  const supabase = createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) throw new Error('Yetkisiz: giriş yapmamışsınız')
+  const { data: admin } = await supabase
+    .from('super_admins')
+    .select('user_id')
+    .eq('user_id', user.id)
+    .maybeSingle()
+  if (!admin) throw new Error('Yetkisiz: süper admin değilsiniz')
+  return { user }
+}
 
-  const supabase = await createClient()
+export async function getSystemHealth() {
+  await requireSuperAdmin()
+  const supabase = createClient()
   const { data, error } = await supabase.from('v_admin_system_health').select('*').single()
   if (error) throw new Error(error.message)
   const h = data as unknown as SystemHealth
 
-  // Türetilmiş sinyaller
   const signals: SystemSignal[] = []
 
   signals.push({
@@ -67,10 +78,8 @@ export async function getSystemHealth() {
 }
 
 export async function getRecentSystemActivity(limit = 20) {
-  const admin = await getSuperAdminUser()
-  if (!admin) throw new Error('UNAUTHORIZED')
-
-  const supabase = await createClient()
+  await requireSuperAdmin()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('platform_audit_logs')
     .select('id, ts, action, actor_email, target_label, tone')

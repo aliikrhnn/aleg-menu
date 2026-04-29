@@ -1,7 +1,6 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { getSuperAdminUser } from '@/lib/auth/super-admin'
 
 export interface AdminAuditLogEntry {
   id: number
@@ -23,23 +22,36 @@ export interface AdminAuditLogEntry {
   tone: 'ok' | 'warn' | 'danger' | 'super' | 'muted' | 'gold' | 'olive'
 }
 
+async function requireSuperAdmin() {
+  const supabase = createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) throw new Error('Yetkisiz: giriş yapmamışsınız')
+  const { data: admin } = await supabase
+    .from('super_admins')
+    .select('user_id')
+    .eq('user_id', user.id)
+    .maybeSingle()
+  if (!admin) throw new Error('Yetkisiz: süper admin değilsiniz')
+  return { user }
+}
+
 interface ListAuditLogsParams {
   q?: string
   actorId?: string
   action?: string
   tone?: string
   businessId?: string
-  from?: string // ISO date
+  from?: string
   to?: string
   limit?: number
   offset?: number
 }
 
 export async function listAuditLogs(params: ListAuditLogsParams = {}) {
-  const admin = await getSuperAdminUser()
-  if (!admin) throw new Error('UNAUTHORIZED')
-
-  const supabase = await createClient()
+  await requireSuperAdmin()
+  const supabase = createClient()
   const { q, actorId, action, tone, businessId, from, to, limit = 100, offset = 0 } = params
 
   let query = supabase.from('v_admin_audit_logs_full').select('*', { count: 'exact' })
@@ -53,7 +65,9 @@ export async function listAuditLogs(params: ListAuditLogsParams = {}) {
 
   if (q && q.trim().length > 0) {
     const term = `%${q.trim()}%`
-    query = query.or(`action.ilike.${term},target_label.ilike.${term},business_name.ilike.${term},actor_email.ilike.${term}`)
+    query = query.or(
+      `action.ilike.${term},target_label.ilike.${term},business_name.ilike.${term},actor_email.ilike.${term}`,
+    )
   }
 
   query = query.order('ts', { ascending: false }).range(offset, offset + limit - 1)
@@ -67,10 +81,8 @@ export async function listAuditLogs(params: ListAuditLogsParams = {}) {
 }
 
 export async function listAuditActionTypes() {
-  const admin = await getSuperAdminUser()
-  if (!admin) throw new Error('UNAUTHORIZED')
-
-  const supabase = await createClient()
+  await requireSuperAdmin()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('platform_audit_logs')
     .select('action')

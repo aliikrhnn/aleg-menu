@@ -2,14 +2,18 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-import { getSuperAdminUser } from '@/lib/auth/super-admin'
-import { logAdminAction } from '@/lib/admin/audit'
 
 type Json = Record<string, unknown>
 
 export type SupportTicketStatus = 'open' | 'in_progress' | 'waiting_user' | 'resolved' | 'closed'
 export type SupportTicketPriority = 'low' | 'normal' | 'high' | 'urgent'
-export type SupportTicketCategory = 'general' | 'billing' | 'technical' | 'feature_request' | 'bug' | 'account'
+export type SupportTicketCategory =
+  | 'general'
+  | 'billing'
+  | 'technical'
+  | 'feature_request'
+  | 'bug'
+  | 'account'
 
 export interface AdminSupportTicket {
   id: string
@@ -57,6 +61,51 @@ export interface AdminSupportMetrics {
   avg_resolution_hours: number | null
 }
 
+// Permission check
+async function requireSuperAdmin() {
+  const supabase = createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) throw new Error('Yetkisiz: giriş yapmamışsınız')
+  const { data: admin } = await supabase
+    .from('super_admins')
+    .select('user_id, full_name')
+    .eq('user_id', user.id)
+    .maybeSingle()
+  if (!admin) throw new Error('Yetkisiz: süper admin değilsiniz')
+  return { user, admin: admin as { user_id: string; full_name: string | null } }
+}
+
+// Audit helper
+async function logAudit(
+  client: ReturnType<typeof createClient>,
+  action: string,
+  targetId: string | null,
+  targetLabel: string | null,
+  businessId: string | null,
+  meta: Record<string, unknown>,
+  tone: string,
+) {
+  try {
+    await (client.rpc as unknown as (
+      fn: string,
+      params: Record<string, unknown>,
+    ) => Promise<{ error: unknown }>)('log_audit', {
+      p_action: action,
+      p_target_type: 'support_ticket',
+      p_target_id: targetId,
+      p_target_label: targetLabel,
+      p_business_id: businessId,
+      p_meta: meta,
+      p_tone: tone,
+    })
+  } catch (e) {
+    console.error('Audit log hatası:', e)
+  }
+}
+
+// LISTE
 interface ListSupportTicketsParams {
   q?: string
   status?: SupportTicketStatus | 'all'
@@ -68,10 +117,8 @@ interface ListSupportTicketsParams {
 }
 
 export async function listSupportTickets(params: ListSupportTicketsParams = {}) {
-  const admin = await getSuperAdminUser()
-  if (!admin) throw new Error('UNAUTHORIZED')
-
-  const supabase = await createClient()
+  const { user } = await requireSuperAdmin()
+  const supabase = createClient()
   const { q, status = 'all', priority = 'all', category = 'all', assignee = 'all', limit = 100, offset = 0 } = params
 
   let query = supabase.from('v_admin_support_tickets_list').select('*', { count: 'exact' })
@@ -79,12 +126,14 @@ export async function listSupportTickets(params: ListSupportTicketsParams = {}) 
   if (status !== 'all') query = query.eq('status', status)
   if (priority !== 'all') query = query.eq('priority', priority)
   if (category !== 'all') query = query.eq('category', category)
-  if (assignee === 'me') query = query.eq('assignee_id', admin.user_id)
+  if (assignee === 'me') query = query.eq('assignee_id', user.id)
   if (assignee === 'unassigned') query = query.is('assignee_id', null)
 
   if (q && q.trim().length > 0) {
     const term = `%${q.trim()}%`
-    query = query.or(`subject.ilike.${term},ticket_no.ilike.${term},reporter_email.ilike.${term},business_name.ilike.${term}`)
+    query = query.or(
+      `subject.ilike.${term},ticket_no.ilike.${term},reporter_email.ilike.${term},business_name.ilike.${term}`,
+    )
   }
 
   query = query.order('last_reply_at', { ascending: false }).range(offset, offset + limit - 1)
@@ -99,20 +148,16 @@ export async function listSupportTickets(params: ListSupportTicketsParams = {}) 
 }
 
 export async function getSupportMetrics(): Promise<AdminSupportMetrics> {
-  const admin = await getSuperAdminUser()
-  if (!admin) throw new Error('UNAUTHORIZED')
-
-  const supabase = await createClient()
+  await requireSuperAdmin()
+  const supabase = createClient()
   const { data, error } = await supabase.from('v_admin_support_metrics').select('*').single()
   if (error) throw new Error(error.message)
   return data as unknown as AdminSupportMetrics
 }
 
 export async function getSupportTicket(id: string) {
-  const admin = await getSuperAdminUser()
-  if (!admin) throw new Error('UNAUTHORIZED')
-
-  const supabase = await createClient()
+  await requireSuperAdmin()
+  const supabase = createClient()
   const { data: ticket, error: tErr } = await supabase
     .from('v_admin_support_tickets_list')
     .select('*')
@@ -138,31 +183,23 @@ export async function replySupportTicket(input: {
   body: string
   isInternal?: boolean
 }) {
-  const admin = await getSuperAdminUser()
-  if (!admin) throw new Error('UNAUTHORIZED')
+  const { user, admin } = await requireSuperAdmin()
   if (!input.body.trim()) throw new Error('Mesaj boş olamaz')
 
-  const supabase = await createClient()
+  const supabase = createClient()
   const { error } = await supabase.from('support_ticket_messages').insert({
     ticket_id: input.ticketId,
-    author_id: admin.user_id,
-    author_email: admin.email,
-    author_name: admin.full_name ?? admin.email,
+    author_id: user.id,
+    author_email: user.email,
+    author_name: admin.full_name ?? user.email,
     author_type: 'admin',
     body: input.body.trim(),
     is_internal: input.isInternal ?? false,
   })
   if (error) throw new Error(error.message)
 
-  // İç notlar için audit kaydı atma — gürültü olur
   if (!input.isInternal) {
-    await logAdminAction({
-      action: 'support.reply',
-      target_type: 'support_ticket',
-      target_id: input.ticketId,
-      tone: 'muted',
-      meta: { internal: false },
-    })
+    await logAudit(supabase, 'support.reply', input.ticketId, null, null, { internal: false }, 'muted')
   }
 
   revalidatePath(`/destek/${input.ticketId}`)
@@ -174,10 +211,8 @@ export async function updateSupportTicketStatus(input: {
   ticketId: string
   status: SupportTicketStatus
 }) {
-  const admin = await getSuperAdminUser()
-  if (!admin) throw new Error('UNAUTHORIZED')
-
-  const supabase = await createClient()
+  await requireSuperAdmin()
+  const supabase = createClient()
   const patch: Record<string, unknown> = { status: input.status }
   if (input.status === 'resolved') patch.resolved_at = new Date().toISOString()
   if (input.status === 'closed') patch.closed_at = new Date().toISOString()
@@ -185,13 +220,15 @@ export async function updateSupportTicketStatus(input: {
   const { error } = await supabase.from('support_tickets').update(patch).eq('id', input.ticketId)
   if (error) throw new Error(error.message)
 
-  await logAdminAction({
-    action: 'support.status_change',
-    target_type: 'support_ticket',
-    target_id: input.ticketId,
-    tone: input.status === 'resolved' || input.status === 'closed' ? 'ok' : 'muted',
-    meta: { status: input.status },
-  })
+  await logAudit(
+    supabase,
+    'support.status_change',
+    input.ticketId,
+    null,
+    null,
+    { status: input.status },
+    input.status === 'resolved' || input.status === 'closed' ? 'ok' : 'muted',
+  )
 
   revalidatePath(`/destek/${input.ticketId}`)
   revalidatePath('/destek')
@@ -202,23 +239,15 @@ export async function assignSupportTicket(input: {
   ticketId: string
   assigneeId: string | null
 }) {
-  const admin = await getSuperAdminUser()
-  if (!admin) throw new Error('UNAUTHORIZED')
-
-  const supabase = await createClient()
+  await requireSuperAdmin()
+  const supabase = createClient()
   const { error } = await supabase
     .from('support_tickets')
     .update({ assignee_id: input.assigneeId })
     .eq('id', input.ticketId)
   if (error) throw new Error(error.message)
 
-  await logAdminAction({
-    action: 'support.assign',
-    target_type: 'support_ticket',
-    target_id: input.ticketId,
-    tone: 'muted',
-    meta: { assignee_id: input.assigneeId },
-  })
+  await logAudit(supabase, 'support.assign', input.ticketId, null, null, { assignee_id: input.assigneeId }, 'muted')
 
   revalidatePath(`/destek/${input.ticketId}`)
   revalidatePath('/destek')
@@ -229,23 +258,23 @@ export async function updateSupportTicketPriority(input: {
   ticketId: string
   priority: SupportTicketPriority
 }) {
-  const admin = await getSuperAdminUser()
-  if (!admin) throw new Error('UNAUTHORIZED')
-
-  const supabase = await createClient()
+  await requireSuperAdmin()
+  const supabase = createClient()
   const { error } = await supabase
     .from('support_tickets')
     .update({ priority: input.priority })
     .eq('id', input.ticketId)
   if (error) throw new Error(error.message)
 
-  await logAdminAction({
-    action: 'support.priority_change',
-    target_type: 'support_ticket',
-    target_id: input.ticketId,
-    tone: input.priority === 'urgent' ? 'warn' : 'muted',
-    meta: { priority: input.priority },
-  })
+  await logAudit(
+    supabase,
+    'support.priority_change',
+    input.ticketId,
+    null,
+    null,
+    { priority: input.priority },
+    input.priority === 'urgent' ? 'warn' : 'muted',
+  )
 
   revalidatePath(`/destek/${input.ticketId}`)
   revalidatePath('/destek')
@@ -261,17 +290,14 @@ export async function createSupportTicketAsAdmin(input: {
   priority?: SupportTicketPriority
   body: string
 }) {
-  const admin = await getSuperAdminUser()
-  if (!admin) throw new Error('UNAUTHORIZED')
+  const { user, admin } = await requireSuperAdmin()
   if (!input.subject.trim() || !input.body.trim()) throw new Error('Konu ve mesaj zorunlu')
 
-  const supabase = await createClient()
+  const supabase = createClient()
 
-  // Ticket no
   const { data: noData, error: noErr } = await supabase.rpc('generate_support_ticket_no')
   if (noErr) throw new Error(noErr.message)
 
-  // Business name snapshot
   let businessName: string | null = null
   if (input.businessId) {
     const { data: b } = await supabase.from('businesses').select('name').eq('id', input.businessId).single()
@@ -299,21 +325,23 @@ export async function createSupportTicketAsAdmin(input: {
 
   await supabase.from('support_ticket_messages').insert({
     ticket_id: ticketRow.id,
-    author_id: admin.user_id,
-    author_email: admin.email,
-    author_name: admin.full_name ?? admin.email,
+    author_id: user.id,
+    author_email: user.email,
+    author_name: admin.full_name ?? user.email,
     author_type: 'admin',
     body: input.body.trim(),
     is_internal: false,
   })
 
-  await logAdminAction({
-    action: 'support.create',
-    target_type: 'support_ticket',
-    target_id: ticketRow.id,
-    tone: 'muted',
-    meta: { ticket_no: noData, on_behalf: input.reporterEmail },
-  })
+  await logAudit(
+    supabase,
+    'support.create',
+    ticketRow.id,
+    null,
+    input.businessId ?? null,
+    { ticket_no: noData, on_behalf: input.reporterEmail },
+    'muted',
+  )
 
   revalidatePath('/destek')
   return { ok: true, ticketId: ticketRow.id }

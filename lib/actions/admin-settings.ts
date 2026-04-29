@@ -2,8 +2,6 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-import { getSuperAdminUser } from '@/lib/auth/super-admin'
-import { logAdminAction } from '@/lib/admin/audit'
 
 export interface PlatformSetting {
   key: string
@@ -13,11 +11,49 @@ export interface PlatformSetting {
   updated_at: string
 }
 
-export async function listPlatformSettings() {
-  const admin = await getSuperAdminUser()
-  if (!admin) throw new Error('UNAUTHORIZED')
+async function requireSuperAdmin() {
+  const supabase = createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) throw new Error('Yetkisiz: giriş yapmamışsınız')
+  const { data: admin } = await supabase
+    .from('super_admins')
+    .select('user_id')
+    .eq('user_id', user.id)
+    .maybeSingle()
+  if (!admin) throw new Error('Yetkisiz: süper admin değilsiniz')
+  return { user }
+}
 
-  const supabase = await createClient()
+async function logAudit(
+  client: ReturnType<typeof createClient>,
+  action: string,
+  targetLabel: string | null,
+  meta: Record<string, unknown>,
+  tone: string,
+) {
+  try {
+    await (client.rpc as unknown as (
+      fn: string,
+      params: Record<string, unknown>,
+    ) => Promise<{ error: unknown }>)('log_audit', {
+      p_action: action,
+      p_target_type: 'platform_setting',
+      p_target_id: null,
+      p_target_label: targetLabel,
+      p_business_id: null,
+      p_meta: meta,
+      p_tone: tone,
+    })
+  } catch (e) {
+    console.error('Audit log hatası:', e)
+  }
+}
+
+export async function listPlatformSettings() {
+  await requireSuperAdmin()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('platform_settings')
     .select('*')
@@ -28,23 +64,20 @@ export async function listPlatformSettings() {
 }
 
 export async function updatePlatformSetting(input: { key: string; value: unknown }) {
-  const admin = await getSuperAdminUser()
-  if (!admin) throw new Error('UNAUTHORIZED')
+  const { user } = await requireSuperAdmin()
 
-  const supabase = await createClient()
+  const supabase = createClient()
   const { error } = await supabase
     .from('platform_settings')
-    .update({ value: input.value as never, updated_by: admin.user_id, updated_at: new Date().toISOString() })
+    .update({
+      value: input.value as never,
+      updated_by: user.id,
+      updated_at: new Date().toISOString(),
+    })
     .eq('key', input.key)
   if (error) throw new Error(error.message)
 
-  await logAdminAction({
-    action: 'settings.update',
-    target_type: 'platform_setting',
-    target_label: input.key,
-    tone: 'super',
-    meta: { value: input.value },
-  })
+  await logAudit(supabase, 'settings.update', input.key, { value: input.value }, 'super')
 
   revalidatePath('/ayarlar')
   return { ok: true }

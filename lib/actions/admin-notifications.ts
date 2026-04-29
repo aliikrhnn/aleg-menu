@@ -2,8 +2,6 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-import { getSuperAdminUser } from '@/lib/auth/super-admin'
-import { logAdminAction } from '@/lib/admin/audit'
 
 export type AnnouncementCategory = 'info' | 'maintenance' | 'feature' | 'warning' | 'critical'
 export type AnnouncementStatus = 'draft' | 'scheduled' | 'published' | 'cancelled'
@@ -30,6 +28,48 @@ export interface AdminAnnouncement {
   updated_at: string
 }
 
+// Permission check
+async function requireSuperAdmin() {
+  const supabase = createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) throw new Error('Yetkisiz: giriş yapmamışsınız')
+  const { data: admin } = await supabase
+    .from('super_admins')
+    .select('user_id, full_name')
+    .eq('user_id', user.id)
+    .maybeSingle()
+  if (!admin) throw new Error('Yetkisiz: süper admin değilsiniz')
+  return { user, admin: admin as { user_id: string; full_name: string | null } }
+}
+
+async function logAudit(
+  client: ReturnType<typeof createClient>,
+  action: string,
+  targetId: string | null,
+  targetLabel: string | null,
+  meta: Record<string, unknown>,
+  tone: string,
+) {
+  try {
+    await (client.rpc as unknown as (
+      fn: string,
+      params: Record<string, unknown>,
+    ) => Promise<{ error: unknown }>)('log_audit', {
+      p_action: action,
+      p_target_type: 'announcement',
+      p_target_id: targetId,
+      p_target_label: targetLabel,
+      p_business_id: null,
+      p_meta: meta,
+      p_tone: tone,
+    })
+  } catch (e) {
+    console.error('Audit log hatası:', e)
+  }
+}
+
 interface ListAnnouncementsParams {
   q?: string
   status?: AnnouncementStatus | 'all'
@@ -39,10 +79,8 @@ interface ListAnnouncementsParams {
 }
 
 export async function listAnnouncements(params: ListAnnouncementsParams = {}) {
-  const admin = await getSuperAdminUser()
-  if (!admin) throw new Error('UNAUTHORIZED')
-
-  const supabase = await createClient()
+  await requireSuperAdmin()
+  const supabase = createClient()
   const { q, status = 'all', category = 'all', limit = 100, offset = 0 } = params
 
   let query = supabase.from('v_admin_announcements_list').select('*', { count: 'exact' })
@@ -63,10 +101,8 @@ export async function listAnnouncements(params: ListAnnouncementsParams = {}) {
 }
 
 export async function getAnnouncement(id: string) {
-  const admin = await getSuperAdminUser()
-  if (!admin) throw new Error('UNAUTHORIZED')
-
-  const supabase = await createClient()
+  await requireSuperAdmin()
+  const supabase = createClient()
   const { data, error } = await supabase
     .from('v_admin_announcements_list')
     .select('*')
@@ -88,11 +124,10 @@ export async function createAnnouncement(input: {
   ctaUrl?: string | null
   publishNow?: boolean
 }) {
-  const admin = await getSuperAdminUser()
-  if (!admin) throw new Error('UNAUTHORIZED')
+  const { user, admin } = await requireSuperAdmin()
   if (!input.title.trim() || !input.body.trim()) throw new Error('Başlık ve içerik zorunlu')
 
-  const supabase = await createClient()
+  const supabase = createClient()
 
   const status: AnnouncementStatus =
     input.publishNow ? 'published' : input.publishAt ? 'scheduled' : 'draft'
@@ -108,8 +143,8 @@ export async function createAnnouncement(input: {
       status,
       publish_at: input.publishNow ? new Date().toISOString() : input.publishAt ?? null,
       expires_at: input.expiresAt ?? null,
-      created_by: admin.user_id,
-      created_by_name: admin.full_name ?? admin.email,
+      created_by: user.id,
+      created_by_name: admin.full_name ?? user.email,
       cta_label: input.ctaLabel ?? null,
       cta_url: input.ctaUrl ?? null,
     })
@@ -119,77 +154,49 @@ export async function createAnnouncement(input: {
 
   const row = data as unknown as { id: string }
 
-  await logAdminAction({
-    action: 'announcement.create',
-    target_type: 'announcement',
-    target_id: row.id,
-    target_label: input.title,
-    tone: 'super',
-    meta: { status, target_type: input.targetType ?? 'all' },
-  })
+  await logAudit(supabase, 'announcement.create', row.id, input.title, { status, target_type: input.targetType ?? 'all' }, 'super')
 
   revalidatePath('/bildirimler')
   return { ok: true, id: row.id }
 }
 
 export async function publishAnnouncement(id: string) {
-  const admin = await getSuperAdminUser()
-  if (!admin) throw new Error('UNAUTHORIZED')
-
-  const supabase = await createClient()
+  await requireSuperAdmin()
+  const supabase = createClient()
   const { error } = await supabase
     .from('platform_announcements')
     .update({ status: 'published', publish_at: new Date().toISOString() })
     .eq('id', id)
   if (error) throw new Error(error.message)
 
-  await logAdminAction({
-    action: 'announcement.publish',
-    target_type: 'announcement',
-    target_id: id,
-    tone: 'super',
-  })
+  await logAudit(supabase, 'announcement.publish', id, null, {}, 'super')
 
   revalidatePath('/bildirimler')
   return { ok: true }
 }
 
 export async function cancelAnnouncement(id: string) {
-  const admin = await getSuperAdminUser()
-  if (!admin) throw new Error('UNAUTHORIZED')
-
-  const supabase = await createClient()
+  await requireSuperAdmin()
+  const supabase = createClient()
   const { error } = await supabase
     .from('platform_announcements')
     .update({ status: 'cancelled' })
     .eq('id', id)
   if (error) throw new Error(error.message)
 
-  await logAdminAction({
-    action: 'announcement.cancel',
-    target_type: 'announcement',
-    target_id: id,
-    tone: 'warn',
-  })
+  await logAudit(supabase, 'announcement.cancel', id, null, {}, 'warn')
 
   revalidatePath('/bildirimler')
   return { ok: true }
 }
 
 export async function deleteAnnouncement(id: string) {
-  const admin = await getSuperAdminUser()
-  if (!admin) throw new Error('UNAUTHORIZED')
-
-  const supabase = await createClient()
+  await requireSuperAdmin()
+  const supabase = createClient()
   const { error } = await supabase.from('platform_announcements').delete().eq('id', id)
   if (error) throw new Error(error.message)
 
-  await logAdminAction({
-    action: 'announcement.delete',
-    target_type: 'announcement',
-    target_id: id,
-    tone: 'danger',
-  })
+  await logAudit(supabase, 'announcement.delete', id, null, {}, 'danger')
 
   revalidatePath('/bildirimler')
   return { ok: true }

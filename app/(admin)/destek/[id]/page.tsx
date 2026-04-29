@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation'
 import { SupportDetailClient } from '@/components/admin/support-detail-client'
 import { getSupportTicket } from '@/lib/actions/admin-support'
-import { getSuperAdminUser } from '@/lib/auth/super-admin'
+import { createClient } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,8 +11,11 @@ interface PageProps {
 
 export default async function DestekDetailPage({ params }: PageProps) {
   const { id } = await params
-  const admin = await getSuperAdminUser()
-  if (!admin) notFound()
+  const supabase = createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) notFound()
 
   let ticketData
   try {
@@ -26,7 +29,7 @@ export default async function DestekDetailPage({ params }: PageProps) {
       <SupportDetailClient
         ticket={ticketData.ticket}
         messages={ticketData.messages}
-        currentUserId={admin.user_id}
+        currentUserId={user.id}
       />
     </div>
   )
