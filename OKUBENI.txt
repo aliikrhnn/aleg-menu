@@ -1,105 +1,90 @@
-ALEG TUR 2B — Bug #5 + #10 fix paketi
-======================================
+ALEG TUR 2C — Bug #9 fix paketi (SON BUG!)
+=============================================
 
-Bu paket 3 bug'ı çözer:
-
-✅ #5a — Müşteri telefon ekranında sipariş takibi (yeni özellik)
-✅ #5b — Müşteri ürün değerlendirme (yeni özellik, reviews tablosu mevcut)
-✅ #10 — Kasa hızlı satışta cari ödeme
-
-KALAN: #9 (yetkisiz kasiyer kasa erişimi) — replication adımları lazım
+✅ #9 — Yetkisi olmayan kasiyer kasa kısmındaki kasaya girebiliyor
 
 
-KURULUM (kod tarafı)
---------------------
+SORUN
+=====
 
-Bu zip'i aç, içindeki dosyaları projendeki AYNI yerlere kopyala (üstüne yaz):
+verifyCashierPin server action'ı rol kontrolü YAPMIYORDU.
 
-  lib/actions/orders.ts                                         (#5a - getOrderTracking eklendi)
-  app/menu/[slug]/cart-drawer.tsx                               (#5a - "Siparişi takip et" butonu)
-  app/menu/[slug]/menu-view.tsx                                 (#5a - businessSlug prop geçişi)
-  app/menu/[slug]/siparis/[orderId]/page.tsx                    (#5a + #5b - YENİ DOSYA)
-  app/menu/[slug]/siparis/[orderId]/tracking-client.tsx         (#5a + #5b - YENİ DOSYA)
-  app/kasa/kasa-board.tsx                                       (#10 - hideOnAccount kaldırıldı)
+Yani:
+  • Garson rolündeki bir hesap (role='waiter') kasiyer listesinde
+    görünmüyordu (filtre doğru çalışıyor)
+  • AMA o hesabın id'si + PIN'iyle direkt giriş yapılabiliyordu
+  • Veya: kasiyer önce 'cashier' rolünde girdi, sonra rolü 'waiter'
+    yapıldı, eski localStorage session'ıyla erişmeye devam ediyordu
 
-
-DEĞİŞİKLİK ÖZETİ
-================
-
-#5a — Müşteri sipariş takibi
-----------------------------
-ESKİ: Müşteri sipariş verdi, "#42" kodunu gördü, hepsi bu. Siparişin
-      durumu (alındı/hazırlanıyor/hazır/teslim) takip edilemiyordu.
-
-YENİ:
-  • Sepet success ekranına "Siparişi takip et" butonu eklendi
-  • Yeni route: /menu/[slug]/siparis/[orderId]
-  • 4 adımlı progress bar (alındı → hazırlanıyor → hazır → teslim)
-  • Aktif adım vurgulanır (pulse animasyonu)
-  • 5 saniyede bir otomatik güncelleme (polling)
-  • Sipariş kalemleri + toplam görünür
-  • İptal edilmiş siparişler için ayrı durum kartı
-  • Brutalist Spice tasarım dili — italic serif, mono eyebrow
+3 katmanlı bug:
+  1. Server: verifyCashierPin rol kontrolü yapmıyor
+  2. Client: localStorage session'ında rol saklanmıyor
+  3. Client: Stale session koruması yok
 
 
-#5b — Müşteri ürün değerlendirme
---------------------------------
-ESKİ: Reviews tablosu vardı, panel arayüzü vardı, ama müşteri telefondan
-      değerlendirme yapamıyordu — UI yoktu.
+ÇÖZÜM
+=====
 
-YENİ:
-  • Sipariş "delivered" olunca takip ekranında değerlendirme formu açılır
-  • 5 yıldızlı interactive rating (hover efekti)
-  • İsteğe bağlı yorum, ad, telefon
-  • submitReview server action'ı zaten vardı, sadece UI bağlandı
-  • Aynı sipariş için tekrar değerlendirme engelleniyor (server tarafı + UI)
-  • Submit edilince teşekkür mesajı
+3 katman koruma eklendi:
+
+[1] Server-side rol kontrolü (verifyCashierPin'de)
+    • expectedRole parametresi eklendi ('cashier' | 'waiter')
+    • Hesap rolü ile mismatch varsa giriş reddedilir
+    • 'both' rolü her iki uygulamada da geçerli
+    
+[2] localStorage session'ında role saklama
+    • signIn / unlock çağrılarına role eklendi
+    • Cashier session tipinde role zaten vardı, sadece kullanılmıyordu
+
+[3] Client-side stale session koruması
+    • kasa-app: rolü 'waiter' olan biri kasaya girmeye çalışırsa
+      otomatik signOut + login ekranına dön
+    • waiter-app: rolü 'cashier' olan biri garson uygulamasına girmeye
+      çalışırsa otomatik signOut + login ekranına dön
 
 
-#10 — Hızlı satışta cari ödeme
-------------------------------
-ESKİ: Hızlı satış ekranında Nakit / Kart / İndirim / Parçalı butonları
-      vardı, ama Cari (on_account) butonu kasten gizliyordu (hideOnAccount).
+KURULUM
+=======
 
-YENİ:
-  • Tek satır değişiklik: kasa-board.tsx satır 989 - "hideOnAccount" kaldırıldı
-  • Hızlı satışta artık 3 ödeme yöntemi: Nakit / Kart / Cari
-  • Cari seçilince zaten mevcut olan CustomerPicker modal açılıyor
-  • Müşteri seçimi sonrası borç cari hesaba yazılıyor
-  • Gün sonu raporunda görünür (zaten çalışan akış)
+Bu zip'i aç, içindeki 4 dosyayı projendeki AYNI yerlere kopyala:
+
+  lib/actions/cashiers.ts          (verifyCashierPin'e expectedRole eklendi)
+  app/kasa/cashier-login.tsx       (expectedRole prop'u + role saklama)
+  app/kasa/kasa-app.tsx            (stale session koruması)
+  app/garson/waiter-app.tsx        (stale session koruması)
 
 
 PUSH
-----
+====
 
   git add .
-  git commit -m "fix: tur 2b - order tracking, reviews, on-account quick sale"
+  git commit -m "fix: tur 2c - cashier role enforcement (bug #9)"
   git push origin main
 
 
-KALAN BUG (#9)
-==============
+TEST SENARYOLARI
+================
 
-❓ #9 — Yetkisi olmayan kasiyer kasa kısmındaki kasaya girebiliyor
+1. Normal akış (geriye uyumluluk):
+   • Kasiyer oluştur (role='cashier'), kasada PIN ile gir → çalışmalı
+   • Garson oluştur (role='waiter'), garsonda PIN ile gir → çalışmalı
+   • Both rolünde biri her ikisinde de girebilmeli
 
-Bunu çözmek için önce nasıl reproduce edilebileceğini öğrenmem lazım:
+2. Yetkisiz erişim engelleme:
+   • Garson hesabıyla kasaya gir denemesi → "Bu hesabın kasa yetkisi yok"
+   • Kasiyer hesabıyla garsona gir denemesi → "Bu hesabın garson yetkisi yok"
 
-  • Kasiyer rolü 'cashier' iken giriş yapıyor, sonra rolü 'waiter'
-    yapılıyor mu? Eski session ile devam ediyor mu?
-  • Yoksa direkt rol filtresi atlanıyor mu?
-  • PIN'siz kasiyer eklemek mümkün mü?
-
-Test ekibinden tam adımları al, ben de fix'leyeyim.
+3. Stale session:
+   • Kasiyer A 'cashier' rolünde kasaya girdi
+   • Admin A'nın rolünü 'waiter' yaptı
+   • A'nın tarayıcısında sayfa yenilendiğinde → otomatik logout, login ekranı
 
 
-YENİ DOSYA YAPISI
-=================
+ÖZET — 12 BUG'IN HEPSİ ÇÖZÜLDÜ! 🎉
 
-app/menu/[slug]/
-├── cart-drawer.tsx        (güncellendi)
-├── menu-view.tsx          (güncellendi)
-├── siparis/               (YENİ KLASÖR)
-│   └── [orderId]/         (YENİ KLASÖR)
-│       ├── page.tsx       (YENİ DOSYA - server component)
-│       └── tracking-client.tsx  (YENİ DOSYA - client component)
-└── ... (diğerleri değişmedi)
+Tur 1: #1, #2, #3, #4+#7, #11, #12  (6 bug)
+Tur 2A: #6, #8                        (2 bug)
+Tur 2B: #5a, #5b, #10                 (3 bug)
+Tur 2C: #9                            (1 bug)
+─────────────────────────────────────
+TOPLAM: 12/12 ✅

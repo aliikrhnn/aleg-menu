@@ -17,6 +17,8 @@ type Props = {
   businessName: string;
   mode: 'login' | 'unlock';
   lockedCashierId?: string;
+  /** Hangi uygulama için giriş — server tarafında rol kontrolü yapılır */
+  expectedRole?: 'cashier' | 'waiter';
 };
 
 const LOCKOUT_KEY = 'aleg-kasa-lockout';
@@ -28,6 +30,7 @@ export function CashierLogin({
   businessName,
   mode,
   lockedCashierId,
+  expectedRole = 'cashier',
 }: Props) {
   const { signIn, unlock, signOut } = useCashierSession();
   const [selectedId, setSelectedId] = useState<string | null>(
@@ -120,7 +123,7 @@ export function CashierLogin({
     setBusy(true);
     setError(null);
 
-    const r = await verifyCashierPin(selectedCashier.id, pin);
+    const r = await verifyCashierPin(selectedCashier.id, pin, expectedRole);
 
     if (!r.success || !r.cashier) {
       // Yanlış PIN - attempt sayacı
@@ -159,6 +162,7 @@ export function CashierLogin({
         emoji: r.cashier.emoji,
         can_close_day: r.cashier.can_close_day,
         can_refund: r.cashier.can_refund,
+        role: r.cashier.role,
         signed_in_at: Date.now(),
       });
     } else {
@@ -169,6 +173,7 @@ export function CashierLogin({
         emoji: r.cashier.emoji,
         can_close_day: r.cashier.can_close_day,
         can_refund: r.cashier.can_refund,
+        role: r.cashier.role,
       });
     }
   };

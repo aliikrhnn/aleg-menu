@@ -23,13 +23,22 @@ export function WaiterApp({
   businessName,
   businessId,
 }: Props) {
-  const { cashier, isLocked, setBusinessName } = useCashierSession();
+  const { cashier, isLocked, setBusinessName, signOut } = useCashierSession();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
     setBusinessName(businessName);
   }, [businessName, setBusinessName]);
+
+  // Stale session koruması: rolü 'cashier' olan biri garson uygulamasına
+  // erişmeye çalışırsa session'ı temizle
+  useEffect(() => {
+    if (!mounted) return;
+    if (cashier && cashier.role && cashier.role === 'cashier') {
+      signOut();
+    }
+  }, [mounted, cashier, signOut]);
 
   if (!mounted) {
     return (
@@ -50,14 +59,17 @@ export function WaiterApp({
     );
   }
 
-  // Kasiyer yok veya kilitli → giriş ekranı (kasa ile aynı PIN sistemi)
-  if (!cashier || isLocked) {
+  const hasInvalidRole = cashier && cashier.role === 'cashier';
+
+  // Kasiyer yok veya kilitli veya yanlış rol → giriş ekranı (kasa ile aynı PIN sistemi)
+  if (!cashier || isLocked || hasInvalidRole) {
     return (
       <CashierLogin
         availableCashiers={availableCashiers}
         businessName={businessName}
         mode={isLocked && cashier ? 'unlock' : 'login'}
         lockedCashierId={isLocked ? cashier?.id : undefined}
+        expectedRole="waiter"
       />
     );
   }

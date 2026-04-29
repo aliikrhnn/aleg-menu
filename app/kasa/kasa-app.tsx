@@ -26,13 +26,22 @@ export function KasaApp({
   businessId,
   initialOrders,
 }: Props) {
-  const { cashier, isLocked, setBusinessName } = useCashierSession();
+  const { cashier, isLocked, setBusinessName, signOut } = useCashierSession();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
     setBusinessName(businessName);
   }, [businessName, setBusinessName]);
+
+  // Stale session koruması: localStorage'da role'ü 'waiter' olan biri kasaya
+  // erişmeye çalışırsa session'ı temizle (eski/manipüle edilmiş session olabilir)
+  useEffect(() => {
+    if (!mounted) return;
+    if (cashier && cashier.role && cashier.role === 'waiter') {
+      signOut();
+    }
+  }, [mounted, cashier, signOut]);
 
   // Hydration sırasında blank göster (SSR mismatch önleme)
   if (!mounted) {
@@ -54,14 +63,18 @@ export function KasaApp({
     );
   }
 
-  // Kasiyer yok veya kilitli → giriş ekranı
-  if (!cashier || isLocked) {
+  // Stale waiter session — yukarıdaki effect signOut tetikler, redirect'e gerek yok
+  const hasInvalidRole = cashier && cashier.role === 'waiter';
+
+  // Kasiyer yok veya kilitli veya yanlış rol → giriş ekranı
+  if (!cashier || isLocked || hasInvalidRole) {
     return (
       <CashierLogin
         availableCashiers={availableCashiers}
         businessName={businessName}
         mode={isLocked && cashier ? 'unlock' : 'login'}
         lockedCashierId={isLocked ? cashier?.id : undefined}
+        expectedRole="cashier"
       />
     );
   }

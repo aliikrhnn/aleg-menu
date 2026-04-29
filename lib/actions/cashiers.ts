@@ -352,7 +352,8 @@ export async function deleteCashier(
 // ============================================================
 export async function verifyCashierPin(
   cashierId: string,
-  pin: string
+  pin: string,
+  expectedRole?: 'cashier' | 'waiter'
 ): Promise<{
   success: boolean;
   cashier?: {
@@ -362,6 +363,7 @@ export async function verifyCashierPin(
     emoji: string;
     can_close_day: boolean;
     can_refund: boolean;
+    role: CashierRole;
   };
   error?: string;
 }> {
@@ -375,7 +377,9 @@ export async function verifyCashierPin(
 
     const { data: cashier } = await admin
       .from('cashier_accounts')
-      .select('id, business_id, display_name, color, emoji, pin_hash, can_close_day, can_refund, is_active')
+      .select(
+        'id, business_id, display_name, color, emoji, pin_hash, can_close_day, can_refund, is_active, role'
+      )
       .eq('id', cashierId)
       .maybeSingle();
 
@@ -390,6 +394,22 @@ export async function verifyCashierPin(
     const valid = await bcrypt.compare(pin, cashier.pin_hash);
     if (!valid) {
       return { success: false, error: 'Yanlış PIN' };
+    }
+
+    // Rol kontrolü — kasa giriş ekranı 'cashier' rolündekileri kabul etmeli;
+    // garson uygulaması 'waiter' rolündekileri. 'both' rolü her ikisinde de geçerli.
+    const cashierRole = (cashier.role as CashierRole) || 'cashier';
+    if (expectedRole === 'cashier' && cashierRole === 'waiter') {
+      return {
+        success: false,
+        error: 'Bu hesabın kasa yetkisi yok',
+      };
+    }
+    if (expectedRole === 'waiter' && cashierRole === 'cashier') {
+      return {
+        success: false,
+        error: 'Bu hesabın garson yetkisi yok',
+      };
     }
 
     // last_used_at güncelle (arka planda, hata olsa sorun değil)
@@ -410,6 +430,7 @@ export async function verifyCashierPin(
         emoji: cashier.emoji,
         can_close_day: cashier.can_close_day,
         can_refund: cashier.can_refund,
+        role: cashierRole,
       },
     };
   } catch (err) {
