@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
@@ -115,7 +115,7 @@ export function AdminUsersClient({ members, currentUserId }: AdminUsersClientPro
                       <div className="text-sm text-[var(--ink)]/60">{m.email}</div>
                     )}
                     <div className="mt-1 text-xs text-[var(--ink)]/50">
-                      Son giriş: {lastSeen} · {new Date(m.admin_since).getFullYear()}'den beri admin
+                      Son giriş: {lastSeen} · {new Date(m.admin_since).getFullYear()}&apos;den beri admin
                     </div>
                   </div>
                 </div>
