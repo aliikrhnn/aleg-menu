@@ -28,7 +28,7 @@ export function SettingsClient({ settings }: SettingsClientProps) {
     <div className="space-y-8">
       <header className="border-b border-[var(--ink)]/10 pb-6">
         <Eyebrow>Süper Admin · Ayarlar</Eyebrow>
-        <SerifTitle as="h1">Platform Ayarları</SerifTitle>
+        <SerifTitle>Platform Ayarları</SerifTitle>
         <p className="mt-2 text-sm text-[var(--ink)]/70">
           Platform genelinde geçerli yapılandırma. Her değişiklik audit log&apos;a yazılır.
         </p>

@@ -25,6 +25,16 @@ const TONE_LABEL: Record<string, string> = {
   olive: 'Kayıt',
 }
 
+const TONE_OPTIONS: Array<'danger' | 'warn' | 'super' | 'gold' | 'ok' | 'muted' | 'olive'> = [
+  'danger',
+  'warn',
+  'super',
+  'gold',
+  'ok',
+  'muted',
+  'olive',
+]
+
 export function AuditClient({ initialItems, actionTypes }: AuditClientProps) {
   const [, startTransition] = useTransition()
   const [search, setSearch] = useState('')
@@ -51,7 +61,6 @@ export function AuditClient({ initialItems, actionTypes }: AuditClientProps) {
     })
   }, [initialItems, search, actionFilter, toneFilter])
 
-  // Tarih bazlı gruplama
   const groups = useMemo(() => {
     const map = new Map<string, AdminAuditLogEntry[]>()
     for (const e of filtered) {
@@ -72,7 +81,7 @@ export function AuditClient({ initialItems, actionTypes }: AuditClientProps) {
       <header className="flex items-end justify-between gap-6 border-b border-[var(--ink)]/10 pb-6">
         <div>
           <Eyebrow>Süper Admin · Audit</Eyebrow>
-          <SerifTitle as="h1">Hareket Kaydı</SerifTitle>
+          <SerifTitle>Hareket Kaydı</SerifTitle>
           <p className="mt-2 text-sm text-[var(--ink)]/70">
             Platform üzerinde yapılan tüm yönetim hareketlerinin tam günlüğü.
           </p>
@@ -100,13 +109,20 @@ export function AuditClient({ initialItems, actionTypes }: AuditClientProps) {
           </select>
         </div>
         <div className="mt-3 flex flex-wrap gap-2 border-t border-[var(--ink)]/10 pt-3">
-          <FilterChip active={toneFilter === 'all'} onClick={() => setToneFilter('all')}>
-            Tüm önem
-          </FilterChip>
-          {(['danger', 'warn', 'super', 'gold', 'ok', 'muted', 'olive'] as const).map((t) => (
-            <FilterChip key={t} active={toneFilter === t} onClick={() => setToneFilter(t)}>
-              {TONE_LABEL[t] ?? t}
-            </FilterChip>
+          <FilterChip
+            label="Tüm önem"
+            value="all"
+            active={toneFilter === 'all'}
+            onClick={() => setToneFilter('all')}
+          />
+          {TONE_OPTIONS.map((t) => (
+            <FilterChip
+              key={t}
+              label={TONE_LABEL[t] ?? t}
+              value={t}
+              active={toneFilter === t}
+              onClick={() => setToneFilter(t)}
+            />
           ))}
         </div>
       </section>
@@ -140,9 +156,7 @@ export function AuditClient({ initialItems, actionTypes }: AuditClientProps) {
                         </span>
                       </div>
                       <div className="mt-1.5 text-sm text-[var(--ink)]/85">
-                        {e.target_label && (
-                          <span className="font-medium">{e.target_label}</span>
-                        )}
+                        {e.target_label && <span className="font-medium">{e.target_label}</span>}
                         {e.business_name && (
                           <>
                             {e.target_label && <span className="text-[var(--ink)]/30"> · </span>}

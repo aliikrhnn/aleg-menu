@@ -31,7 +31,7 @@ export function SystemClient({ health, signals, recentActivity }: SystemClientPr
       <header className="flex items-end justify-between gap-6 border-b border-[var(--ink)]/10 pb-6">
         <div>
           <Eyebrow>Süper Admin · Sistem</Eyebrow>
-          <SerifTitle as="h1">Sistem Durumu</SerifTitle>
+          <SerifTitle>Sistem Durumu</SerifTitle>
           <p className="mt-2 text-sm text-[var(--ink)]/70">
             Platformun anlık sağlık durumu, son 24 saat trafiği ve operasyonel sinyaller.
           </p>

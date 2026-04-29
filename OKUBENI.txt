@@ -1,34 +1,46 @@
-Paket 4 - Build Fix
-====================
+Paket 4 - BUILD FIX 2 (TÜM SORUNLAR DÜZELTİLDİ)
+================================================
 
-Önceki Paket 4 zip'i `@/lib/auth/super-admin` ve `@/lib/admin/audit`
-adlı yardımcı dosyaları varsayıyordu — sende yoklar.
+Bu paket önceki Paket 4 fix'in üstüne gelir. Aşağıdaki TÜM
+TypeScript build hatalarını düzeltir:
 
-Bu fix paketi, mevcut projendeki pattern'ı (her dosyanın kendi
-requireSuperAdmin() ve logAudit() helper'ları) kullanacak şekilde
-TÜM 6 server action'ı + 2 sayfayı + 1 client component'i yeniden yazıyor.
+1. SerifTitle: 'as' prop'u yok → kaldırıldı
+2. StatusDot: 'gold' ve 'olive' kabul etmiyor → ayrı 
+   STATUS_DOT_TONE map'leri ile sadeleştirildi
+3. FilterChip: children değil 'label' + 'value' alıyor 
+   → tüm 13 kullanım yeniden yazıldı
+
+Ek olarak (önceki fix'in tekrarı, garanti olsun diye):
+- requireSuperAdmin() her dosyaya gömüldü
+- log_audit RPC çağrısı düzgün
 
 YAPMAN GEREKEN:
 ---------------
 
-1. Bu zip'i aç
-2. İçindeki klasör yapısını projendeki AYNI yerlere kopyala 
-   (üstüne yaz):
-   
-   lib/actions/admin-support.ts
-   lib/actions/admin-notifications.ts
-   lib/actions/admin-users.ts
-   lib/actions/admin-audit.ts
-   lib/actions/admin-system.ts
-   lib/actions/admin-settings.ts
-   
-   app/admin/(shell)/destek/[id]/page.tsx     ← (shell), zip'te (admin)
-   app/admin/(shell)/kullanicilar/page.tsx     ← (shell), zip'te (admin)
-   
-   components/admin/admin-users-client.tsx
+Bu zip'i aç ve içindeki TÜM dosyaları projendeki AYNI
+yerlere kopyala (üstüne yaz - confirm "Yes to All"):
 
-3. git add . && git commit -m "fix paket 4" && git push origin main
+components/admin/admin-users-client.tsx     ← güncellendi
+components/admin/audit-client.tsx            ← güncellendi
+components/admin/notifications-client.tsx    ← güncellendi
+components/admin/settings-client.tsx         ← güncellendi
+components/admin/support-detail-client.tsx   ← güncellendi
+components/admin/support-list-client.tsx     ← güncellendi
+components/admin/system-client.tsx           ← güncellendi
 
-NOT: Önceki Paket 4'ten gelen şu dosyaları SİL (artık gereksiz):
-- lib/auth/super-admin.ts (eğer yarattıysan)
-- lib/admin/audit.ts (eğer yarattıysan)
+lib/actions/admin-support.ts          (önceki fix ile aynı)
+lib/actions/admin-notifications.ts    (önceki fix ile aynı)
+lib/actions/admin-users.ts            (önceki fix ile aynı)
+lib/actions/admin-audit.ts            (önceki fix ile aynı)
+lib/actions/admin-system.ts           (önceki fix ile aynı)
+lib/actions/admin-settings.ts         (önceki fix ile aynı)
+
+app/admin/(shell)/destek/[id]/page.tsx       ← (shell), zip'te (admin)
+app/admin/(shell)/kullanicilar/page.tsx       ← (shell), zip'te (admin)
+
+Sonra:
+  git add .
+  git commit -m "fix: align paket 4 with primitives signatures"
+  git push origin main
+
+Bu sefer geçecek.

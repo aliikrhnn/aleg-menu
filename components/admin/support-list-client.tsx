@@ -38,6 +38,15 @@ const STATUS_TONE: Record<SupportTicketStatus, 'ok' | 'warn' | 'danger' | 'super
   closed: 'muted',
 }
 
+// StatusDot kısıtlı tone destekliyor
+const STATUS_DOT_TONE: Record<SupportTicketStatus, 'ok' | 'warn' | 'danger' | 'super' | 'muted'> = {
+  open: 'warn',
+  in_progress: 'super',
+  waiting_user: 'warn',
+  resolved: 'ok',
+  closed: 'muted',
+}
+
 const PRIORITY_LABEL: Record<SupportTicketPriority, string> = {
   low: 'Düşük',
   normal: 'Normal',
@@ -92,7 +101,6 @@ export function SupportTicketsClient({ initialItems, metrics }: SupportTicketsCl
       if (statusFilter !== 'all' && t.status !== statusFilter) return false
       if (priorityFilter !== 'all' && t.priority !== priorityFilter) return false
       if (assigneeFilter === 'unassigned' && t.assignee_id !== null) return false
-      // 'me' filter — server tarafında çalışacak; burada öylece bırakıyoruz
       if (search.trim()) {
         const q = search.trim().toLowerCase()
         if (
@@ -114,7 +122,7 @@ export function SupportTicketsClient({ initialItems, metrics }: SupportTicketsCl
       <header className="flex items-end justify-between gap-6 border-b border-[var(--ink)]/10 pb-6">
         <div>
           <Eyebrow>Süper Admin · Destek</Eyebrow>
-          <SerifTitle as="h1">Destek talepleri</SerifTitle>
+          <SerifTitle>Destek talepleri</SerifTitle>
           <p className="mt-2 text-sm text-[var(--ink)]/70">
             Müşteri yardım taleplerini yönet, ata, çöz.
           </p>
@@ -147,64 +155,76 @@ export function SupportTicketsClient({ initialItems, metrics }: SupportTicketsCl
             placeholder="Konu, ticket no, e-posta, işletme..."
           />
           <div className="flex flex-wrap gap-2">
-            <FilterChip active={statusFilter === 'all'} onClick={() => setStatusFilter('all')}>
-              Tümü
-            </FilterChip>
-            <FilterChip active={statusFilter === 'open'} onClick={() => setStatusFilter('open')}>
-              Açık
-            </FilterChip>
             <FilterChip
+              label="Tümü"
+              value="all"
+              active={statusFilter === 'all'}
+              onClick={() => setStatusFilter('all')}
+            />
+            <FilterChip
+              label="Açık"
+              value="open"
+              active={statusFilter === 'open'}
+              onClick={() => setStatusFilter('open')}
+            />
+            <FilterChip
+              label="İşlemde"
+              value="in_progress"
               active={statusFilter === 'in_progress'}
               onClick={() => setStatusFilter('in_progress')}
-            >
-              İşlemde
-            </FilterChip>
+            />
             <FilterChip
+              label="Bekliyor"
+              value="waiting_user"
               active={statusFilter === 'waiting_user'}
               onClick={() => setStatusFilter('waiting_user')}
-            >
-              Bekliyor
-            </FilterChip>
+            />
             <FilterChip
+              label="Çözüldü"
+              value="resolved"
               active={statusFilter === 'resolved'}
               onClick={() => setStatusFilter('resolved')}
-            >
-              Çözüldü
-            </FilterChip>
+            />
           </div>
         </div>
         <div className="mt-3 flex flex-wrap gap-2 border-t border-[var(--ink)]/10 pt-3">
-          <FilterChip active={priorityFilter === 'all'} onClick={() => setPriorityFilter('all')}>
-            Tüm öncelikler
-          </FilterChip>
           <FilterChip
+            label="Tüm öncelikler"
+            value="all"
+            active={priorityFilter === 'all'}
+            onClick={() => setPriorityFilter('all')}
+          />
+          <FilterChip
+            label="Acil"
+            value="urgent"
             active={priorityFilter === 'urgent'}
             onClick={() => setPriorityFilter('urgent')}
-          >
-            Acil
-          </FilterChip>
-          <FilterChip active={priorityFilter === 'high'} onClick={() => setPriorityFilter('high')}>
-            Yüksek
-          </FilterChip>
+          />
+          <FilterChip
+            label="Yüksek"
+            value="high"
+            active={priorityFilter === 'high'}
+            onClick={() => setPriorityFilter('high')}
+          />
           <span className="mx-1 h-6 w-px bg-[var(--ink)]/10" aria-hidden />
           <FilterChip
+            label="Tüm atamalar"
+            value="all"
             active={assigneeFilter === 'all'}
             onClick={() => setAssigneeFilter('all')}
-          >
-            Tüm atamalar
-          </FilterChip>
+          />
           <FilterChip
+            label="Atanmamış"
+            value="unassigned"
             active={assigneeFilter === 'unassigned'}
             onClick={() => setAssigneeFilter('unassigned')}
-          >
-            Atanmamış
-          </FilterChip>
+          />
           <FilterChip
+            label="Bende"
+            value="me"
             active={assigneeFilter === 'me'}
             onClick={() => setAssigneeFilter('me')}
-          >
-            Bende
-          </FilterChip>
+          />
         </div>
       </section>
 
@@ -228,7 +248,7 @@ export function SupportTicketsClient({ initialItems, metrics }: SupportTicketsCl
                   className="flex flex-col gap-3 px-6 py-4 transition hover:bg-[var(--cream)]/60 sm:flex-row sm:items-center sm:gap-6"
                 >
                   <div className="flex min-w-0 flex-1 items-start gap-4">
-                    <StatusDot tone={STATUS_TONE[t.status]} />
+                    <StatusDot tone={STATUS_DOT_TONE[t.status]} />
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                         <span className="font-mono text-[11px] uppercase tracking-wider text-[var(--ink)]/45">
@@ -285,10 +305,13 @@ function MetricCard({
   tone: 'ok' | 'warn' | 'danger' | 'super' | 'muted' | 'gold' | 'olive'
   hint?: string
 }) {
+  // StatusDot gold/olive desteklemiyor - sadeleştir
+  const dotTone: 'ok' | 'warn' | 'danger' | 'super' | 'muted' =
+    tone === 'gold' || tone === 'olive' ? 'super' : tone
   return (
     <div className="rounded-3xl border border-[var(--ink)]/10 bg-[var(--paper)] p-5">
       <div className="flex items-center gap-2">
-        <StatusDot tone={tone} />
+        <StatusDot tone={dotTone} />
         <Eyebrow>{label}</Eyebrow>
       </div>
       <div className="mt-3">

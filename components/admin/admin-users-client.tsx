@@ -58,7 +58,7 @@ export function AdminUsersClient({ members, currentUserId }: AdminUsersClientPro
       <header className="flex items-end justify-between gap-6 border-b border-[var(--ink)]/10 pb-6">
         <div>
           <Eyebrow>Süper Admin · Ekip</Eyebrow>
-          <SerifTitle as="h1">Yönetim ekibi</SerifTitle>
+          <SerifTitle>Yönetim ekibi</SerifTitle>
           <p className="mt-2 text-sm text-[var(--ink)]/70">
             Platformu yönetmeye yetkili kişiler. {members.length} aktif admin.
           </p>
@@ -158,7 +158,7 @@ export function AdminUsersClient({ members, currentUserId }: AdminUsersClientPro
             onClick={(e) => e.stopPropagation()}
           >
             <header className="flex items-center justify-between border-b border-[var(--ink)]/10 pb-4">
-              <SerifTitle as="h2">Admin ekle</SerifTitle>
+              <SerifTitle>Admin ekle</SerifTitle>
               <button
                 onClick={() => setShowInvite(false)}
                 className="text-2xl text-[var(--ink)]/60 hover:text-[var(--ink)]"

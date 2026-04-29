@@ -38,6 +38,15 @@ const STATUS_TONE: Record<SupportTicketStatus, 'ok' | 'warn' | 'danger' | 'super
   closed: 'muted',
 }
 
+// StatusDot kısıtlı tone destekliyor - gold/olive yok
+const STATUS_DOT_TONE: Record<SupportTicketStatus, 'ok' | 'warn' | 'danger' | 'super' | 'muted'> = {
+  open: 'warn',
+  in_progress: 'super',
+  waiting_user: 'warn',
+  resolved: 'ok',
+  closed: 'muted',
+}
+
 const PRIORITY_LABEL: Record<SupportTicketPriority, string> = {
   low: 'Düşük',
   normal: 'Normal',
@@ -149,7 +158,7 @@ export function SupportDetailClient({
             <Pill tone={STATUS_TONE[ticket.status]}>{STATUS_LABEL[ticket.status]}</Pill>
             <Pill tone={PRIORITY_TONE[ticket.priority]}>{PRIORITY_LABEL[ticket.priority]}</Pill>
           </div>
-          <SerifTitle as="h1" className="mt-3">
+          <SerifTitle className="mt-3">
             {ticket.subject}
           </SerifTitle>
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-[var(--ink)]/65">
@@ -263,7 +272,7 @@ export function SupportDetailClient({
                         : 'border-[var(--ink)]/10 hover:bg-[var(--cream)]'
                     }`}
                   >
-                    <StatusDot tone={STATUS_TONE[s]} />
+                    <StatusDot tone={STATUS_DOT_TONE[s]} />
                     {STATUS_LABEL[s]}
                   </button>
                 ),

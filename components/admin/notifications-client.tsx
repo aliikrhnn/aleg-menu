@@ -52,6 +52,9 @@ const CATEGORY_LABEL: Record<AnnouncementCategory, string> = {
 
 type StatusFilter = AnnouncementStatus | 'all'
 
+const STATUS_FILTER_OPTIONS: StatusFilter[] = ['all', 'draft', 'scheduled', 'published', 'cancelled']
+const CATEGORY_OPTIONS: AnnouncementCategory[] = ['info', 'feature', 'maintenance', 'warning', 'critical']
+
 interface NotificationsClientProps {
   initialItems: AdminAnnouncement[]
 }
@@ -72,7 +75,7 @@ export function NotificationsClient({ initialItems }: NotificationsClientProps) 
       <header className="flex items-end justify-between gap-6 border-b border-[var(--ink)]/10 pb-6">
         <div>
           <Eyebrow>Süper Admin · Bildirimler</Eyebrow>
-          <SerifTitle as="h1">Duyurular &amp; Bildirimler</SerifTitle>
+          <SerifTitle>Duyurular &amp; Bildirimler</SerifTitle>
           <p className="mt-2 text-sm text-[var(--ink)]/70">
             İşletmelere sistem duyuruları, yeni özellik haberleri ve bakım planları gönder.
           </p>
@@ -87,10 +90,14 @@ export function NotificationsClient({ initialItems }: NotificationsClientProps) 
       </header>
 
       <section className="flex flex-wrap gap-2">
-        {(['all', 'draft', 'scheduled', 'published', 'cancelled'] as StatusFilter[]).map((s) => (
-          <FilterChip key={s} active={statusFilter === s} onClick={() => setStatusFilter(s)}>
-            {s === 'all' ? 'Tümü' : STATUS_LABEL[s]}
-          </FilterChip>
+        {STATUS_FILTER_OPTIONS.map((s) => (
+          <FilterChip
+            key={s}
+            label={s === 'all' ? 'Tümü' : STATUS_LABEL[s]}
+            value={s}
+            active={statusFilter === s}
+            onClick={() => setStatusFilter(s)}
+          />
         ))}
       </section>
 
@@ -152,8 +159,7 @@ function AnnouncementCard({
   onCancel: () => void
   onDelete: () => void
 }) {
-  const readPct =
-    a.recipient_count > 0 ? Math.round((a.read_count / a.recipient_count) * 100) : 0
+  const readPct = a.recipient_count > 0 ? Math.round((a.read_count / a.recipient_count) * 100) : 0
 
   return (
     <article className="rounded-3xl border border-[var(--ink)]/10 bg-[var(--paper)] p-6">
@@ -208,12 +214,8 @@ function AnnouncementCard({
         <span>
           {a.created_by_name ?? '?'} · {new Date(a.created_at).toLocaleDateString('tr-TR')}
         </span>
-        {a.publish_at && (
-          <span>Yayın: {new Date(a.publish_at).toLocaleString('tr-TR')}</span>
-        )}
-        {a.expires_at && (
-          <span>Bitiş: {new Date(a.expires_at).toLocaleString('tr-TR')}</span>
-        )}
+        {a.publish_at && <span>Yayın: {new Date(a.publish_at).toLocaleString('tr-TR')}</span>}
+        {a.expires_at && <span>Bitiş: {new Date(a.expires_at).toLocaleString('tr-TR')}</span>}
         {a.status === 'published' && a.recipient_count > 0 && (
           <span>
             <span className="font-medium text-[var(--ink)]">{a.read_count}</span>/
@@ -271,7 +273,7 @@ function CreateAnnouncementModal({
         onClick={(e) => e.stopPropagation()}
       >
         <header className="flex items-center justify-between border-b border-[var(--ink)]/10 pb-4">
-          <SerifTitle as="h2">Yeni duyuru</SerifTitle>
+          <SerifTitle>Yeni duyuru</SerifTitle>
           <button onClick={onClose} className="text-2xl text-[var(--ink)]/60 hover:text-[var(--ink)]">
             ×
           </button>
@@ -285,9 +287,7 @@ function CreateAnnouncementModal({
           className="mt-4 space-y-4"
         >
           <div>
-            <label className="block text-xs uppercase tracking-wider text-[var(--ink)]/55">
-              Başlık
-            </label>
+            <label className="block text-xs uppercase tracking-wider text-[var(--ink)]/55">Başlık</label>
             <input
               type="text"
               value={title}
@@ -299,9 +299,7 @@ function CreateAnnouncementModal({
           </div>
 
           <div>
-            <label className="block text-xs uppercase tracking-wider text-[var(--ink)]/55">
-              İçerik
-            </label>
+            <label className="block text-xs uppercase tracking-wider text-[var(--ink)]/55">İçerik</label>
             <textarea
               value={body}
               onChange={(e) => setBody(e.target.value)}
@@ -313,17 +311,17 @@ function CreateAnnouncementModal({
           </div>
 
           <div>
-            <label className="block text-xs uppercase tracking-wider text-[var(--ink)]/55">
-              Kategori
-            </label>
+            <label className="block text-xs uppercase tracking-wider text-[var(--ink)]/55">Kategori</label>
             <div className="mt-2 flex flex-wrap gap-2">
-              {(['info', 'feature', 'maintenance', 'warning', 'critical'] as AnnouncementCategory[]).map(
-                (c) => (
-                  <FilterChip key={c} active={category === c} onClick={() => setCategory(c)}>
-                    {CATEGORY_LABEL[c]}
-                  </FilterChip>
-                ),
-              )}
+              {CATEGORY_OPTIONS.map((c) => (
+                <FilterChip
+                  key={c}
+                  label={CATEGORY_LABEL[c]}
+                  value={c}
+                  active={category === c}
+                  onClick={() => setCategory(c)}
+                />
+              ))}
             </div>
           </div>
 
