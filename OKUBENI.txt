@@ -1,113 +1,109 @@
-ALEG TUR 4A — Dashboard güzelleştirme (1. pas: Hero Metrikler)
-================================================================
+ALEG TUR 4B — Dashboard güzelleştirme (2. pas: LiveOps)
+=========================================================
 
-Dashboard'ı "canlı nefes alan" yöne taşıyoruz. Bu ilk paste hero
-metrikleri komple yenilendi:
-
-  ✨ Sparkline'lı kartlar (son 7 günün cirosu)
-  💚 Aktif sipariş kartında pulse halka + breakdown
-  🎨 Animasyonlar (mount'ta sparkline çiziliyor, baretler büyüyor)
-  📊 Tek metrik 1 kart yerine: 1 büyük + 1 canlı + 1 küçük (3 sütun layout)
+Canlı operasyon kartı tamamen yenilendi. Mutfak ekranı / kitchen
+display tarzı, akıcı, anlamlı bir izlenim.
 
 
-YENİ LAYOUT
-===========
+YENİLİKLER
+==========
 
-  ┌──────────────────────────────────┬───────────────┬───────────────┐
-  │  BUGÜN CİRO     ↗+12% düne göre   │  AKTİF SİPARİŞ•│  ORT. SEPET   │
-  │                                    │             3│                 │
-  │  ₺2.450,00                        │              │  ₺85,50         │
-  │                                    │  • 1 yeni     │  29 sipariş     │
-  │  SON 7 GÜN                         │  • 1 hazır.. │                 │
-  │  ╱╲    ╱╲╱╲                       │  • 1 hazır    │  ▁▃▄▆█▇█      │
-  │ ╱  ╲  ╱      •                    │              │                 │
-  │     ╲╱                             │              │                 │
-  └──────────────────────────────────┴───────────────┴───────────────┘
-  
-  • Bugün ciro: 2 sütun genişlikte. Sparkline area chart, son nokta vurgulu
-    + halo pulse animasyonu
-  • Aktif sipariş: yeşil glow halka, pulse efekti, breakdown rows
-  • Ort. sepet: bar sparkline (son 7 günün sipariş sayısı), son bar accent
-  
-  Mobile'da: 1 sütun, sırasıyla alt alta
+[1] Workload meter (yoğunluk)
+    • Sağ üstte mini çubuk: aktif sipariş sayısına göre 0-100%
+    • <50% yeşil, 50-75% sarı, >75% kırmızı
+    • Spring transition ile değişiyor
 
+[2] Akış görselleştirmesi (Yeni → Hazırlanıyor → Hazır)
+    • Tek satırlık oransal bar (Tailwind colors)
+    • Her stage kendi rengiyle + count, akıcı entrance animasyonu
+    • Altında legend: "3 yeni · 2 hazırlanıyor · 1 hazır"
 
-ANİMASYONLAR
-============
+[3] Detay kutuları zenginleşti
+    • Her kutuda: küçük emoji ikon (📋 🍳 🔔 🪑)
+    • Aktif olmayanlarda emoji grayscale + 40% opacity
+    • Aktif olanda renkli border + soft background
+    • Pulse dot (yanıp sönen) sayının yanında — yeni/hazır olanlarda
+    • "Hazır" durumunda ekstra urgent glow halkası
 
-  • Sparkline çizgisi mount'ta soldan sağa çiziliyor (stroke-dashoffset)
-  • Area gradient aşağıdan yukarıya açılıyor
-  • Son nokta 1sn'de pop! efekti, sonra halo halka 2.4s pulse loop
-  • Bar sparkline: her bar staggered (50ms aralık) bottom'dan büyüyor
-  • Aktif sipariş kartı: yeşil glow halkası 2.4s expand-fade
-  • Live dot (yeşil): yumuşak nefes 1.8s loop
-  • Yeni/hazır breakdown row dot'ları: pulse
+[4] Acil durum modu (garson çağrısı varsa)
+    • Tüm kart background subtle accent renge dönüyor
+    • Sağ üstte radial gradient pulse animasyonu
+    • Çağrı bandı kart girişinde shake animasyonu (bir kez)
+    • Çağrı butonu turuncu solid, dikkat çekici
 
+[5] Boş durum
+    • "Mutfak sakin" başlığı
+    • Yeşil ✓ ikonu (animasyon ile pop)
+    • "Yeni sipariş geldiğinde burada anında görünür"
+    • Detay kutuları tamamen gizleniyor (bilişsel temizlik)
 
-VERİ KATMANI
-============
-
-DashboardData tipine eklendi:
-
-  last7Days: Array<{
-    date: string;        // "2025-01-15"
-    revenue: number;     // o günün toplamı
-    count: number;       // sipariş sayısı
-    isToday: boolean;
-  }>;
-
-Sorgu:
-  • Tek paralel query (sevenDaysAgo'dan bugüne)
-  • Türkiye saatine göre gün bucket'larına bölünüyor (UTC+3)
-  • Eksik günler 0 ile dolduruluyor (sparkline kesintisiz)
+[6] Aksiyon butonları
+    • Her butonda küçük ikon (⌫ POS, ◳ İstasyonlar, ▦ Masalar)
+    • Hover'da scale-up, primary butonda subtle shadow
 
 
-DOSYALAR
-========
+KULLANICI HİSSİ
+===============
 
-GÜNCELLEMELER:
-  lib/actions/dashboard.ts
-    • last7Days alanı eklendi DashboardData tipine
-    • last7DaysOrders sorgusu paralel array'e
-    • Türkiye saatli gün bucket hesabı
+ÖNCESİ:
+  [Statik 4 kutu hep görünüyor, ne yapacağı belirsiz]
 
-  app/panel/(shell)/dashboard/hero-metrics.tsx
-    • Tamamen yeniden yazıldı
-    • BigMetricCard / LivePulseCard / SmallMetricCard 3 alt component
-    • Sparkline (line+area) ve BarSparkline component'leri
-    • Animasyon keyframe'leri inline
-
-  app/panel/(shell)/page.tsx
-    • HeroMetrics çağrısına yeni props (newOrders, preparingOrders,
-      readyOrders, last7Days)
+SONRASI:
+  • Boşken huzur veriyor: "her şey yolunda"
+  • Aktivite varken ne kadar yoğun olduğunu bir bakışta görüyor
+  • Akış barı sayesinde "şu an mutfakta nerede sıkışma var" hızlı anlaşılıyor
+  • Çağrı geldiğinde kart kendini sahneliyor — ekrandan dikkat çekiyor
+  • Hazır siparişlerde glow → garson hemen görüyor
 
 
 KURULUM
 =======
 
-3 dosyayı kopyala:
-
-  lib/actions/dashboard.ts
-  app/panel/(shell)/dashboard/hero-metrics.tsx
-  app/panel/(shell)/page.tsx
+1 dosya:
+  app/panel/(shell)/dashboard/live-ops.tsx
 
 
 PUSH
 ====
 
   git add .
-  git commit -m "feat: tur 4a - hero metrics with sparklines and live pulse"
+  git commit -m "feat: tur 4b - live ops with flow visualization"
   git push origin main
+
+
+TEST
+====
+
+[A] Boş durum:
+    1. Hiç aktif sipariş yok, çağrı yok
+    2. ✅ "Mutfak sakin" + ✓ ikonu
+    3. "Yeni sipariş geldiğinde..." metni
+    4. Detay kutuları görünmemeli
+
+[B] Sipariş akışı:
+    1. 1 yeni, 2 hazırlanıyor, 1 hazır sipariş ekle
+    2. ✅ Akış barı 4 stage'i oransal göstermeli (1/4, 2/4, 1/4)
+    3. Detay kutuları açılmalı, aktif renkli
+    4. "Hazır" kutusu glow halkalı
+    5. Yoğunluk barı sarı renkte (4/15 = ~27% → yeşil aslında)
+
+[C] Çağrı geldi:
+    1. Müşteri masadan garson çağırsın
+    2. ✅ Kart background'ı subtle accent
+    3. Üst sağda radial pulse
+    4. Çağrı bandı bir kez sallanmalı (mount'ta)
+    5. Sağdaki "GİT" butonu turuncu, dikkat çekici
+
+[D] Yoğun saat:
+    1. 12+ aktif sipariş olsun
+    2. ✅ Yoğunluk barı sarı/kırmızı renkte
 
 
 SIRADAKİ
 ========
 
-Bu paketin testi onaylandığında dashboard'da geri kalan parçalar:
-  • LiveOps (mutfak/garson durum kartı) — daha canlı
-  • HourlyChart — area chart
-  • TopProducts — animated bars + ürün görseli
-  • LatestReview — sparkle animasyonu
-  • QuickActions — micro animations
+  • Tur 4C: HourlyChart → smooth area chart
+  • Tur 4D: TopProducts → animated bars
+  • Tur 4E: LatestReview + QuickActions
 
-Adım adım, her birini ayrı pakette test edip onayladıktan sonra geçeceğiz.
+Test edip onayladığında 4C'ye geçiyorum.
