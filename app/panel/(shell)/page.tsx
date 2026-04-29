@@ -85,7 +85,7 @@ async function DashboardContent() {
       {/* Tükendi uyarı şeridi (varsa) */}
       <SoldOutAlert />
 
-      {/* 4 hero metrics */}
+      {/* 4 hero metrics - canlı sparkline'lar */}
       <HeroMetrics
         todayRevenue={data.today.revenue}
         todayOrderCount={data.today.order_count}
@@ -93,8 +93,12 @@ async function DashboardContent() {
         monthRevenue={data.month.revenue}
         monthOrderCount={data.month.order_count}
         activeOrders={data.live.activeOrders}
+        newOrders={data.live.newOrders}
+        preparingOrders={data.live.preparingOrders}
+        readyOrders={data.live.readyOrders}
         revenueChangePct={data.today.revenue_change_pct}
         orderChangePct={data.today.order_change_pct}
+        last7Days={data.last7Days}
       />
 
       {/* Canlı operasyon — panelin kalbi, tam genişlikte */}

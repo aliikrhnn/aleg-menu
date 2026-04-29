@@ -1,58 +1,113 @@
-ALEG TUR 3D-v2 — Build hatası fix
-==================================
+ALEG TUR 4A — Dashboard güzelleştirme (1. pas: Hero Metrikler)
+================================================================
 
-ESLint/TS hatası:
+Dashboard'ı "canlı nefes alan" yöne taşıyoruz. Bu ilk paste hero
+metrikleri komple yenilendi:
 
-  Right operand of ?? is unreachable because the left operand is never nullish.
-
-  const statusKey = (`status_${order.status}` as keyof typeof T) ?? 'status_received';
-                                                                  ^^
-
-Template literal her zaman string döner, asla null/undefined olmaz —
-TypeScript haklı, `??` gereksiz.
+  ✨ Sparkline'lı kartlar (son 7 günün cirosu)
+  💚 Aktif sipariş kartında pulse halka + breakdown
+  🎨 Animasyonlar (mount'ta sparkline çiziliyor, baretler büyüyor)
+  📊 Tek metrik 1 kart yerine: 1 büyük + 1 canlı + 1 küçük (3 sütun layout)
 
 
-ÇÖZÜM
-=====
+YENİ LAYOUT
+===========
 
-Status etiketlerini T objesinden çıkarıp ayrı bir STATUS_LABELS record'una
-taşıdım. Daha temiz, daha tip güvenli:
+  ┌──────────────────────────────────┬───────────────┬───────────────┐
+  │  BUGÜN CİRO     ↗+12% düne göre   │  AKTİF SİPARİŞ•│  ORT. SEPET   │
+  │                                    │             3│                 │
+  │  ₺2.450,00                        │              │  ₺85,50         │
+  │                                    │  • 1 yeni     │  29 sipariş     │
+  │  SON 7 GÜN                         │  • 1 hazır.. │                 │
+  │  ╱╲    ╱╲╱╲                       │  • 1 hazır    │  ▁▃▄▆█▇█      │
+  │ ╱  ╲  ╱      •                    │              │                 │
+  │     ╲╱                             │              │                 │
+  └──────────────────────────────────┴───────────────┴───────────────┘
+  
+  • Bugün ciro: 2 sütun genişlikte. Sparkline area chart, son nokta vurgulu
+    + halo pulse animasyonu
+  • Aktif sipariş: yeşil glow halka, pulse efekti, breakdown rows
+  • Ort. sepet: bar sparkline (son 7 günün sipariş sayısı), son bar accent
+  
+  Mobile'da: 1 sütun, sırasıyla alt alta
 
-  const STATUS_LABELS: Record<string, { tr: string; en: string }> = {
-    received: { tr: 'Alındı', en: 'Received' },
-    confirmed: { tr: 'Alındı', en: 'Confirmed' },
-    preparing: { tr: 'Hazırlanıyor', en: 'Preparing' },
-    ready: { tr: 'Hazır', en: 'Ready' },
-    delivered: { tr: 'Teslim edildi', en: 'Delivered' },
-    cancelled: { tr: 'İptal edildi', en: 'Cancelled' },
-  };
 
-  const statusLabel = STATUS_LABELS[order.status]?.[lang] || order.status;
+ANİMASYONLAR
+============
 
-Artık:
-  • Template literal trickery yok
-  • Optional chaining (`?.`) kullanıldı — record'da olmayan status için
-    de güvenli
-  • Fallback (`|| order.status`) — olası yeni status isimleri için
-    bilinmeyen değer dönmek yerine raw status gösterilir
+  • Sparkline çizgisi mount'ta soldan sağa çiziliyor (stroke-dashoffset)
+  • Area gradient aşağıdan yukarıya açılıyor
+  • Son nokta 1sn'de pop! efekti, sonra halo halka 2.4s pulse loop
+  • Bar sparkline: her bar staggered (50ms aralık) bottom'dan büyüyor
+  • Aktif sipariş kartı: yeşil glow halkası 2.4s expand-fade
+  • Live dot (yeşil): yumuşak nefes 1.8s loop
+  • Yeni/hazır breakdown row dot'ları: pulse
+
+
+VERİ KATMANI
+============
+
+DashboardData tipine eklendi:
+
+  last7Days: Array<{
+    date: string;        // "2025-01-15"
+    revenue: number;     // o günün toplamı
+    count: number;       // sipariş sayısı
+    isToday: boolean;
+  }>;
+
+Sorgu:
+  • Tek paralel query (sevenDaysAgo'dan bugüne)
+  • Türkiye saatine göre gün bucket'larına bölünüyor (UTC+3)
+  • Eksik günler 0 ile dolduruluyor (sparkline kesintisiz)
+
+
+DOSYALAR
+========
+
+GÜNCELLEMELER:
+  lib/actions/dashboard.ts
+    • last7Days alanı eklendi DashboardData tipine
+    • last7DaysOrders sorgusu paralel array'e
+    • Türkiye saatli gün bucket hesabı
+
+  app/panel/(shell)/dashboard/hero-metrics.tsx
+    • Tamamen yeniden yazıldı
+    • BigMetricCard / LivePulseCard / SmallMetricCard 3 alt component
+    • Sparkline (line+area) ve BarSparkline component'leri
+    • Animasyon keyframe'leri inline
+
+  app/panel/(shell)/page.tsx
+    • HeroMetrics çağrısına yeni props (newOrders, preparingOrders,
+      readyOrders, last7Days)
 
 
 KURULUM
 =======
 
-Sadece bu 1 dosyayı kopyala (üzerine yaz):
+3 dosyayı kopyala:
 
-  app/menu/[slug]/my-orders-panel.tsx
-
-Diğer Tur 3D dosyaları zaten doğru — onları tekrar yapma.
+  lib/actions/dashboard.ts
+  app/panel/(shell)/dashboard/hero-metrics.tsx
+  app/panel/(shell)/page.tsx
 
 
 PUSH
 ====
 
   git add .
-  git commit -m "fix: tur 3d - status label type guard"
+  git commit -m "feat: tur 4a - hero metrics with sparklines and live pulse"
   git push origin main
 
 
-Build geçer geçmez teste verirsin 🙏
+SIRADAKİ
+========
+
+Bu paketin testi onaylandığında dashboard'da geri kalan parçalar:
+  • LiveOps (mutfak/garson durum kartı) — daha canlı
+  • HourlyChart — area chart
+  • TopProducts — animated bars + ürün görseli
+  • LatestReview — sparkle animasyonu
+  • QuickActions — micro animations
+
+Adım adım, her birini ayrı pakette test edip onayladıktan sonra geçeceğiz.

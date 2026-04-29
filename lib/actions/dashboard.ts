@@ -55,6 +55,13 @@ export type DashboardData = {
     occupiedTables: number;
     pendingWaiterCalls: number;
   };
+  // Son 7 günün günlük cirosu/sipariş sayısı (sparkline için, en eski → en yeni)
+  last7Days: Array<{
+    date: string; // YYYY-MM-DD
+    revenue: number;
+    count: number;
+    isToday: boolean;
+  }>;
   // Son değerlendirme (varsa)
   latestReview: {
     id: string;
@@ -130,6 +137,8 @@ export async function getDashboardData(): Promise<{
     const todayRange = turkeyDayRange(0);
     const yesterdayRange = turkeyDayRange(1);
     const monthStart = monthStartIso();
+    // Son 7 günün başlangıcı (bugün dahil) — sparkline için
+    const sevenDaysAgo = turkeyDayRange(6).from;
 
     const [
       businessRes,
@@ -141,6 +150,7 @@ export async function getDashboardData(): Promise<{
       tablesRes,
       waiterCallsRes,
       latestReviewRes,
+      last7DaysRes,
     ] = await Promise.all([
       // İşletme bilgisi
       admin.from('businesses').select('*').eq('id', businessId).maybeSingle(),
@@ -205,6 +215,13 @@ export async function getDashboardData(): Promise<{
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle(),
+      // Son 7 günün siparişleri (sparkline için)
+      admin
+        .from('orders')
+        .select('total, created_at')
+        .eq('business_id', businessId)
+        .gte('created_at', sevenDaysAgo)
+        .neq('status', 'cancelled'),
     ]);
 
     const business = businessRes.data;
@@ -342,6 +359,35 @@ export async function getDashboardData(): Promise<{
         }
       : null;
 
+    // Son 7 günün günlük cirosu — sparkline için
+    // Türkiye saatine göre günü belirle, en eski → en yeni
+    const last7DaysOrders = last7DaysRes.data || [];
+    const dayBuckets = new Map<string, { revenue: number; count: number }>();
+    // 7 günlük slotları önceden 0'la
+    const todayTr = new Date(Date.now() + 3 * 60 * 60 * 1000); // UTC+3
+    const todayKey = `${todayTr.getUTCFullYear()}-${String(todayTr.getUTCMonth() + 1).padStart(2, '0')}-${String(todayTr.getUTCDate()).padStart(2, '0')}`;
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(todayTr.getTime() - i * 24 * 60 * 60 * 1000);
+      const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+      dayBuckets.set(key, { revenue: 0, count: 0 });
+    }
+    last7DaysOrders.forEach((o) => {
+      const dt = new Date(o.created_at as string);
+      const trDate = new Date(dt.getTime() + 3 * 60 * 60 * 1000);
+      const key = `${trDate.getUTCFullYear()}-${String(trDate.getUTCMonth() + 1).padStart(2, '0')}-${String(trDate.getUTCDate()).padStart(2, '0')}`;
+      const bucket = dayBuckets.get(key);
+      if (bucket) {
+        bucket.revenue += parseFloat(String(o.total || 0));
+        bucket.count += 1;
+      }
+    });
+    const last7Days = Array.from(dayBuckets.entries()).map(([date, v]) => ({
+      date,
+      revenue: v.revenue,
+      count: v.count,
+      isToday: date === todayKey,
+    }));
+
     const fullName = (membership.full_name as string) || 'dostum';
     const firstName = fullName.split(' ')[0];
 
@@ -383,6 +429,7 @@ export async function getDashboardData(): Promise<{
       peakHour,
       topProducts,
       live,
+      last7Days,
       latestReview,
     };
 
