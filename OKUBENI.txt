@@ -1,90 +1,108 @@
-ALEG TUR 2C — Bug #9 fix paketi (SON BUG!)
-=============================================
+ALEG TUR 2D — Bug #9 ek fix (yetki bayrak kontrolü)
+====================================================
 
-✅ #9 — Yetkisi olmayan kasiyer kasa kısmındaki kasaya girebiliyor
+Tur 2C'de yanlış bir bug üzerinde çalışmıştım: cashier vs waiter
+ayrımının zaten doğru çalıştığını fark etmedim (kasada zaten waiter
+listede gözükmüyor). 
+
+Asıl bug ŞU İDİ:
+  • Kasiyer oluştururken "Gün kapatır" / "İade alabilir" toggle'ları
+    KAPALI olsa bile, o kasiyer kasaya girince yetkili gibi davranıyordu.
+  • can_close_day ve can_refund bayrakları DB'ye kaydediliyordu, 
+    localStorage'a kaydediliyordu, ama UI bunları HİÇ KONTROL ETMİYORDU.
 
 
-SORUN
-=====
+SORUN AKIŞI
+===========
 
-verifyCashierPin server action'ı rol kontrolü YAPMIYORDU.
-
-Yani:
-  • Garson rolündeki bir hesap (role='waiter') kasiyer listesinde
-    görünmüyordu (filtre doğru çalışıyor)
-  • AMA o hesabın id'si + PIN'iyle direkt giriş yapılabiliyordu
-  • Veya: kasiyer önce 'cashier' rolünde girdi, sonra rolü 'waiter'
-    yapıldı, eski localStorage session'ıyla erişmeye devam ediyordu
-
-3 katmanlı bug:
-  1. Server: verifyCashierPin rol kontrolü yapmıyor
-  2. Client: localStorage session'ında rol saklanmıyor
-  3. Client: Stale session koruması yok
+1. Admin kasiyer oluşturur, "Gün kapatır" toggle'ını KAPALI bırakır
+2. DB'de can_close_day = false kaydı var
+3. Kasiyer login olur, can_close_day = false localStorage'a kaydedilir
+4. AMA "GÜN SONU OLUŞTUR VE İNDİR" butonu HER KASİYERE açık
+5. Kasiyer butona basar, gün sonu wizard'ı açılır → bug
 
 
 ÇÖZÜM
 =====
 
-3 katman koruma eklendi:
+[1] register-panel.tsx — Gün Sonu butonu can_close_day kontrol ediyor
+    • Yetkisi varsa: normal "GÜN SONU OLUŞTUR VE İNDİR" butonu görünür
+    • Yetkisi yoksa: kilit ikonu + "Gün Sonu Yetkisi Yok / Bu işlem 
+      için yetkili bir kasiyere geç" mesajı görünür
+    • handleOpenWizard() defansif olarak da kontrol ediyor (toast hata)
 
-[1] Server-side rol kontrolü (verifyCashierPin'de)
-    • expectedRole parametresi eklendi ('cashier' | 'waiter')
-    • Hesap rolü ile mismatch varsa giriş reddedilir
-    • 'both' rolü her iki uygulamada da geçerli
-    
-[2] localStorage session'ında role saklama
-    • signIn / unlock çağrılarına role eklendi
-    • Cashier session tipinde role zaten vardı, sadece kullanılmıyordu
-
-[3] Client-side stale session koruması
-    • kasa-app: rolü 'waiter' olan biri kasaya girmeye çalışırsa
-      otomatik signOut + login ekranına dön
-    • waiter-app: rolü 'cashier' olan biri garson uygulamasına girmeye
-      çalışırsa otomatik signOut + login ekranına dön
+[2] cashier-session.tsx — useCanCloseDay() ve useCanRefund() helper
+    hook'ları eklendi. İlerideki yetki kontrolleri için kullanışlı.
 
 
-KURULUM
-=======
+can_refund NOTU
+===============
 
-Bu zip'i aç, içindeki 4 dosyayı projendeki AYNI yerlere kopyala:
+İade aksiyonu UI'sı henüz uygulamada YOK (sadece `refundPayment` server 
+action'ı var ama hiçbir yerde çağrılmıyor). Yani şu an can_refund 
+bayrağını kontrol edebilecek bir UI noktası bulunmuyor.
 
-  lib/actions/cashiers.ts          (verifyCashierPin'e expectedRole eklendi)
-  app/kasa/cashier-login.tsx       (expectedRole prop'u + role saklama)
-  app/kasa/kasa-app.tsx            (stale session koruması)
-  app/garson/waiter-app.tsx        (stale session koruması)
+İade UI'ı eklendiğinde useCanRefund() hook'u kullanılarak kontrol 
+ekleyebilirsin (zaten hazır).
+
+
+TUR 2C HALA GEÇERLİ
+====================
+
+Tur 2C'deki cashier vs waiter ayrımı YANLIŞ DEĞİLDİ — sadece test 
+ekibinin asıl şikayeti olan bug değildi. Yine de kalsın çünkü:
+
+  • Defense in depth — 2 farklı koruma katmanı var
+  • Stale session koruması (rolü değişmiş kasiyer otomatik logout)
+  • Server-side rol kontrolü (verifyCashierPin)
+  
+Yani Tur 2C dosyalarını GERİ ALMAYACAK, sadece Tur 2D ile bu 4 dosyayı
+EKLEYECEKSİN. Tur 2C dosyaları zaten push edildi.
+
+
+KURULUM (KOD TARAFI)
+=====================
+
+Bu zip'i aç, içindeki 2 dosyayı projendeki AYNI yerlere kopyala:
+
+  app/kasa/register-panel.tsx        (Gün Sonu butonu yetki kontrolü)
+  lib/cashier-session.tsx            (yetki helper hook'ları)
 
 
 PUSH
 ====
 
   git add .
-  git commit -m "fix: tur 2c - cashier role enforcement (bug #9)"
+  git commit -m "fix: tur 2d - cashier permission flag check (can_close_day)"
   git push origin main
 
 
 TEST SENARYOLARI
 ================
 
-1. Normal akış (geriye uyumluluk):
-   • Kasiyer oluştur (role='cashier'), kasada PIN ile gir → çalışmalı
-   • Garson oluştur (role='waiter'), garsonda PIN ile gir → çalışmalı
-   • Both rolünde biri her ikisinde de girebilmeli
+1. Tam yetkili kasiyer:
+   • Kasiyer oluştururken "Gün kapatır" toggle AÇIK
+   • Kasada "GÜN SONU OLUŞTUR VE İNDİR" butonu görünür ✅
 
-2. Yetkisiz erişim engelleme:
-   • Garson hesabıyla kasaya gir denemesi → "Bu hesabın kasa yetkisi yok"
-   • Kasiyer hesabıyla garsona gir denemesi → "Bu hesabın garson yetkisi yok"
+2. Yetkisiz kasiyer:
+   • Kasiyer oluştururken "Gün kapatır" toggle KAPALI
+   • Kasada kilit ikonu + "Gün Sonu Yetkisi Yok" mesajı görünür ✅
+   • Buton görünmediği için tıklanamaz ✅
 
-3. Stale session:
-   • Kasiyer A 'cashier' rolünde kasaya girdi
-   • Admin A'nın rolünü 'waiter' yaptı
-   • A'nın tarayıcısında sayfa yenilendiğinde → otomatik logout, login ekranı
+3. Yetkilerin değiştirildiği senaryo:
+   • Kasiyer giriş yapmış, "Gün kapatır" yetkisi var
+   • Admin yetkiyi geri alır
+   • Kasiyer aynı sekmeyi yeniler → kilit ikonu görünür
+     (çünkü tekrar verifyCashierPin yapılırsa yeni yetki bayrakları
+     localStorage'a yazılır)
 
 
-ÖZET — 12 BUG'IN HEPSİ ÇÖZÜLDÜ! 🎉
+12 BUG ÖZETİ — TÜM HEPSİ ÇÖZÜLDÜ ✅
 
-Tur 1: #1, #2, #3, #4+#7, #11, #12  (6 bug)
+Tur 1:  #1, #2, #3, #4+#7, #11, #12  (6 bug)
 Tur 2A: #6, #8                        (2 bug)
 Tur 2B: #5a, #5b, #10                 (3 bug)
-Tur 2C: #9                            (1 bug)
+Tur 2C: #9 (rol ayrımı - yan koruma)  (alt katman)
+Tur 2D: #9 (yetki bayrakları - asıl)  (üst katman)
 ─────────────────────────────────────
-TOPLAM: 12/12 ✅
+TOPLAM: 12/12

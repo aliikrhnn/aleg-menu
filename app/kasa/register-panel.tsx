@@ -266,6 +266,11 @@ function RegisterContent({
   }, [loadSession, loadReport]);
 
   function handleOpenWizard() {
+    // Defansif yetki kontrolü — buton zaten gizli ama yine de kontrol
+    if (!cashier?.can_close_day) {
+      toast.error('Gün sonu yetkin yok');
+      return;
+    }
     setWizardOpen(true);
   }
 
@@ -1971,30 +1976,64 @@ function RegisterContent({
                 13. BÜYÜK PDF CTA
                 ======================================================== */}
             <div className="pt-4">
-              <button
-                onClick={handleOpenWizard}
-                className="w-full h-14 rounded-[12px] font-semibold transition-all hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-3"
-                style={{
-                  background: 'var(--ink)',
-                  color: 'var(--paper)',
-                  fontFamily: 'var(--f-mono)',
-                  letterSpacing: '0.1em',
-                  fontSize: 14,
-                }}
-              >
-                <span style={{ fontSize: 18 }}>◳</span>
-                <span>GÜN SONU OLUŞTUR VE İNDİR</span>
-              </button>
-              <p
-                className="text-center mt-3 text-xs"
-                style={{
-                  color: 'var(--ink-3)',
-                  fontFamily: 'var(--f-serif)',
-                  fontStyle: 'italic',
-                }}
-              >
-                Önce göz at, sonra PDF olarak indir.
-              </p>
+              {cashier?.can_close_day ? (
+                <>
+                  <button
+                    onClick={handleOpenWizard}
+                    className="w-full h-14 rounded-[12px] font-semibold transition-all hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-3"
+                    style={{
+                      background: 'var(--ink)',
+                      color: 'var(--paper)',
+                      fontFamily: 'var(--f-mono)',
+                      letterSpacing: '0.1em',
+                      fontSize: 14,
+                    }}
+                  >
+                    <span style={{ fontSize: 18 }}>◳</span>
+                    <span>GÜN SONU OLUŞTUR VE İNDİR</span>
+                  </button>
+                  <p
+                    className="text-center mt-3 text-xs"
+                    style={{
+                      color: 'var(--ink-3)',
+                      fontFamily: 'var(--f-serif)',
+                      fontStyle: 'italic',
+                    }}
+                  >
+                    Önce göz at, sonra PDF olarak indir.
+                  </p>
+                </>
+              ) : (
+                <div
+                  className="w-full rounded-[12px] px-5 py-4 flex items-center gap-3"
+                  style={{
+                    background: 'var(--paper-2)',
+                    border: '1px dashed var(--line)',
+                    color: 'var(--ink-3)',
+                  }}
+                >
+                  <span style={{ fontSize: 18 }}>🔒</span>
+                  <div className="flex-1">
+                    <div
+                      className="text-[12px] uppercase mb-0.5"
+                      style={{
+                        fontFamily: 'var(--f-mono)',
+                        fontWeight: 700,
+                        letterSpacing: '0.12em',
+                        color: 'var(--ink-2)',
+                      }}
+                    >
+                      Gün Sonu Yetkisi Yok
+                    </div>
+                    <p
+                      className="text-[12px]"
+                      style={{ fontFamily: 'var(--f-serif)', fontStyle: 'italic' }}
+                    >
+                      Bu işlem için yetkili bir kasiyere geç.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </>
         )}

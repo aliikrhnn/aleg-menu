@@ -216,3 +216,19 @@ export function useCashierSession(): Ctx {
   if (!ctx) throw new Error('useCashierSession must be used within CashierSessionProvider');
   return ctx;
 }
+
+// ============================================================
+// Yetki yardımcıları — Bug #9 fix kapsamında
+// ============================================================
+
+/** Kasiyerin gün sonu alma yetkisi var mı? */
+export function useCanCloseDay(): boolean {
+  const { cashier } = useCashierSession();
+  return !!cashier?.can_close_day;
+}
+
+/** Kasiyerin iade alma yetkisi var mı? */
+export function useCanRefund(): boolean {
+  const { cashier } = useCashierSession();
+  return !!cashier?.can_refund;
+}
