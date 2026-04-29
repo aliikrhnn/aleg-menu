@@ -986,7 +986,6 @@ export function KasaBoard({ initialOrders, businessId }: Props) {
             setRefreshKey((k) => k + 1);
           }}
           quickSale
-          hideOnAccount
         />
       )}
 

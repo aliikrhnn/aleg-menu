@@ -1530,6 +1530,7 @@ export function MenuView({
         items={cartItemsForDrawer}
         total={cartTotal}
         businessId={business.id}
+        businessSlug={business.slug}
         tableId={qrTable?.id || null}
         tableName={qrTable?.name || null}
         onQtyChange={handleQtyChange}

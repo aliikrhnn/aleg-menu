@@ -1,85 +1,105 @@
-ALEG TUR 2A — Bug #6 + #8 fix paketi
-=====================================
+ALEG TUR 2B — Bug #5 + #10 fix paketi
+======================================
 
-Bu paket 2 bug'ı çözer:
+Bu paket 3 bug'ı çözer:
 
-✅ #6 — Gün sonu PDF saat grafik kötü görünüyor
-✅ #8 — Yazıcı agent ZIP indirme + güzel kurulum modal'ı
+✅ #5a — Müşteri telefon ekranında sipariş takibi (yeni özellik)
+✅ #5b — Müşteri ürün değerlendirme (yeni özellik, reviews tablosu mevcut)
+✅ #10 — Kasa hızlı satışta cari ödeme
+
+KALAN: #9 (yetkisiz kasiyer kasa erişimi) — replication adımları lazım
 
 
 KURULUM (kod tarafı)
 --------------------
 
-Bu zip'i aç, içindeki 2 dosyayı projendeki AYNI yerlere kopyala (üstüne yaz):
+Bu zip'i aç, içindeki dosyaları projendeki AYNI yerlere kopyala (üstüne yaz):
 
-  lib/utils/z-report-pdf.ts                                  (bug #6)
-  app/panel/(shell)/yazicilar/tabs/advanced-tab.tsx          (bug #8)
-
-
-ÖNEMLİ — AGENT ZIP DOSYASINI KOY (#8 için)
--------------------------------------------
-
-UI'da "Agent ZIP indir" butonu eklendi, ama dosyanın kendisi senin
-bilgisayarında. Şunu yap:
-
-  1. Mevcut "aleg-printer-agent.zip" dosyanı bul
-     (proje haricinde, geliştirme klasöründe olabilir)
-
-  2. Projenin içine kopyala:
-     C:\Users\aliik\OneDrive\Desktop\aleg-starter\public\downloads\
-     
-     (downloads klasörü yoksa oluştur)
-
-  3. Dosya adı tam olarak "aleg-printer-agent.zip" olmalı
-  
-  4. Eğer aleg-printer-agent.zip dosyası SENDE DE YOKSA:
-     UI çalışır ama indir butonuna tıklanınca 404 verir.
-     Önce ZIP'i hazırla, sonra UI'yi push et.
+  lib/actions/orders.ts                                         (#5a - getOrderTracking eklendi)
+  app/menu/[slug]/cart-drawer.tsx                               (#5a - "Siparişi takip et" butonu)
+  app/menu/[slug]/menu-view.tsx                                 (#5a - businessSlug prop geçişi)
+  app/menu/[slug]/siparis/[orderId]/page.tsx                    (#5a + #5b - YENİ DOSYA)
+  app/menu/[slug]/siparis/[orderId]/tracking-client.tsx         (#5a + #5b - YENİ DOSYA)
+  app/kasa/kasa-board.tsx                                       (#10 - hideOnAccount kaldırıldı)
 
 
 DEĞİŞİKLİK ÖZETİ
 ================
 
-#6 — PDF saat grafik
---------------------
-ESKİ: Sadece sipariş olan saatler bar olarak çiziliyordu — tek bar
-      tüm canvas'ı kaplıyor, boş gibi görünüyordu.
-
-YENİ: 
-  - İş saatleri aralığını otomatik tespit ediyor (en erken-1 → en geç+1)
-  - Eğer 7 saatten az ise ortalayıp ±4 saat gösteriyor (görsel denge)
-  - Boş saatler ince gri çizgi olarak görünüyor (referans)
-  - Aktif saatler bar olarak, peak hour vurgulanmış
-  
-Sonuç: Tek bir 13:00 bar yerine, örneğin 09:00-17:00 aralığında
-       bütün saatler — sadece olanlar dolu, gerisi boş çizgi.
-
-
-#8 — Yazıcı Agent kurulum modal
--------------------------------
-ESKİ: "Kurulum rehberi" tıklayınca toast.error pop-up'ı çıkıyordu
-      (dağınık metin, indirme yok, yapışkan değil)
+#5a — Müşteri sipariş takibi
+----------------------------
+ESKİ: Müşteri sipariş verdi, "#42" kodunu gördü, hepsi bu. Siparişin
+      durumu (alındı/hazırlanıyor/hazır/teslim) takip edilemiyordu.
 
 YENİ:
-  - Tıklayınca güzel bir modal açılıyor (4 adımlı kurulum)
-  - "Agent ZIP indir" butonu var (link: /downloads/aleg-printer-agent.zip)
-  - İşletme ID + Supabase URL kopyalanabilir kart olarak gösterilyor
-  - Service Role Key için uyarı kartı (Supabase'den alınmalı)
-  - "Henüz agent kurulmamış" empty state'inde de "Agent'ı kur" CTA'sı
+  • Sepet success ekranına "Siparişi takip et" butonu eklendi
+  • Yeni route: /menu/[slug]/siparis/[orderId]
+  • 4 adımlı progress bar (alındı → hazırlanıyor → hazır → teslim)
+  • Aktif adım vurgulanır (pulse animasyonu)
+  • 5 saniyede bir otomatik güncelleme (polling)
+  • Sipariş kalemleri + toplam görünür
+  • İptal edilmiş siparişler için ayrı durum kartı
+  • Brutalist Spice tasarım dili — italic serif, mono eyebrow
+
+
+#5b — Müşteri ürün değerlendirme
+--------------------------------
+ESKİ: Reviews tablosu vardı, panel arayüzü vardı, ama müşteri telefondan
+      değerlendirme yapamıyordu — UI yoktu.
+
+YENİ:
+  • Sipariş "delivered" olunca takip ekranında değerlendirme formu açılır
+  • 5 yıldızlı interactive rating (hover efekti)
+  • İsteğe bağlı yorum, ad, telefon
+  • submitReview server action'ı zaten vardı, sadece UI bağlandı
+  • Aynı sipariş için tekrar değerlendirme engelleniyor (server tarafı + UI)
+  • Submit edilince teşekkür mesajı
+
+
+#10 — Hızlı satışta cari ödeme
+------------------------------
+ESKİ: Hızlı satış ekranında Nakit / Kart / İndirim / Parçalı butonları
+      vardı, ama Cari (on_account) butonu kasten gizliyordu (hideOnAccount).
+
+YENİ:
+  • Tek satır değişiklik: kasa-board.tsx satır 989 - "hideOnAccount" kaldırıldı
+  • Hızlı satışta artık 3 ödeme yöntemi: Nakit / Kart / Cari
+  • Cari seçilince zaten mevcut olan CustomerPicker modal açılıyor
+  • Müşteri seçimi sonrası borç cari hesaba yazılıyor
+  • Gün sonu raporunda görünür (zaten çalışan akış)
 
 
 PUSH
 ----
 
   git add .
-  git commit -m "fix: tur 2a - PDF hourly chart + agent setup modal"
+  git commit -m "fix: tur 2b - order tracking, reviews, on-account quick sale"
   git push origin main
 
 
-KALAN BUG'LAR (TUR 2B'ye)
--------------------------
+KALAN BUG (#9)
+==============
 
-❓ #5a — Müşteri sipariş takibi (yeni özellik, ~1.5h)
-❓ #5b — Müşteri ürün değerlendirme (~1h)
-❓ #10 — Kasa hızlı satışta cari ödeme (~2h)
-❓ #9  — Yetki bypass (replication adımı netleşmeli)
+❓ #9 — Yetkisi olmayan kasiyer kasa kısmındaki kasaya girebiliyor
+
+Bunu çözmek için önce nasıl reproduce edilebileceğini öğrenmem lazım:
+
+  • Kasiyer rolü 'cashier' iken giriş yapıyor, sonra rolü 'waiter'
+    yapılıyor mu? Eski session ile devam ediyor mu?
+  • Yoksa direkt rol filtresi atlanıyor mu?
+  • PIN'siz kasiyer eklemek mümkün mü?
+
+Test ekibinden tam adımları al, ben de fix'leyeyim.
+
+
+YENİ DOSYA YAPISI
+=================
+
+app/menu/[slug]/
+├── cart-drawer.tsx        (güncellendi)
+├── menu-view.tsx          (güncellendi)
+├── siparis/               (YENİ KLASÖR)
+│   └── [orderId]/         (YENİ KLASÖR)
+│       ├── page.tsx       (YENİ DOSYA - server component)
+│       └── tracking-client.tsx  (YENİ DOSYA - client component)
+└── ... (diğerleri değişmedi)

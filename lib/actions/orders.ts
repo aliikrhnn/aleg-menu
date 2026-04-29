@@ -283,3 +283,129 @@ export async function getOrderStatus(
     };
   }
 }
+
+// ============================================================
+// Müşteri Sipariş Takibi - tam detay (polling için)
+// ============================================================
+
+export type OrderTrackingItem = {
+  id: string;
+  product_name: string;
+  quantity: number;
+  unit_price: number;
+};
+
+export type OrderTrackingData = {
+  id: string;
+  order_no: string;
+  status: string; // received | preparing | ready | delivered | cancelled
+  order_type: string;
+  total: number;
+  customer_name: string | null;
+  table_name: string | null;
+  items: OrderTrackingItem[];
+  created_at: string;
+  business: {
+    id: string;
+    name: string;
+    slug: string;
+  };
+  has_review: boolean;
+};
+
+export async function getOrderTracking(
+  orderId: string,
+  businessSlug: string
+): Promise<{
+  success: boolean;
+  data?: OrderTrackingData;
+  error?: string;
+}> {
+  try {
+    if (!orderId || orderId.length < 8) {
+      return { success: false, error: 'Geçersiz sipariş kodu' };
+    }
+
+    const admin = createAdminClient();
+
+    // Order çek
+    const { data: order, error: orderErr } = await admin
+      .from('orders')
+      .select(
+        'id, status, order_type, total, customer_name, business_id, table_id, created_at'
+      )
+      .eq('id', orderId)
+      .maybeSingle();
+
+    if (orderErr || !order) {
+      return { success: false, error: 'Sipariş bulunamadı' };
+    }
+
+    // Business kontrol — slug uyumlu mu (güvenlik)
+    const { data: business } = await admin
+      .from('businesses')
+      .select('id, name, slug')
+      .eq('id', order.business_id)
+      .maybeSingle();
+
+    if (!business || (business.slug as string) !== businessSlug) {
+      return { success: false, error: 'Sipariş bu işletmeye ait değil' };
+    }
+
+    // Masa adı
+    let tableName: string | null = null;
+    if (order.table_id) {
+      const { data: table } = await admin
+        .from('tables')
+        .select('name')
+        .eq('id', order.table_id)
+        .maybeSingle();
+      tableName = (table?.name as string) || null;
+    }
+
+    // Sipariş kalemleri
+    const { data: items } = await admin
+      .from('order_items')
+      .select('id, product_name, quantity, unit_price')
+      .eq('order_id', orderId)
+      .order('id', { ascending: true });
+
+    // Bu sipariş için review var mı (5b için)
+    const { data: existingReview } = await admin
+      .from('reviews')
+      .select('id')
+      .eq('order_id', orderId)
+      .maybeSingle();
+
+    return {
+      success: true,
+      data: {
+        id: order.id as string,
+        order_no: (order.id as string).slice(0, 8).toUpperCase(),
+        status: order.status as string,
+        order_type: order.order_type as string,
+        total: Number(order.total),
+        customer_name: (order.customer_name as string | null) || null,
+        table_name: tableName,
+        items: (items || []).map((i) => ({
+          id: i.id as string,
+          product_name: i.product_name as string,
+          quantity: Number(i.quantity),
+          unit_price: Number(i.unit_price),
+        })),
+        created_at: order.created_at as string,
+        business: {
+          id: business.id as string,
+          name: business.name as string,
+          slug: business.slug as string,
+        },
+        has_review: !!existingReview,
+      },
+    };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Hata',
+    };
+  }
+}

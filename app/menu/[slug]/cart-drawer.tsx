@@ -35,6 +35,7 @@ interface CartDrawerProps {
   items: CartDrawerItem[];
   total: number;
   businessId: string;
+  businessSlug: string;
   tableId?: string | null;
   tableName?: string | null;
   onQtyChange: (cartItemKey: string, newQty: number) => void;
@@ -68,6 +69,7 @@ const T = {
   },
   orderCode: { tr: 'Sipariş Kodu', en: 'Order code' },
   newOrder: { tr: 'Yeni sipariş ver', en: 'New order' },
+  trackOrder: { tr: 'Siparişi takip et', en: 'Track order' },
   clear: { tr: 'Sepeti boşalt', en: 'Clear cart' },
 };
 
@@ -79,6 +81,7 @@ export function CartDrawer({
   items,
   total,
   businessId,
+  businessSlug,
   tableId,
   tableName,
   onQtyChange,
@@ -92,6 +95,7 @@ export function CartDrawer({
 
   // Başarı ekranı
   const [successOrderNo, setSuccessOrderNo] = useState<string | null>(null);
+  const [successOrderId, setSuccessOrderId] = useState<string | null>(null);
 
   // ESC ile kapama (submit veya başarı ekranı sırasında değil)
   useEscapeKey(onClose, open && !submitting && !successOrderNo);
@@ -124,6 +128,7 @@ export function CartDrawer({
 
     if (result.success) {
       setSuccessOrderNo(result.order_no);
+      setSuccessOrderId(result.order_id);
       onClearCart();
     } else {
       setError(result.error);
@@ -137,11 +142,13 @@ export function CartDrawer({
     setName('');
     setPhone('');
     setSuccessOrderNo(null);
+    setSuccessOrderId(null);
     onClose();
   };
 
   const handleNewOrder = () => {
     setSuccessOrderNo(null);
+    setSuccessOrderId(null);
     setError(null);
     setNote('');
     setName('');
@@ -258,13 +265,28 @@ export function CartDrawer({
               </span>
             </div>
 
-            <button
-              onClick={handleNewOrder}
-              className="w-full py-3.5 rounded-[14px] bg-accent flex items-center justify-center gap-2 font-semibold text-sm"
-              style={{ color: '#FAF5EA' }}
-            >
-              {T.newOrder[lang]}
-            </button>
+            <div className="flex flex-col gap-2">
+              {successOrderId && (
+                <a
+                  href={`/menu/${businessSlug}/siparis/${successOrderId}`}
+                  className="w-full py-3.5 rounded-[14px] bg-accent flex items-center justify-center gap-2 font-semibold text-sm transition-opacity hover:opacity-90"
+                  style={{ color: '#FAF5EA' }}
+                >
+                  {T.trackOrder[lang]} →
+                </a>
+              )}
+              <button
+                onClick={handleNewOrder}
+                className="w-full py-3.5 rounded-[14px] flex items-center justify-center gap-2 font-semibold text-sm transition-colors"
+                style={{
+                  background: 'var(--card)',
+                  border: '1px solid var(--line)',
+                  color: 'var(--ink-2)',
+                }}
+              >
+                {T.newOrder[lang]}
+              </button>
+            </div>
           </div>
         ) : (
           <>
