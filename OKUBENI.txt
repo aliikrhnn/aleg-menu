@@ -1,118 +1,188 @@
-ALEG TUR 5B — Tema Sorunları Düzeltmesi
-=========================================
+ALEG TUR 6 — Basılı Menü Tasarımları
+=====================================
 
-İki kritik sorunu düzeltiyoruz:
-
-1. ❌ Tema kaydedilmiyordu, panel ve müşteri menüsü eskiye dönüyordu
-2. 🎨 Önizleme jenerik fake mockup'tı, gerçek müşteri menüsü değildi
-
-
-SORUN 1: KAYIT ÇALIŞMIYORDU
-============================
-
-Kök sebep: settings-manager.tsx'teki handleSave fonksiyonu
-updateBusinessSettings'e menu_theme alanını GÖNDERMİYORDU.
-Backend kabul ediyordu ama frontend göndermiyordu.
-
-Ek sebep: Cache invalidation eksikti. revalidatePath şunu çağırıyordu:
-  revalidatePath(`/menu/${businessId}`)
-Ama gerçek path /menu/${slug}. Yani cache hiç temizlenmiyordu.
-
-DÜZELTMELER:
-  ✅ handleSave artık menu_theme'i de updateBusinessSettings'e gönderiyor
-  ✅ Backend kayıttan sonra slug'ı çekip doğru path'i revalidate ediyor:
-       revalidatePath(`/menu/${slug}`)
-       revalidatePath(`/menu/${slug}`, 'layout')
+İşletme sahibi panelden 5 farklı şablon × 3 farklı boyut seçerek
+profesyonel basılı menü PDF/PNG indirebilir. Üstte ürünler ve
+fiyatlar, altta QR ile dijital menüye yönlendirme.
 
 
-SORUN 2: ÖNİZLEME GERÇEKÇİ DEĞİLDİ
-====================================
+5 ŞABLON
+========
 
-Eski ThemePreview: jenerik fake mockup (3 ürün hardcoded, browser bar
-mock vs.) — gerçek menüyü göstermiyordu.
+1. CLASSIC (Klasik Liste)
+   Brutalist Spice paleti (cream + ink + accent kırmızı)
+   Dot leaders ile geleneksel menü
+   Restoranlar için zamansız
 
-YENİ ÖNİZLEME:
-  • Gerçek müşteri menüsü iframe'de yükleniyor
-  • iPhone-style telefon mockup içinde (notch, status bar, gerçek
-    proporsiyon — 360x720 px)
-  • Tema değişince iframe otomatik yeniden yükleniyor
-  • Sağ panelde bilgi kartı (tema, vurgu rengi, URL)
-  • "Yeni sekmede aç" butonu → tam ekran inceleme
-  • İlk yüklemede spinner
+2. ELITE (Fine Dining)
+   Koyu zemin + gold accent + watermark
+   Geniş whitespace, Playfair Display
+   À la carte, lüks restoranlar
 
-NASIL ÇALIŞIYOR:
-  • Müşteri menüsü page.tsx artık ?preview_theme=elite&preview_accent=AB1234
-    parametrelerini destekliyor
-  • Bu parametre VARSA → DB'deki tema yerine bunlar kullanılır (sadece
-    önizleme için, DB değişmez)
-  • Bu parametre YOKSA → DB'den okunur (normal müşteri ziyareti)
-  • iframe src="/menu/{slug}?preview_theme=...&preview_accent=..."
-  • Tema değişince state güncelleniyor → iframe key bump → yeniden yükleniyor
+3. MODERN GRID
+   Beyaz + mint, kart sistem (2 sütun)
+   Inter + JetBrains Mono
+   Specialty kafe, brunch
+
+4. VINTAGE BISTRO
+   Eski Paris kafesi, krem + deep red
+   Köşeli QR çerçevesi, DM Serif Display
+   Bistro, şarküteri, pastane
+
+5. MINIMAL (Skandinav)
+   Çıplak, sadece tipografi
+   Sage tones, sadece Inter
+   Modern, sade konseptler
 
 
-PREVIEW URL ÖRNEĞİ
-==================
+3 BOYUT
+=======
 
-  /menu/aleg-cafe?preview_theme=elite&preview_accent=C9A961
+  • A4 Dikey  (210 × 297 mm)  — En yaygın, pano/çerçeve
+  • A5 Dikey  (148 × 210 mm)  — Kompakt masa üstü
+  • Pláka     (240 × 360 mm)  — Büyük masa menüsü
 
-Tema = Elit Restoran, accent = Gold (#C9A961). DB değişmedi,
-sadece bu URL'de görünüyor. Müşteri normal menüye girince
-hâlâ DB'deki tema görünüyor.
+
+SAYFA YAPISI
+============
+
+URL: /panel/menu-tasarim
+Sidebar: MENÜ → "Menü Tasarımı"
+
+Layout:
+  [Sol panel - 340px - kontroller]    [Sağ panel - canlı önizleme]
+   ┌────────────────────────┐         ┌─────────────────────────┐
+   │ Adım 1: Şablon         │         │                          │
+   │  • Klasik Liste ✓      │         │  [Tam ölçekli mini       │
+   │  • Elit                │         │   menü önizlemesi]       │
+   │  • Modern Grid         │         │                          │
+   │  • Vintage Bistro      │         │  Pencere boyutuna göre   │
+   │  • Minimal             │         │  otomatik scale ediliyor │
+   ├────────────────────────┤         │                          │
+   │ Adım 2: Boyut          │         │                          │
+   │  • A4 Dikey ✓          │         │                          │
+   │  • A5 Dikey            │         │                          │
+   │  • Pláka 24x36         │         │                          │
+   ├────────────────────────┤         │                          │
+   │ Adım 3: İndir          │         │                          │
+   │  [PDF olarak indir ↓]  │         │                          │
+   │  [PNG olarak indir ↓]  │         │                          │
+   └────────────────────────┘         └─────────────────────────┘
+
+
+VERİ AKIŞI
+==========
+
+  1. Server: getPrintableMenuData()
+     • İşletme bilgisi (ad, logo, slogan, adres, telefon, IG)
+     • Aktif kategoriler (sıralı)
+     • Aktif ürünler (kategorilere yerleştirilmiş)
+     • QR URL (https://{slug}.alegstudio.com)
+  
+  2. Client: 
+     • QRCode lib ile QR PNG dataURL üretilir
+     • PrintMenuDocument component'i şablon + boyut + qrDataUrl ile render
+     • Önizleme: docElement + scale ile küçük gösterim
+     • İndirme: html-to-image ile docElement → PNG dataURL
+                jsPDF ile PNG → PDF (gerçek mm boyutunda)
+
+
+ÖNEMLİ — PAKET KURULUMU
+========================
+
+Yeni dependency: html-to-image
+
+  npm install html-to-image
+
+(package.json'da zaten ekledim)
 
 
 KURULUM
 =======
 
-5 dosya (hepsi ÜZERİNE YAZ):
+ÖNCE npm install çalıştır (yeni paket için):
 
-  lib/actions/settings.ts
-  app/panel/(shell)/ayarlar/tabs/theme-tab.tsx
-  app/panel/(shell)/ayarlar/tabs/theme-preview.tsx
-  app/panel/(shell)/ayarlar/settings-manager.tsx
-  app/menu/[slug]/page.tsx
+  cd aleg-menu-main
+  npm install
+
+SONRA dosyaları kopyala:
+
+  YENİ:
+    lib/actions/printable-menu.ts
+    lib/printable-menu/templates.ts
+    lib/printable-menu/print-menu-document.tsx
+    app/panel/(shell)/menu-tasarim/page.tsx
+    app/panel/(shell)/menu-tasarim/client.tsx
+  
+  GÜNCELLEME:
+    components/panel/nav-config.ts (yeni nav öğesi)
+    package.json (html-to-image dep'i)
 
 
 PUSH
 ====
 
   git add .
-  git commit -m "fix: tur 5b - theme save + realistic phone preview iframe"
+  git commit -m "feat: tur 6 - printable menu designer (5 templates × 3 sizes)"
   git push origin main
 
 
 TEST
 ====
 
-[A] Kayıt çalışıyor mu:
-    1. Panel → Ayarlar → Menü Teması
-    2. "Elit Restoran" seç → Kaydet
-    3. Sayfa yenile (F5)
-    4. ✅ "Elit Restoran" hâlâ seçili kalmalı (DB'ye gitti)
-    5. {slug}.alegstudio.com'a git
-    6. ✅ Koyu tema + gold accent görünmeli
+[A] Boş işletme:
+    1. Hiç ürün yok
+    2. /panel/menu-tasarim aç
+    3. ✅ "Önce menüye ürün ekle" uyarısı
+    4. İndir butonları disabled
 
-[B] Canlı önizleme:
-    1. Panel → Ayarlar → Menü Teması
-    2. Önizleme bölümünde gerçek bir telefon mockup görmelisin
-    3. İçinde gerçek müşteri menün (kategoriler, ürünler vs.)
-    4. ✅ "Modern Cafe"ye tıkla → iframe yenilenmeli, beyaz/mint görünmeli
-    5. Vurgu rengi "Deep Red" → iframe yenilenmeli, butonlar kırmızı
-    6. "Yeni sekmede aç" → tam ekran preview
+[B] İlk yükleme:
+    1. Birkaç kategori + ürün var
+    2. /panel/menu-tasarim aç
+    3. ✅ Sol panelde 3 adım: Şablon, Boyut, İndir
+    4. Sağ panelde Klasik + A4 önizleme görünüyor
+    5. QR kod altta, ürünler ve fiyatlar üstte
 
-[C] Preview URL DB'yi değiştirmiyor:
-    1. Önizlemede tema değiştir AMA KAYDETME
-    2. {slug}.alegstudio.com aç
-    3. ✅ Hâlâ eski tema görünmeli (DB değişmedi)
+[C] Şablon değişimi:
+    1. "Elit" tıkla
+    2. ✅ Önizleme koyu temaya döner, gold accent, watermark
+    3. "Modern Grid" tıkla
+    4. ✅ Ürünler 2 sütun karta dönüşür
 
-[D] Cache temizliği:
-    1. Tema kaydet
-    2. {slug}.alegstudio.com aç → yeni tema görünmeli
-    3. Hard reload yapmadan görünür olmalı (Next revalidatePath)
+[D] Boyut değişimi:
+    1. "A5" seç
+    2. ✅ Önizleme küçülür, oran değişir
+    3. "Pláka 24x36" seç
+    4. ✅ Önizleme büyür, daha geniş layout
+
+[E] PDF indir:
+    1. "PDF olarak indir" tıkla
+    2. ✅ Buton "Hazırlanıyor…" yazıyor
+    3. Browser PDF dosyası indirir
+    4. Aç → tam doğru boyutta, profesyonel görünüm
+    5. Yazıcıya gönder → kağıda doğru basıyor
+
+[F] PNG indir:
+    1. "PNG olarak indir" tıkla
+    2. ✅ Yüksek çözünürlüklü PNG indirilir (3x pixelRatio)
+    3. Sosyal medyada paylaşılabilir
 
 
-NOT
-====
+TEKNİK NOT
+==========
 
-Tur 5'in temel akışı (5 tema, accent override, panel UI) zaten
-hazırdı — bu sadece düzeltme paketi. Migration ve menu-themes.ts
-yine gerekli, daha önce kurmadıysan onları da ekle.
+  • html-to-image: SVG/CSS'i pixel-perfect PNG'ye çevirir
+  • jsPDF: PNG'i mm cinsinden tam boyutlu PDF'e gömer
+  • pixelRatio: 3 → yüksek çözünürlük (yazıcı kalitesi)
+  • Önizleme dinamik scale: pencere boyutuna göre auto-fit
+  • Tüm tasarım React component'i — özelleştirilmesi kolay
+  • Fontlar: globals.css'te zaten yüklü (Tur 5'te eklendi)
+
+
+SIRADAKİ
+========
+
+Test edip onayladığında dashboard'daki "POS" rotasını kaldırma
+(Tur 4F'in tamamlanması) veya başka bir özellik konuşacağız.
+
+İyi testler!

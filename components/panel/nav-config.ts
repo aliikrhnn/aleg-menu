@@ -45,6 +45,7 @@ export const PANEL_NAV: PanelNavGroup[] = [
     items: [
       { id: 'menu', label: 'Menü', href: '/menu', icon: '⊟' },
       { id: 'variations', label: 'Varyasyonlar', href: '/menu/varyasyonlar', icon: '◇' },
+      { id: 'menu_design', label: 'Menü Tasarımı', href: '/menu-tasarim', icon: '◨' },
     ],
   },
   {
