@@ -457,3 +457,121 @@ export async function getOrderTracking(
     };
   }
 }
+
+// ============================================================
+// Müşteri "Siparişlerim" - localStorage'taki ID listesinden batch sorgu
+// ============================================================
+export type CustomerOrderSummary = {
+  id: string;
+  order_no: string;
+  status: string;
+  total: number;
+  created_at: string;
+  table_name: string | null;
+  order_type: string;
+  has_review: boolean;
+};
+
+/**
+ * Müşterinin localStorage'da tuttuğu sipariş ID'lerini batch olarak sorgular.
+ * Sadece businessSlug'a ait olanları döner (güvenlik).
+ * En yeni sipariş üstte.
+ */
+export async function getCustomerOrdersBatch(
+  orderIds: string[],
+  businessSlug: string
+): Promise<{
+  success: boolean;
+  orders?: CustomerOrderSummary[];
+  error?: string;
+}> {
+  try {
+    if (!orderIds || orderIds.length === 0) {
+      return { success: true, orders: [] };
+    }
+    // Limit — kötüye kullanım önleme
+    const safeIds = orderIds.slice(0, 50).filter((id) => {
+      // UUID formatı kontrolü
+      return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    });
+    if (safeIds.length === 0) {
+      return { success: true, orders: [] };
+    }
+
+    const admin = createAdminClient();
+
+    // Önce işletmeyi slug'a göre bul (güvenlik için)
+    const { data: business } = await admin
+      .from('businesses')
+      .select('id')
+      .eq('slug', businessSlug)
+      .maybeSingle();
+
+    if (!business) {
+      return { success: false, error: 'İşletme bulunamadı' };
+    }
+
+    // Sadece bu işletmeye ait siparişleri getir
+    const { data: rows, error } = await admin
+      .from('orders')
+      .select('id, status, total, created_at, table_id, order_type, business_id')
+      .in('id', safeIds)
+      .eq('business_id', business.id)
+      .order('created_at', { ascending: false });
+
+    if (error) return { success: false, error: error.message };
+    if (!rows || rows.length === 0) {
+      return { success: true, orders: [] };
+    }
+
+    // Masa adlarını topluca al
+    const tableIds = Array.from(
+      new Set(
+        rows
+          .map((r) => r.table_id as string | null)
+          .filter((v): v is string => !!v)
+      )
+    );
+    const tableNameMap = new Map<string, string>();
+    if (tableIds.length > 0) {
+      const { data: tables } = await admin
+        .from('tables')
+        .select('id, name')
+        .in('id', tableIds);
+      (tables || []).forEach((t) => {
+        tableNameMap.set(t.id as string, t.name as string);
+      });
+    }
+
+    // Hangi sipariş için review yapılmış?
+    const orderIdList = rows.map((r) => r.id as string);
+    const { data: reviews } = await admin
+      .from('reviews')
+      .select('order_id')
+      .in('order_id', orderIdList);
+    const reviewedSet = new Set(
+      (reviews || []).map((r) => r.order_id as string)
+    );
+
+    return {
+      success: true,
+      orders: rows.map((r) => ({
+        id: r.id as string,
+        order_no: (r.id as string).slice(0, 8).toUpperCase(),
+        status: r.status as string,
+        total: Number(r.total),
+        created_at: r.created_at as string,
+        table_name: r.table_id
+          ? tableNameMap.get(r.table_id as string) || null
+          : null,
+        order_type: r.order_type as string,
+        has_review: reviewedSet.has(r.id as string),
+      })),
+    };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Hata',
+    };
+  }
+}

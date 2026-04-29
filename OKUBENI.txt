@@ -1,143 +1,195 @@
-ALEG TUR 3C — Multi-order takip + Google yönlendirme debug
-============================================================
+ALEG TUR 3D — Müşteri ekranında "Siparişlerim" bölümü
+======================================================
 
-İki sorun:
+Müşteri menüsünde sürekli erişilebilir bir Siparişlerim paneli.
+Müşterinin verdiği TÜM siparişleri (birden fazla bile olsa) liste
+halinde gösterir, statüleri canlı kalır, tek tıkla takibe geçilebilir.
 
-  ✅ 1. Aynı masada birden fazla sipariş olduğunda karışıyordu
-        → Müşteri bir siparişi takip ederken aynı masaya verilen DİĞER
-          siparişleri de görüp aralarında geçiş yapabilecek
+
+YAPISAL ÖZET
+============
+
+Müşteri her sipariş verdiğinde sipariş ID'si localStorage'a kaydoluyor:
   
-  ✅ 2. 4-5 yıldızda Google'a yönlendirmiyordu
-        → Cache stratejisi sadeleştirildi (settings her zaman taze)
-        → Console.log eklendi - sebebi tespit etmek için
+  key: aleg-customer-orders-{slug}
+  value: [{ id, addedAt }, ...]
+  
+  • İşletme bazlı (her kafenin kendi listesi var)
+  • Maksimum 30 entry (kotayı zorlamasın)
+  • 7 gün TTL (eski siparişler temizleniyor)
+  • Tarayıcı/cihaz bazlı (sunucu tarafında müşteri kimliği yok)
+
+Mount'ta her tracking sayfası açıldığında da ID listeye ekleniyor —
+böylece müşteri direkt URL ile gelmiş olsa bile listede görünür.
 
 
-SORUN 1 — Multi-order karışıklık
-=================================
+KULLANICI DENEYİMİ
+==================
 
-ESKİ DAVRANIŞ:
-  • Her sipariş kendi UUID URL'inde: /menu/[slug]/siparis/[orderId]
-  • Aynı masaya 2 sipariş veren müşteri 1. siparişin URL'ini takipte tutsa
-    bile 2. siparişin durumunu o ekranda görmüyordu
-  • Garson 1. siparişi teslim edince ekran "delivered + review" gösteriyor,
-    2. sipariş hâlâ hazırlanıyor olduğu halde müşteri için kayboluyordu
-
-YENİ DAVRANIŞ:
-  • getOrderTracking artık aynı masaya verilen son 6 saatlik tüm
-    siparişleri "related_orders" olarak da döndürüyor
-  • Tracking ekranında sipariş kalemleri altında "Bu masadaki diğer 
-    siparişlerin" bloğu görünüyor:
+[A] Sepet doluyken (cartCount > 0):
     
-      📋 #A1B2C3D4  ALINDI       5 dk · ₺145
-      🍳 #E5F6A7B8  HAZIRLANIYOR  2 dk · ₺85
-      ✓  #C9D0E1F2  TESLİM        1 sa · ₺220
-      
-  • Her satır o siparişin kendi takip URL'ine link
-  • Status renkli (alındı=ink, hazırlanıyor=accent, hazır/teslim=olive,
-    iptal=danger)
-  • Tek aktif sipariş varsa blok hiç görünmüyor (gereksiz UI yok)
+    ┌─────────────────────────────────────┐
+    │  📋 SİPARİŞLERİM           (3) →    │  ← Mini bar (cart üstünde)
+    ├─────────────────────────────────────┤
+    │  3  Sepeti görüntüle      ₺145,00   │  ← Ana cart button
+    └─────────────────────────────────────┘
+
+[B] Sepet boşken (cartCount === 0):
+    
+    Sağ alt köşede floating circular pill button:
+    
+        ┌─────────────────────┐
+        │  📋  SİPARİŞLERİM (2) │
+        └─────────────────────┘
+
+[C] Siparişlerim paneline tıklayınca (modal):
+    
+    ┌──────────────────────────────────┐
+    │ 3 sipariş            [↻] [×]      │
+    │ Siparişlerim                       │  ← italic serif başlık
+    ├──────────────────────────────────┤
+    │ 🍳  HAZIRLANIYOR · 2 dk          │
+    │     Masa 5  · ₺85,00              │
+    │     #A1B2C3D4         [TAKIP →] │
+    │                                    │
+    │ ✓   TESLİM EDİLDİ · 15 dk        │
+    │     Masa 5  · ₺145,00            │
+    │     #E5F6A7B8     [DEĞERLENDIR →]│  ← review yapılmamışsa CTA
+    │                       [Listeden çıkar]│
+    │                                    │
+    │ ⊘   İPTAL · 1 sa                  │
+    │     Paket  · ₺60,00              │
+    │     #C9D0E1F2         [TAKIP →] │
+    │                       [Listeden çıkar]│
+    └──────────────────────────────────┘
 
 
-SORUN 2 — Google yönlendirme çalışmıyor (debug)
-================================================
+YENI DOSYALAR
+=============
 
-OLASI NEDENLER:
-  [a] Panel → Yazıcılar & Fiş → Fiş Tasarımı'nda
-      "Akıllı yönlendirme" toggle KAPALI
-  [b] Google Place ID alanı BOŞ (toggle açık olsa bile)
-  [c] Browser eski JavaScript bundle'ı cache'lemiş
-  [d] Tur 3B'den kalan localStorage cache eski formatta
+  lib/customer-orders.ts                  YENİ
+    • localStorage helper'ları
+    • addCustomerOrder(slug, orderId)
+    • getCustomerOrderIds(slug)
+    • removeCustomerOrder(slug, orderId)
+    • clearCustomerOrders(slug)
+    • 7 gün TTL otomatik temizliği
 
-İLERİ ALMAK İÇİN:
-  • Müşteri telefonunda takip ekranını aç
-  • Yıldıza tıkla
-  • Browser console'una bak — şu log'u göreceksin:
-  
-    [Aleg Review] {
-      stars: 5,
-      smartRedirect: true,    ← false ise Panel'de toggle kapalı
-      hasPlaceId: true,        ← false ise Google Place ID girilmemiş
-      placeId: 'ChIJ...'
-    }
-  
-  • smartRedirect false ise → Panel'de toggle aç
-  • hasPlaceId false ise → Google Place ID gir
-  • İkisi de true ama yine yönlendirmiyorsa → screenshot al, console
-    log'u paylaş
+  app/menu/[slug]/my-orders-panel.tsx     YENİ
+    • Müşteri sipariş listesi modal'ı
+    • 8 saniyede bir auto-refresh (canlı statü)
+    • OrderRow component (her satır)
+    • Empty state, loading, error
+    • Brutalist Spice tasarımı
 
-CACHE TEMİZLEME:
-  • Tur 3B'de localStorage'a TÜM order objesi kaydoluyordu (review settings
-    olmadan kayıt edilmiş eski cache'ler smart_redirect=undefined dönüyor
-    olabilir)
-  • Tur 3C'de cache stratejisi değiştirildi:
-    - Eski key: aleg-order-{uuid}      → JSON.stringify(tüm obje)
-    - Yeni key: aleg-order-status-{uuid}  → sadece status string
-  • Eski cache'ler ilk açılışta otomatik temizleniyor
-  • Settings (review_smart_redirect, google_place_id) ARTIK CACHE'TE YOK,
-    her zaman server'dan geliyor
-  
-  Yine de browser cache sorunluysa müşteri telefonundan:
-    • Ayarlar → Tarayıcı → Site verilerini temizle
-    • veya Hard refresh: iOS Safari'de Settings → Safari → Clear History
+
+GÜNCELLENEN DOSYALAR
+====================
+
+  lib/actions/orders.ts
+    • CustomerOrderSummary tipi YENİ
+    • getCustomerOrdersBatch(orderIds, slug) YENİ — batch sorgu
+    • UUID validasyonu, businessSlug guard, 50 entry limit
+
+  app/menu/[slug]/cart-drawer.tsx
+    • Sipariş başarılı olunca addCustomerOrder() çağrılıyor
+    • Müşteri sipariş verir vermez listeye düşer
+
+  app/menu/[slug]/menu-view.tsx
+    • myOrdersOpen, myOrdersCount state'leri
+    • Floating "Siparişlerim" mini bar (cart üstünde)
+    • Cart yokken sağ alt floating circular button
+    • MyOrdersPanel mount
+
+  app/menu/[slug]/siparis/[orderId]/tracking-client.tsx
+    • Mount'ta addCustomerOrder() — direkt URL ile gelen müşteri için
+    • RelatedOrderSummary import'u zaten vardı (Tur 3C)
+
+  app/globals.css
+    • menu-myorders-in keyframe YENİ — spring entrance
 
 
 KURULUM
 =======
 
-2 dosyayı kopyala:
+7 dosyayı kopyala (1 yeni + 6 güncelleme):
 
-  lib/actions/orders.ts
-    • RelatedOrderSummary tipi eklendi
-    • OrderTrackingData'ya related_orders alanı
-    • Aynı masada son 6 saatlik diğer siparişler getiriliyor
+  YENİ DOSYALAR (önce bunları oluştur):
+    lib/customer-orders.ts
+    app/menu/[slug]/my-orders-panel.tsx
 
-  app/menu/[slug]/siparis/[orderId]/tracking-client.tsx
-    • Cache: sadece status (full obje değil)
-    • RelatedOrderCard component'i (yeni)
-    • "Bu masadaki diğer siparişlerin" bloğu
-    • handleStarPick'e console.log eklendi (debug)
+  GÜNCELLEMELER (üzerine yaz):
+    lib/actions/orders.ts
+    app/menu/[slug]/cart-drawer.tsx
+    app/menu/[slug]/menu-view.tsx
+    app/menu/[slug]/siparis/[orderId]/tracking-client.tsx
+    app/globals.css
 
 
 PUSH
 ====
 
   git add .
-  git commit -m "feat: tur 3c - multi-order tracking, smart redirect debug logs"
+  git commit -m "feat: tur 3d - my orders panel for customer menu"
   git push origin main
 
 
 TEST SENARYOLARI
 ================
 
-[A] Multi-order:
-    1. Aynı masaya farklı 2 sipariş ver (A=2 ürün, B=3 ürün)
-    2. A'nın takip URL'ini aç
-    3. ✅ "Bu masadaki diğer siparişlerin" altında B görünmeli
-    4. B'ye tıkla → B'nin takip ekranı açılmalı
-    5. Orada da "Bu masadaki diğer siparişlerin" altında A olmalı
-    6. Garson A'yı teslim et → A'nın ekranı review formuna geçer
-    7. B'nin ekranında A "Teslim ✓" olarak görünür ama B hala hazırlanıyor
+[A] İlk kullanım:
+    1. Müşteri menüye girer (henüz sipariş yok)
+    2. ✅ Hiçbir "Siparişlerim" butonu görünmemeli
+    3. Bir sipariş ver
+    4. Cart drawer kapatılınca sağ alt'ta "📋 SİPARİŞLERİM (1)" görünmeli
 
-[B] Google yönlendirme:
-    1. Panel → Yazıcılar & Fiş → Fiş Tasarımı
-    2. "Akıllı yönlendirme" toggle AÇ
-    3. Google Place ID gir (örn: ChIJN1t_tDeuEmsRUsoyG83frY4)
-    4. Kaydet
-    5. Müşteri sipariş ver, delivered durumuna gelsin
-    6. Takip ekranında 5 yıldıza tıkla
-    7. Console'da "[Aleg Review]" log'u kontrol et
-    8. ✅ "Bunu duymak harika!" + Google butonu görünmeli
-    9. Google butonuna tıkla → yeni sekmede Google review sayfası
+[B] Birden fazla sipariş:
+    1. 3 ayrı sipariş ver (aralarda biraz bekle)
+    2. ✅ Sayaç (3) olmalı
+    3. Panele tıkla → 3 sipariş listede, en yeni üstte
+    4. Statüleri renkli (alındı=gri, hazırlanıyor=accent, hazır/teslim=olive)
 
-[C] Düşük yıldız (1-3):
-    1. Aynı sipariş için 2 yıldıza tıkla
-    2. ✅ Direkt yorum formu açılmalı (Google ekranı atlanıyor)
-    3. "Ne oldu?" prompt'u görünmeli
-    4. Yorum yaz, gönder
-    5. ✅ Sadece panele düşmeli, Google'a yönlendirme YOK
+[C] Canlı statü güncellemesi:
+    1. Panel açık, sipariş "hazırlanıyor"
+    2. Mutfakta "hazır" işaretle
+    3. ✅ 8 saniye içinde panelde "🔔 HAZIR" görünmeli (poll)
+
+[D] Sepet doluyken görünüm:
+    1. Aktif siparişin var (1+)
+    2. Yeni bir ürün sepete ekle
+    3. ✅ Mini bar (📋 SİPARİŞLERİM) cart button üstünde
+    4. ✅ Cart button da görünüyor altta
+
+[E] Direkt URL ile gelme:
+    1. Müşteriye /menu/{slug}/siparis/{orderId} linkini at
+    2. O linki aç
+    3. Menüye geri dön
+    4. ✅ Siparişlerim listesinde o sipariş otomatik görünmeli
+
+[F] Listeden çıkarma:
+    1. Teslim edilmiş bir sipariş listede
+    2. "Listeden çıkar" linkine tıkla
+    3. ✅ Liste güncellenmeli, sayaç düşmeli
+    4. Sipariş DB'de duruyor (sadece müşterinin görüş listesinden çıkıyor)
+
+[G] 7 günden eski siparişler:
+    1. localStorage'da 8 gün önceki entry var
+    2. Menü açıldığında otomatik filtrelenir
+    3. ✅ Listede görünmez
+
+
+GÜVENLİK
+========
+
+• getCustomerOrdersBatch sadece businessSlug'a ait siparişleri döndürür
+• Başka işletmenin sipariş ID'si gönderilse de filtrelenir
+• UUID format validasyonu var (kötü niyetli string'ler reddedilir)
+• Maksimum 50 ID per call (DoS önlemi)
+• localStorage cihaz/tarayıcı bazlı — başka müşteri başkasının siparişini
+  görmüyor (çünkü ID'leri bilmiyor)
 
 
 SIRADAKİ
 ========
 
-Bu paketin testi onaylandığında dashboard güzelleştirmesine geçeceğim.
+Bu paketin testi onaylandığında dashboard güzelleştirmesine geçiyoruz.

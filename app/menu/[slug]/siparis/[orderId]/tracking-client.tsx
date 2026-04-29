@@ -8,6 +8,7 @@ import {
   type RelatedOrderSummary,
 } from '@/lib/actions/orders';
 import { submitReview } from '@/lib/actions/reviews';
+import { addCustomerOrder } from '@/lib/customer-orders';
 
 type Lang = 'tr' | 'en';
 
@@ -157,6 +158,12 @@ export function TrackingClient({
     }
   });
   const [lang] = useState<Lang>('tr'); // Default tr; menüden lang param gelmez
+
+  // Mount'ta bu sipariş ID'sini "Siparişlerim" listesine ekle (idempotent)
+  // Müşteri direkt linkle gelmiş olabilir, bunu da listeye katalım
+  useEffect(() => {
+    addCustomerOrder(businessSlug, orderId);
+  }, [businessSlug, orderId]);
 
   // Her status değişikliğini localStorage'a kaydet
   useEffect(() => {

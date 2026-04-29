@@ -11,6 +11,8 @@ import {
 import { useEscapeKey } from '@/lib/hooks/use-escape-key';
 import type { LocalizedText } from '@/types/database';
 import { CartDrawer } from './cart-drawer';
+import { MyOrdersPanel } from './my-orders-panel';
+import { getCustomerOrderIds } from '@/lib/customer-orders';
 import {
   submitWaiterCall,
   getPublicCallButtons,
@@ -191,6 +193,27 @@ export function MenuView({
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartDrawerOpen, setCartDrawerOpen] = useState(false);
   const [toast, setToast] = useState<{ name: string; ts: number } | null>(null);
+
+  // Siparişlerim paneli (müşteri tarafı sipariş takibi)
+  const [myOrdersOpen, setMyOrdersOpen] = useState(false);
+  const [myOrdersCount, setMyOrdersCount] = useState(0);
+
+  // Mount'ta ve panel açılıp kapandığında sipariş sayısını güncelle
+  useEffect(() => {
+    setMyOrdersCount(getCustomerOrderIds(business.slug).length);
+  }, [business.slug, myOrdersOpen, cartDrawerOpen]);
+
+  // Storage event'iyle başka sekmeler de senkron olsun + 30sn'de bir poll
+  useEffect(() => {
+    const updateCount = () =>
+      setMyOrdersCount(getCustomerOrderIds(business.slug).length);
+    window.addEventListener('storage', updateCount);
+    const interval = setInterval(updateCount, 30000);
+    return () => {
+      window.removeEventListener('storage', updateCount);
+      clearInterval(interval);
+    };
+  }, [business.slug]);
 
   // Sepet butonu pozisyonu - arc animasyonu için
   const cartButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -1467,6 +1490,54 @@ export function MenuView({
       {/* ============ FLOATING CART BUTTON ============ */}
       {cartCount > 0 && (
         <div className="fixed left-0 right-0 bottom-0 z-50 px-4 pb-4 pt-2 bg-gradient-to-t from-paper to-transparent">
+          {/* Siparişlerim mini bar - cart üstünde */}
+          {myOrdersCount > 0 && (
+            <button
+              onClick={() => setMyOrdersOpen(true)}
+              className="w-full h-10 mb-2 rounded-[12px] flex items-center justify-between px-3.5 transition-all active:scale-[0.99]"
+              style={{
+                background: 'var(--card)',
+                border: '1px solid var(--line)',
+                boxShadow: '0 4px 12px rgba(42,31,24,0.06)',
+                animation:
+                  'menu-myorders-in 380ms cubic-bezier(0.34, 1.56, 0.64, 1)',
+              }}
+            >
+              <span className="flex items-center gap-2">
+                <span style={{ fontSize: 14 }}>📋</span>
+                <span
+                  style={{
+                    fontFamily: 'var(--f-mono)',
+                    fontSize: 11,
+                    fontWeight: 700,
+                    letterSpacing: '0.1em',
+                    textTransform: 'uppercase',
+                    color: 'var(--ink-2)',
+                  }}
+                >
+                  {lang === 'tr' ? 'Siparişlerim' : 'My orders'}
+                </span>
+                <span
+                  className="grid place-items-center"
+                  style={{
+                    fontFamily: 'var(--f-mono)',
+                    fontSize: 10,
+                    fontWeight: 700,
+                    minWidth: 18,
+                    height: 18,
+                    padding: '0 5px',
+                    borderRadius: 9,
+                    background:
+                      'color-mix(in srgb, var(--accent) 14%, transparent)',
+                    color: 'var(--accent)',
+                  }}
+                >
+                  {myOrdersCount}
+                </span>
+              </span>
+              <span style={{ color: 'var(--ink-3)', fontSize: 14 }}>→</span>
+            </button>
+          )}
           <button
             ref={cartButtonRef}
             onClick={() => {
@@ -1521,6 +1592,53 @@ export function MenuView({
         </div>
       )}
 
+      {/* ============ FLOATING SIPARIŞLERIM BUTONU (sepet boşken) ============ */}
+      {cartCount === 0 && myOrdersCount > 0 && (
+        <div className="fixed right-4 bottom-4 z-50">
+          <button
+            onClick={() => setMyOrdersOpen(true)}
+            className="rounded-full flex items-center gap-2 pl-3 pr-3.5 h-12 transition-all active:scale-95"
+            style={{
+              background: 'var(--ink)',
+              color: 'var(--paper)',
+              boxShadow:
+                '0 12px 28px rgba(42,31,24,0.28), 0 4px 10px rgba(42,31,24,0.16)',
+              animation:
+                'menu-myorders-in 380ms cubic-bezier(0.34, 1.56, 0.64, 1)',
+            }}
+          >
+            <span style={{ fontSize: 16 }}>📋</span>
+            <span
+              style={{
+                fontFamily: 'var(--f-mono)',
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase',
+              }}
+            >
+              {lang === 'tr' ? 'Siparişlerim' : 'My orders'}
+            </span>
+            <span
+              className="grid place-items-center"
+              style={{
+                fontFamily: 'var(--f-mono)',
+                fontSize: 10,
+                fontWeight: 700,
+                minWidth: 20,
+                height: 20,
+                padding: '0 6px',
+                borderRadius: 10,
+                background: 'var(--accent)',
+                color: '#FAF5EA',
+              }}
+            >
+              {myOrdersCount}
+            </span>
+          </button>
+        </div>
+      )}
+
       {/* ============ CART DRAWER ============ */}
       <CartDrawer
         open={cartDrawerOpen}
@@ -1535,6 +1653,14 @@ export function MenuView({
         tableName={qrTable?.name || null}
         onQtyChange={handleQtyChange}
         onClearCart={handleClearCart}
+      />
+
+      {/* ============ MY ORDERS PANEL ============ */}
+      <MyOrdersPanel
+        open={myOrdersOpen}
+        onClose={() => setMyOrdersOpen(false)}
+        businessSlug={business.slug}
+        lang={lang}
       />
 
       {/* ============ TOAST (sepete eklendi) ============ */}

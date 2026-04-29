@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { submitOrder } from '@/lib/actions/orders';
 import { useEscapeKey } from '@/lib/hooks/use-escape-key';
+import { addCustomerOrder } from '@/lib/customer-orders';
 
 type Lang = 'tr' | 'en';
 
@@ -129,6 +130,8 @@ export function CartDrawer({
     if (result.success) {
       setSuccessOrderNo(result.order_no);
       setSuccessOrderId(result.order_id);
+      // "Siparişlerim" listesine ekle (localStorage)
+      addCustomerOrder(businessSlug, result.order_id);
       onClearCart();
     } else {
       setError(result.error);
