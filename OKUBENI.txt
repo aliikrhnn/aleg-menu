@@ -1,109 +1,110 @@
-ALEG TUR 4B — Dashboard güzelleştirme (2. pas: LiveOps)
-=========================================================
+ALEG TUR 4C — Dashboard güzelleştirme (3. pas: HourlyChart)
+=============================================================
 
-Canlı operasyon kartı tamamen yenilendi. Mutfak ekranı / kitchen
-display tarzı, akıcı, anlamlı bir izlenim.
+Saatlik ciro grafiği tamamen yeniden yazıldı. Recharts dependency
+kaldırıldı (artık tamamen custom SVG).
 
 
 YENİLİKLER
 ==========
 
-[1] Workload meter (yoğunluk)
-    • Sağ üstte mini çubuk: aktif sipariş sayısına göre 0-100%
-    • <50% yeşil, 50-75% sarı, >75% kırmızı
-    • Spring transition ile değişiyor
+[1] Animasyonlu çizim
+    • Mount'ta soldan sağa stroke-dashoffset ile çizgi "çiziliyor"
+    • Area gradient aşağıdan yukarıya açılıyor
+    • Heatbar bar'ları staggered (20ms aralık) bottom-up entrance
+    • Peak point pop! sonra halo halkası 2.4s pulse
 
-[2] Akış görselleştirmesi (Yeni → Hazırlanıyor → Hazır)
-    • Tek satırlık oransal bar (Tailwind colors)
-    • Her stage kendi rengiyle + count, akıcı entrance animasyonu
-    • Altında legend: "3 yeni · 2 hazırlanıyor · 1 hazır"
+[2] Hover deneyimi
+    • Mouse hareketinde en yakın saat noktasına snap
+    • Dikey rule (kesik çizgi) o saati gösterir
+    • Tooltip noktanın üstünde - dark, mono, kompakt
+    • "16:00 / ₺245,00 / 12 sipariş"
 
-[3] Detay kutuları zenginleşti
-    • Her kutuda: küçük emoji ikon (📋 🍳 🔔 🪑)
-    • Aktif olmayanlarda emoji grayscale + 40% opacity
-    • Aktif olanda renkli border + soft background
-    • Pulse dot (yanıp sönen) sayının yanında — yeni/hazır olanlarda
-    • "Hazır" durumunda ekstra urgent glow halkası
+[3] Görsel zenginlik
+    • Background grid (ince kesik çizgiler, %50 opacity)
+    • Ortalama çizgisi (yatay kesik çizgi)
+    • Peak point: büyük accent dot + dış halo halkası
+    • Smooth quadratic bezier path (eski monotone yerine)
 
-[4] Acil durum modu (garson çağrısı varsa)
-    • Tüm kart background subtle accent renge dönüyor
-    • Sağ üstte radial gradient pulse animasyonu
-    • Çağrı bandı kart girişinde shake animasyonu (bir kez)
-    • Çağrı butonu turuncu solid, dikkat çekici
+[4] Heatbar yenilendi
+    • "Yoğunluk haritası" başlığı eklendi
+    • Bar'lar staggered animasyonla geliyor
+    • Peak saat solid accent, diğerleri intensity'e göre
 
-[5] Boş durum
-    • "Mutfak sakin" başlığı
-    • Yeşil ✓ ikonu (animasyon ile pop)
-    • "Yeni sipariş geldiğinde burada anında görünür"
-    • Detay kutuları tamamen gizleniyor (bilişsel temizlik)
-
-[6] Aksiyon butonları
-    • Her butonda küçük ikon (⌫ POS, ◳ İstasyonlar, ▦ Masalar)
-    • Hover'da scale-up, primary butonda subtle shadow
+[5] Empty state daha sıcak
+    • 🌅 ikonu yumuşak nefes animasyonu (4sn loop)
+    • "Henüz sipariş yok, ama gün daha bitmedi" italic serif
+    • Boş heatbar saatleri staggered entrance
+    • from-to saat etiketleri altta
 
 
-KULLANICI HİSSİ
-===============
+ÖNCESİ vs SONRASI
+=================
 
-ÖNCESİ:
-  [Statik 4 kutu hep görünüyor, ne yapacağı belirsiz]
+ÖNCE: Recharts area chart, statik, hover'da basit tooltip
+       Peak için sadece ReferenceDot
 
-SONRASI:
-  • Boşken huzur veriyor: "her şey yolunda"
-  • Aktivite varken ne kadar yoğun olduğunu bir bakışta görüyor
-  • Akış barı sayesinde "şu an mutfakta nerede sıkışma var" hızlı anlaşılıyor
-  • Çağrı geldiğinde kart kendini sahneliyor — ekrandan dikkat çekiyor
-  • Hazır siparişlerde glow → garson hemen görüyor
+SONRA: Custom SVG animasyonlu chart
+       • Mount entrance animasyonu (1.2s çizim)
+       • Dikey hover rule + büyük circle highlight
+       • Peak halkası pulse loop
+       • Ortalama referans çizgisi
+       • Heatbar staggered entrance
+
+
+BUNDLE BOYUTU
+=============
+
+Önceden recharts'tan AreaChart, Area, XAxis, YAxis, ResponsiveContainer,
+Tooltip, ReferenceDot import ediliyordu.
+
+Şimdi: sadece React + next/link. Recharts hâlâ başka yerlerde
+kullanılabilir (rapor sayfaları gibi) — onları etkilemez.
 
 
 KURULUM
 =======
 
 1 dosya:
-  app/panel/(shell)/dashboard/live-ops.tsx
+  app/panel/(shell)/dashboard/hourly-chart.tsx
 
 
 PUSH
 ====
 
   git add .
-  git commit -m "feat: tur 4b - live ops with flow visualization"
+  git commit -m "feat: tur 4c - hourly chart with custom svg animation"
   git push origin main
 
 
 TEST
 ====
 
-[A] Boş durum:
-    1. Hiç aktif sipariş yok, çağrı yok
-    2. ✅ "Mutfak sakin" + ✓ ikonu
-    3. "Yeni sipariş geldiğinde..." metni
-    4. Detay kutuları görünmemeli
+[A] Veri yokken:
+    1. Hiç sipariş yok bugün
+    2. ✅ 🌅 ikonu yumuşak nefes animasyonu
+    3. "Henüz sipariş yok..." italic serif metin
+    4. Alt boş heatbar saatleri staggered yükleniyor
 
-[B] Sipariş akışı:
-    1. 1 yeni, 2 hazırlanıyor, 1 hazır sipariş ekle
-    2. ✅ Akış barı 4 stage'i oransal göstermeli (1/4, 2/4, 1/4)
-    3. Detay kutuları açılmalı, aktif renkli
-    4. "Hazır" kutusu glow halkalı
-    5. Yoğunluk barı sarı renkte (4/15 = ~27% → yeşil aslında)
+[B] Veri varken:
+    1. Bugün siparişler var
+    2. ✅ Sayfa yüklendiğinde çizgi soldan sağa çiziliyor
+    3. Area gradient aşağıdan açılıyor
+    4. Heatbar barları sırayla "büyüyor"
+    5. Peak saatte halo pulse loop'a giriyor
 
-[C] Çağrı geldi:
-    1. Müşteri masadan garson çağırsın
-    2. ✅ Kart background'ı subtle accent
-    3. Üst sağda radial pulse
-    4. Çağrı bandı bir kez sallanmalı (mount'ta)
-    5. Sağdaki "GİT" butonu turuncu, dikkat çekici
-
-[D] Yoğun saat:
-    1. 12+ aktif sipariş olsun
-    2. ✅ Yoğunluk barı sarı/kırmızı renkte
+[C] Hover:
+    1. Mouse'u chart üzerinde gezdir
+    2. ✅ En yakın saate snap olmalı
+    3. Dikey kesik çizgi o saati gösteriyor
+    4. Büyük circle highlight noktada
+    5. Üstünde tooltip: saat / ₺ tutar / sipariş sayısı
 
 
 SIRADAKİ
 ========
 
-  • Tur 4C: HourlyChart → smooth area chart
-  • Tur 4D: TopProducts → animated bars
+  • Tur 4D: TopProducts → animated bars + ürün hero
   • Tur 4E: LatestReview + QuickActions
 
-Test edip onayladığında 4C'ye geçiyorum.
+Test edip onayladığında 4D'ye geçiyorum.
