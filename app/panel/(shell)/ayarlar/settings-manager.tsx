@@ -17,16 +17,18 @@ import { OrdersTab } from './tabs/orders-tab';
 import { PreviewTab } from './tabs/preview-tab';
 import { AdminPinTab } from './tabs/admin-pin-tab';
 import { SoundsTab } from './tabs/sounds-tab';
+import { ThemeTab } from './tabs/theme-tab';
 import { toast } from '@/components/ui/toast';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
 
-type TabId = 'identity' | 'contact' | 'hours' | 'orders' | 'sounds' | 'admin-pin' | 'preview';
+type TabId = 'identity' | 'contact' | 'hours' | 'orders' | 'theme' | 'sounds' | 'admin-pin' | 'preview';
 
 const TABS: Array<{ id: TabId; label: string; icon: string }> = [
   { id: 'identity', label: 'Kimlik', icon: 'sparkle' },
   { id: 'contact', label: 'İletişim', icon: 'phone' },
   { id: 'hours', label: 'Çalışma Saatleri', icon: 'clock' },
   { id: 'orders', label: 'Sipariş', icon: 'cart' },
+  { id: 'theme', label: 'Menü Teması', icon: 'palette' },
   { id: 'sounds', label: 'Bildirim Sesleri', icon: 'speaker' },
   { id: 'admin-pin', label: 'Kasa PIN', icon: 'lock' },
   { id: 'preview', label: 'Önizleme', icon: 'eye' },
@@ -392,6 +394,14 @@ export function SettingsManager({ initialSettings, rootDomain }: Props) {
             currency={settings.currency}
             onChangeConfig={(c: OrderConfig) => patch('order_config', c)}
             onChangeCurrency={(c: string) => patch('currency', c)}
+          />
+        )}
+
+        {tab === 'theme' && (
+          <ThemeTab
+            theme={settings.menu_theme}
+            onChange={(t) => patch('menu_theme', t)}
+            businessName={settings.name}
           />
         )}
 

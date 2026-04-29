@@ -61,6 +61,12 @@ export type BusinessSettings = {
   working_hours: WorkingHours;
   order_config: OrderConfig;
   currency: string;
+
+  // Menü tema kişiselleştirme
+  menu_theme: {
+    preset: 'brutalist' | 'elite' | 'modern' | 'vintage' | 'minimal';
+    accent_override: string | null;
+  };
 };
 
 async function requireBusinessAccess() {
@@ -119,7 +125,7 @@ export async function getBusinessSettings(): Promise<{
     const { data, error } = await admin
       .from('businesses')
       .select(
-        'id, slug, name, logo_url, city, phone, email, tagline_tr, tagline_en, address, whatsapp, instagram, facebook, website, working_hours, order_config, currency'
+        'id, slug, name, logo_url, city, phone, email, tagline_tr, tagline_en, address, whatsapp, instagram, facebook, website, working_hours, order_config, currency, menu_theme'
       )
       .eq('id', businessId)
       .maybeSingle();
@@ -127,6 +133,25 @@ export async function getBusinessSettings(): Promise<{
     if (error || !data) {
       return { success: false, error: error?.message || 'İşletme bulunamadı' };
     }
+
+    const rawTheme = data.menu_theme as
+      | { preset?: string; accent_override?: string | null }
+      | null;
+    const validPresets = [
+      'brutalist',
+      'elite',
+      'modern',
+      'vintage',
+      'minimal',
+    ];
+    const themePreset = validPresets.includes(rawTheme?.preset || '')
+      ? (rawTheme!.preset as BusinessSettings['menu_theme']['preset'])
+      : 'brutalist';
+    const themeAccent =
+      rawTheme?.accent_override &&
+      /^#[0-9A-Fa-f]{6}$/.test(rawTheme.accent_override)
+        ? rawTheme.accent_override
+        : null;
 
     const settings: BusinessSettings = {
       id: data.id,
@@ -146,6 +171,10 @@ export async function getBusinessSettings(): Promise<{
       working_hours: (data.working_hours as WorkingHours) || DEFAULT_HOURS,
       order_config: (data.order_config as OrderConfig) || DEFAULT_ORDER_CONFIG,
       currency: data.currency || 'TRY',
+      menu_theme: {
+        preset: themePreset,
+        accent_override: themeAccent,
+      },
     };
 
     return { success: true, settings };
@@ -176,6 +205,10 @@ export type SettingsUpdate = Partial<{
   working_hours: WorkingHours;
   order_config: OrderConfig;
   currency: string;
+  menu_theme: {
+    preset: 'brutalist' | 'elite' | 'modern' | 'vintage' | 'minimal';
+    accent_override: string | null;
+  };
 }>;
 
 export async function updateBusinessSettings(
@@ -199,6 +232,29 @@ export async function updateBusinessSettings(
 
     if (updates.website && !updates.website.match(/^https?:\/\//)) {
       updates.website = 'https://' + updates.website;
+    }
+
+    // menu_theme validasyonu
+    if (updates.menu_theme !== undefined) {
+      const validPresets = [
+        'brutalist',
+        'elite',
+        'modern',
+        'vintage',
+        'minimal',
+      ];
+      if (!validPresets.includes(updates.menu_theme.preset)) {
+        return { success: false, error: 'Geçersiz tema seçimi' };
+      }
+      if (
+        updates.menu_theme.accent_override !== null &&
+        !/^#[0-9A-Fa-f]{6}$/.test(updates.menu_theme.accent_override || '')
+      ) {
+        return {
+          success: false,
+          error: 'Vurgu rengi #RRGGBB formatında olmalı',
+        };
+      }
     }
 
     const { error } = await admin

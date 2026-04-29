@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { resolveQrSlug } from '@/lib/actions/qr';
 import { getPublicCallButtons } from '@/lib/actions/call-buttons';
 import { MenuView } from './menu-view';
+import { resolveTheme, buildThemeCSS } from '@/lib/menu-themes';
 import type { LocalizedText } from '@/types/database';
 
 interface Props {
@@ -22,7 +23,7 @@ export default async function CustomerMenuPage({ params, searchParams }: Props) 
   // 1. İşletmeyi slug'dan bul
   const { data: business } = await supabase
     .from('businesses')
-    .select('id, slug, name, logo_url, city, subscription_status, settings, app_config, order_config')
+    .select('id, slug, name, logo_url, city, subscription_status, settings, app_config, order_config, menu_theme')
     .eq('slug', params.slug)
     .maybeSingle();
 
@@ -177,24 +178,50 @@ export default async function CustomerMenuPage({ params, searchParams }: Props) 
     ? callButtonsResult.buttons || []
     : [];
 
-  return (
-    <MenuView
-      business={{
-        id: business.id,
-        name: business.name,
-        slug: business.slug,
-        logo_url: business.logo_url,
-        city: business.city,
-      }}
-      categories={formattedCategories}
-      products={formattedProducts}
-      qrTable={qrTable}
-      orderConfig={
-        business.order_config || {
-          modes: { dinein: true, pickup: true, delivery: false },
+  // Tema yükle ve CSS oluştur
+  const themeConfig = (business.menu_theme as {
+    preset?: string;
+    accent_override?: string | null;
+  } | null) || null;
+  const resolvedTheme = resolveTheme(
+    themeConfig?.preset
+      ? {
+          preset: themeConfig.preset as
+            | 'brutalist'
+            | 'elite'
+            | 'modern'
+            | 'vintage'
+            | 'minimal',
+          accent_override: themeConfig.accent_override || null,
         }
-      }
-      callButtons={callButtons}
-    />
+      : null
+  );
+  const themeCSS = buildThemeCSS(resolvedTheme, '[data-menu-theme]');
+
+  return (
+    <>
+      {/* Tema CSS scope'lu olarak uygulanır */}
+      <style dangerouslySetInnerHTML={{ __html: themeCSS }} />
+      <div data-menu-theme={resolvedTheme.id}>
+        <MenuView
+          business={{
+            id: business.id,
+            name: business.name,
+            slug: business.slug,
+            logo_url: business.logo_url,
+            city: business.city,
+          }}
+          categories={formattedCategories}
+          products={formattedProducts}
+          qrTable={qrTable}
+          orderConfig={
+            business.order_config || {
+              modes: { dinein: true, pickup: true, delivery: false },
+            }
+          }
+          callButtons={callButtons}
+        />
+      </div>
+    </>
   );
 }

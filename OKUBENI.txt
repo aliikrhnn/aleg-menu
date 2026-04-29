@@ -1,68 +1,207 @@
-ALEG TUR 4F — Sidebar'dan "Sipariş Akışı" menüsü kaldırıldı
-=============================================================
+ALEG TUR 5 — QR Menü Tema Kişiselleştirme
+==========================================
 
-İşletme paneli sol menüsündeki "Sipariş Akışı" (◉ /pos) öğesi
-silindi. Artık sidebar'da görünmeyecek.
-
-
-NEDEN
-=====
-
-Kullanıcı isteği — bu sayfa zaten Kasa ve Garson uygulamaları
-ile büyük ölçüde örtüşüyordu, sidebar'da fazladan yer kaplıyordu.
+İşletme sahibi panelden 5 farklı tema seçebilir + accent rengi
+özelleştirebilir. Müşteri menüsü (slug.alegstudio.com) bu seçime
+göre render olur.
 
 
-NE OLDU
+5 TEMA
+======
+
+1. BRUTALIST SPICE (default - şu an kullanıyoruz)
+   Paper #FAF5EA, Ink #2A1F18, Accent #C4553A
+   Bricolage + Instrument Serif italic
+   Sıcak, karakter dolu
+
+2. ELITE RESTORAN
+   Paper #1A1814 (koyu!), Ink #F2EAD8, Gold #C9A961
+   Playfair Display + Cormorant Garamond
+   Lüks fine dining, sert köşeler (4px radius)
+
+3. MODERN CAFE
+   Paper #FFFFFF, Ink #0A0A0A, Mint #4ABDAC
+   Inter + Crimson Pro + JetBrains Mono
+   Temiz, çağdaş, contemporary
+
+4. VINTAGE BISTRO
+   Paper #F8F0E3, Ink #3D2817, Deep red #8B2635
+   DM Serif Display + Lora + Courier Prime
+   Eski Paris kafesi havası, neredeyse köşeli (2px radius)
+
+5. MINIMAL SKANDINAV
+   Paper #FAFAFA, Ink #2C2C2C, Sage #B7C4A0
+   Inter (serif yerine de) - Söhne fallback
+   Soğuk, sade, Nordic, küçük harf eyebrow'lar
+
+
+ÖZEL ACCENT RENGİ
+=================
+
+İşletme sahibi 10 önerilen renkten seçebilir VEYA özel hex girebilir
+(#RRGGBB). Bu seçim temanın varsayılan accent rengini override eder.
+Yani "Modern Cafe" tema + kendi marka rengi = işletmeye özel his.
+
+Önerilen renkler:
+  • Brutalist accent (#C4553A)
+  • Gold (#C9A961)
+  • Mint (#4ABDAC)
+  • Deep red (#8B2635)
+  • Sage (#B7C4A0)
+  • Ocean blue (#1F4E5F)
+  • Dusty purple (#7A5C9F)
+  • Terracotta (#D97757)
+  • Emerald (#0F766E)
+  • Amber brown (#92400E)
+
+
+PANEL UI
+========
+
+Yeni tab: "Menü Teması" (Sipariş ile Bildirim Sesleri arası)
+
+3 adımlı flow:
+  Adım 1: Tema seç
+    • 5 büyük kart, gerçek tema renkleriyle mini önizleme
+    • Seçilende sağ üstte ✓ + ink border + scale
+  
+  Adım 2: Vurgu rengi
+    • "Varsayılan" + 10 renk + "Özel" butonu
+    • Özel'e tıklayınca color picker + hex input
+    • Seçilen renkte ink border + scale
+  
+  Adım 3: Önizleme
+    • Browser-style mockup (3 nokta + URL + tema adı)
+    • Gerçek tema renkleriyle örnek menü:
+      - Hero başlık + tagline + sipariş ver butonu
+      - "Kahveler" kategorisi (3 ürün)
+      - "Tatlılar" kategorisi (2 ürün)
+      - Footer
+    • Tema değiştirince anında güncelleniyor
+
+
+VERİ MODELİ
+===========
+
+Yeni kolon: businesses.menu_theme (jsonb)
+
+  {
+    "preset": "brutalist" | "elite" | "modern" | "vintage" | "minimal",
+    "accent_override": "#C4553A" | null
+  }
+
+Default: { preset: "brutalist", accent_override: null } (mevcut davranış)
+
+
+MÜŞTERİ MENÜSÜ TARAFI
+=====================
+
+app/menu/[slug]/page.tsx içinde:
+  1. businesses.menu_theme okunur
+  2. resolveTheme() ile preset + accent çözülür
+  3. buildThemeCSS() ile [data-menu-theme] scope'lu CSS üretilir
+  4. <style> tag'iyle inject edilir
+  5. <div data-menu-theme="elite"> ile MenuView sarılır
+
+Sonuç: var(--paper), var(--ink), var(--accent), var(--f-serif) vb. tüm
+CSS değişkenleri tema'ya göre yazılır. MenuView ve içindeki tüm
+component'ler (cart-drawer, my-orders-panel, ürün kartları) otomatik
+olarak yeni tema renklerini ve fontlarını kullanır.
+
+Hiçbir component kodu değiştirilmedi — sadece CSS variable'lar.
+
+
+FONTLAR
 =======
 
-components/panel/nav-config.ts
-
-  ÖNCE (GÜNLÜK grubu):
-    • Ana Sayfa
-    • Sipariş Akışı     ← SİLİNDİ
-    • Kasa Uygulaması
-    • Garson Uygulaması
-
-  SONRA (GÜNLÜK grubu):
-    • Ana Sayfa
-    • Kasa Uygulaması
-    • Garson Uygulaması
-
-
-NE OLMADI (kasten)
-==================
-
-  • /panel/pos rotası HÂLÂ erişilebilir (sayfa silinmedi)
-    → Dashboard'daki "POS" hızlı aksiyon butonu çalışmaya devam eder
-    → Live Ops kartındaki "POS" butonu hâlâ aktif
-
-  • Eğer ileride /pos rotasını da silmek istersen, ek olarak şunları
-    güncelleyeceğim:
-      - app/panel/(shell)/pos/ klasörü
-      - hero-metrics.tsx LivePulseCard'taki href="/panel/pos"
-      - live-ops.tsx ActionButton "POS"
+globals.css'e eklenen Google Fonts importları:
+  • Bricolage Grotesque (zaten vardı)
+  • Instrument Serif (Brutalist)
+  • Playfair Display + Cormorant Garamond (Elite)
+  • Inter + Crimson Pro + JetBrains Mono (Modern)
+  • DM Serif Display + Lora + Courier Prime (Vintage)
+  • Söhne yok → Inter fallback (Minimal)
 
 
 KURULUM
 =======
 
-1 dosyayı kopyala (üzerine yaz):
+ÖNCE Supabase'de migration çalıştır:
+  supabase/migrations/0032_menu_theme.sql
+  
+  (Supabase dashboard → SQL Editor → dosya içeriğini yapıştır → Run)
 
-  components/panel/nav-config.ts
+SONRA dosyaları kopyala:
+
+  YENİ:
+    lib/menu-themes.ts
+    app/panel/(shell)/ayarlar/tabs/theme-tab.tsx
+    app/panel/(shell)/ayarlar/tabs/theme-preview.tsx
+    supabase/migrations/0032_menu_theme.sql
+
+  GÜNCELLEME:
+    lib/actions/settings.ts (BusinessSettings tipi + validation)
+    app/panel/(shell)/ayarlar/settings-manager.tsx (yeni tab kaydı)
+    app/menu/[slug]/page.tsx (tema CSS inject)
+    app/globals.css (font importları)
 
 
 PUSH
 ====
 
   git add .
-  git commit -m "chore: remove sipariş akışı from sidebar"
+  git commit -m "feat: tur 5 - menu theme system with 5 presets and accent override"
   git push origin main
 
 
 TEST
 ====
 
-  1. Panele gir, sol menüye bak
-  2. ✅ "Sipariş Akışı" artık görünmemeli
-  3. GÜNLÜK grubu: Ana Sayfa → Kasa → Garson olmalı
-  4. URL ile /panel/pos açarsan sayfa hâlâ çalışıyor (kasten)
+[A] Migration:
+    1. Supabase'de SQL Editor → 0032_menu_theme.sql içeriğini yapıştır → Run
+    2. ✅ businesses tablosunda menu_theme kolonu görünmeli
+    3. Mevcut tüm işletmelerde default değer atanmış olmalı
+
+[B] Panel - Tema seçimi:
+    1. Panel → Ayarlar → "Menü Teması" tab'ı
+    2. ✅ 5 tema kartı görünüyor (her biri kendi renkleriyle)
+    3. "Elit Restoran" seç
+    4. ✅ Seçilen kart ✓ ile işaretlendi, scale büyüdü
+    5. Önizleme bölümü siyah/gold tonlarda güncellendi
+    6. Sağ üstteki "Kaydet" butonuna bas
+
+[C] Müşteri menüsü:
+    1. {slug}.alegstudio.com aç
+    2. ✅ Elit tema renkleri uygulanmış (koyu arkaplan, gold detaylar)
+    3. Playfair Display fontu başlıklarda
+    4. Sipariş butonu, ürün kartları, sepet — hepsi yeni temada
+
+[D] Accent override:
+    1. Panel → Menü Teması
+    2. "Modern Cafe" seç
+    3. Vurgu rengi: "Deep red" tıkla
+    4. ✅ Önizlemede butonlar mint yerine kırmızı oldu
+    5. Kaydet → menüye git → buton kırmızı
+
+[E] Özel renk:
+    1. "Özel" butonuna tıkla
+    2. Color picker'dan istediğin rengi seç (örn #6366f1)
+    3. "Uygula" bas
+    4. ✅ Önizleme o renge dönmeli
+    5. Kaydet → menüde uygulanmalı
+
+[F] Geri dönüş:
+    1. "Varsayılan" daire'ye tıkla
+    2. ✅ Tema'nın orijinal accent'ine döner
+
+
+SIRADAKİ
+========
+
+Tur 6: Basılı menü tasarımları
+  • 5 şablon × 3 boyut (A4 + A5 + Pláka 24x36)
+  • PDF + PNG indirme
+  • İşletme tabela basabilsin
+  • Üstte ürünler/fiyatlar, altta QR
+
+Bu Tur 5'i test edip onayladığında Tur 6'ya geçeriz.
