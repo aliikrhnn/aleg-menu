@@ -26,13 +26,6 @@ const T = {
   loading: { tr: 'Yükleniyor…', en: 'Loading…' },
   refresh: { tr: 'Yenile', en: 'Refresh' },
   remove: { tr: 'Listeden çıkar', en: 'Remove' },
-  // Status
-  status_received: { tr: 'Alındı', en: 'Received' },
-  status_confirmed: { tr: 'Alındı', en: 'Confirmed' },
-  status_preparing: { tr: 'Hazırlanıyor', en: 'Preparing' },
-  status_ready: { tr: 'Hazır', en: 'Ready' },
-  status_delivered: { tr: 'Teslim edildi', en: 'Delivered' },
-  status_cancelled: { tr: 'İptal edildi', en: 'Cancelled' },
   // Order type
   pickup: { tr: 'Paket', en: 'Pickup' },
   delivery: { tr: 'Kapıya', en: 'Delivery' },
@@ -44,6 +37,16 @@ const T = {
   minutesAgo: { tr: 'dk', en: 'm' },
   hoursAgo: { tr: 'sa', en: 'h' },
   daysAgo: { tr: 'g', en: 'd' },
+};
+
+// Status etiketleri (tip güvenli erişim için ayrı record)
+const STATUS_LABELS: Record<string, { tr: string; en: string }> = {
+  received: { tr: 'Alındı', en: 'Received' },
+  confirmed: { tr: 'Alındı', en: 'Confirmed' },
+  preparing: { tr: 'Hazırlanıyor', en: 'Preparing' },
+  ready: { tr: 'Hazır', en: 'Ready' },
+  delivered: { tr: 'Teslim edildi', en: 'Delivered' },
+  cancelled: { tr: 'İptal edildi', en: 'Cancelled' },
 };
 
 const STATUS_CFG: Record<
@@ -327,8 +330,8 @@ function OrderRow({
       ? T.delivery[lang]
       : order.table_name || (lang === 'tr' ? 'Masa' : 'Table');
 
-  const statusKey = (`status_${order.status}` as keyof typeof T) ?? 'status_received';
-  const statusLabel = T[statusKey] ? T[statusKey][lang] : order.status;
+  const statusLabel =
+    STATUS_LABELS[order.status]?.[lang] || order.status;
 
   return (
     <div
