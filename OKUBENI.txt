@@ -1,110 +1,111 @@
-ALEG TUR 4C — Dashboard güzelleştirme (3. pas: HourlyChart)
+ALEG TUR 4D — Dashboard güzelleştirme (4. pas: TopProducts)
 =============================================================
 
-Saatlik ciro grafiği tamamen yeniden yazıldı. Recharts dependency
-kaldırıldı (artık tamamen custom SVG).
+Popüler ürünler kartı tamamen yenilendi. #1 ürün hero treatment +
+animasyonlu sıralama listesi.
 
 
 YENİLİKLER
 ==========
 
-[1] Animasyonlu çizim
-    • Mount'ta soldan sağa stroke-dashoffset ile çizgi "çiziliyor"
-    • Area gradient aşağıdan yukarıya açılıyor
-    • Heatbar bar'ları staggered (20ms aralık) bottom-up entrance
-    • Peak point pop! sonra halo halkası 2.4s pulse
+[1] Champion Card (#1 en çok satan)
+    • Üstte özel kart: subtle gold/accent gradient background
+    • Sağ üstte "sparkle glow" radial pulse animasyonu (3s loop)
+    • Sol: ürün görseli (hero_image_url) > emoji (hero_icon) > ★ fallback
+      → 56x56 yuvarlak kenarlı thumbnail
+    • Ortada: 🥇 1. badge + ürün adı (italic serif 22px) + adet/ciro
+    • Mount entrance animation (spring scale + fade)
 
-[2] Hover deneyimi
-    • Mouse hareketinde en yakın saat noktasına snap
-    • Dikey rule (kesik çizgi) o saati gösterir
-    • Tooltip noktanın üstünde - dark, mono, kompakt
-    • "16:00 / ₺245,00 / 12 sipariş"
+[2] Sıralama satırları (2-5)
+    • Numaralı badge (silver/bronze tonları)
+    • Mini thumbnail (emoji veya image varsa)
+    • Bar fill animasyonu — 0'dan değere staggered (80ms aralık)
+    • Hover'da hafif paper-2 background
 
-[3] Görsel zenginlik
-    • Background grid (ince kesik çizgiler, %50 opacity)
-    • Ortalama çizgisi (yatay kesik çizgi)
-    • Peak point: büyük accent dot + dış halo halkası
-    • Smooth quadratic bezier path (eski monotone yerine)
+[3] Backend genişletildi
+    • Top ürün ID'leri toplanıyor
+    • products tablosundan hero_icon ve hero_image_url çekiliyor (tek query)
+    • topProducts dizisinde her ürünle birlikte dönüyor
 
-[4] Heatbar yenilendi
-    • "Yoğunluk haritası" başlığı eklendi
-    • Bar'lar staggered animasyonla geliyor
-    • Peak saat solid accent, diğerleri intensity'e göre
-
-[5] Empty state daha sıcak
-    • 🌅 ikonu yumuşak nefes animasyonu (4sn loop)
-    • "Henüz sipariş yok, ama gün daha bitmedi" italic serif
-    • Boş heatbar saatleri staggered entrance
-    • from-to saat etiketleri altta
+[4] Empty state daha şirin
+    • ☕ emoji 3s loop'ta yumuşak bob (sallanma)
+    • "İlk sipariş geldiğinde..." italic serif
 
 
 ÖNCESİ vs SONRASI
 =================
 
-ÖNCE: Recharts area chart, statik, hover'da basit tooltip
-       Peak için sadece ReferenceDot
-
-SONRA: Custom SVG animasyonlu chart
-       • Mount entrance animasyonu (1.2s çizim)
-       • Dikey hover rule + büyük circle highlight
-       • Peak halkası pulse loop
-       • Ortalama referans çizgisi
-       • Heatbar staggered entrance
+ÖNCE: Tek tip 5 satır, basit progress bar
+SONRA:
+  • #1 → büyük hero card (görsel + serif italic + badge + glow)
+  • #2-#5 → kompakt liste, bar staggered fill, mini thumbnail
 
 
-BUNDLE BOYUTU
-=============
+BACKEND DEĞİŞİKLİKLERİ
+======================
 
-Önceden recharts'tan AreaChart, Area, XAxis, YAxis, ResponsiveContainer,
-Tooltip, ReferenceDot import ediliyordu.
+DashboardData.topProducts tipi:
+  ÖNCE: { product_id, product_name, quantity, revenue }
+  SONRA: ... + hero_icon: string | null, hero_image_url: string | null
 
-Şimdi: sadece React + next/link. Recharts hâlâ başka yerlerde
-kullanılabilir (rapor sayfaları gibi) — onları etkilemez.
+dashboard.ts:
+  • topProductIds çıkarılıyor
+  • products tablosundan hero alanları batch query ile çekiliyor
+  • topProductsWithHero dizisi dönüş objesinde
 
 
 KURULUM
 =======
 
-1 dosya:
-  app/panel/(shell)/dashboard/hourly-chart.tsx
+2 dosyayı kopyala:
+
+  lib/actions/dashboard.ts                                  (hero lookup eklendi)
+  app/panel/(shell)/dashboard/top-products.tsx              (yeni UI)
 
 
 PUSH
 ====
 
   git add .
-  git commit -m "feat: tur 4c - hourly chart with custom svg animation"
+  git commit -m "feat: tur 4d - top products with champion card"
   git push origin main
 
 
 TEST
 ====
 
-[A] Veri yokken:
+[A] Boş durum:
     1. Hiç sipariş yok bugün
-    2. ✅ 🌅 ikonu yumuşak nefes animasyonu
-    3. "Henüz sipariş yok..." italic serif metin
-    4. Alt boş heatbar saatleri staggered yükleniyor
+    2. ✅ ☕ ikonu yumuşak sallanıyor
+    3. "İlk sipariş geldiğinde..." italic serif
 
-[B] Veri varken:
-    1. Bugün siparişler var
-    2. ✅ Sayfa yüklendiğinde çizgi soldan sağa çiziliyor
-    3. Area gradient aşağıdan açılıyor
-    4. Heatbar barları sırayla "büyüyor"
-    5. Peak saatte halo pulse loop'a giriyor
+[B] Tek ürün:
+    1. Bugün 1 ürün satıldı
+    2. ✅ Champion card görünüyor (gold/accent gradient)
+    3. Sparkle glow animasyonu sağ üstte
+    4. Diğer satırlar yok
 
-[C] Hover:
-    1. Mouse'u chart üzerinde gezdir
-    2. ✅ En yakın saate snap olmalı
-    3. Dikey kesik çizgi o saati gösteriyor
-    4. Büyük circle highlight noktada
-    5. Üstünde tooltip: saat / ₺ tutar / sipariş sayısı
+[C] Birden fazla ürün:
+    1. 4-5 farklı ürün satıldı
+    2. ✅ Champion card #1
+    3. Altında 2-5 sıralı, bar'lar staggered (sırayla) doluyor
+    4. Hover'da satırlar paper-2 background
+
+[D] Ürün hero görseli varsa:
+    1. Ürünün hero_image_url'i dolu
+    2. ✅ Champion'da büyük thumbnail (56x56)
+    3. Sıralı satırlarda mini thumbnail (22x22)
+    
+    Yoksa hero_icon emoji ise:
+    4. Aynı yerlerde emoji görünmeli
+    
+    Yoksa:
+    5. Champion'da ★, sıralılarda sadece numara
 
 
 SIRADAKİ
 ========
 
-  • Tur 4D: TopProducts → animated bars + ürün hero
-  • Tur 4E: LatestReview + QuickActions
+  • Tur 4E: LatestReview + QuickActions micro animations
 
-Test edip onayladığında 4D'ye geçiyorum.
+Test edip onayladığında 4E'ye geçiyorum (son pas).

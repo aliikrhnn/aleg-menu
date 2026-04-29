@@ -45,6 +45,8 @@ export type DashboardData = {
     product_name: string;
     quantity: number;
     revenue: number;
+    hero_icon: string | null;
+    hero_image_url: string | null;
   }>;
   // Şu anki canlı durum
   live: {
@@ -331,6 +333,35 @@ export async function getDashboardData(): Promise<{
       .sort((a, b) => b.quantity - a.quantity)
       .slice(0, 5);
 
+    // Top ürünlerin görsel/ikon snapshot'ı (varsa)
+    const topProductIds = topProducts
+      .map((p) => p.product_id)
+      .filter((id): id is string => !!id);
+    const heroLookup = new Map<
+      string,
+      { hero_icon: string | null; hero_image_url: string | null }
+    >();
+    if (topProductIds.length > 0) {
+      const { data: heroes } = await admin
+        .from('products')
+        .select('id, hero_icon, hero_image_url')
+        .in('id', topProductIds);
+      (heroes || []).forEach((h) => {
+        heroLookup.set(h.id as string, {
+          hero_icon: (h.hero_icon as string | null) || null,
+          hero_image_url: (h.hero_image_url as string | null) || null,
+        });
+      });
+    }
+    const topProductsWithHero = topProducts.map((p) => {
+      const hero = heroLookup.get(p.product_id);
+      return {
+        ...p,
+        hero_icon: hero?.hero_icon || null,
+        hero_image_url: hero?.hero_image_url || null,
+      };
+    });
+
     // Canlı durum
     const liveOrders = liveOrdersRes.data || [];
     const live = {
@@ -427,7 +458,7 @@ export async function getDashboardData(): Promise<{
       },
       hourly,
       peakHour,
-      topProducts,
+      topProducts: topProductsWithHero,
       live,
       last7Days,
       latestReview,
