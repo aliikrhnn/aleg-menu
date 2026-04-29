@@ -3,11 +3,15 @@
 import { useEffect, useState } from 'react';
 import { LiveClock } from './live-clock';
 
-function getGreeting(hour: number): { text: string; tone: 'morning' | 'day' | 'evening' | 'night' } {
-  if (hour < 6) return { text: 'İyi geceler', tone: 'night' };
-  if (hour < 12) return { text: 'Günaydın', tone: 'morning' };
-  if (hour < 18) return { text: 'İyi günler', tone: 'day' };
-  return { text: 'İyi akşamlar', tone: 'evening' };
+function getGreeting(hour: number): {
+  text: string;
+  tone: 'morning' | 'day' | 'evening' | 'night';
+  emoji: string;
+} {
+  if (hour < 6) return { text: 'İyi geceler', tone: 'night', emoji: '🌙' };
+  if (hour < 12) return { text: 'Günaydın', tone: 'morning', emoji: '☀️' };
+  if (hour < 18) return { text: 'İyi günler', tone: 'day', emoji: '☕' };
+  return { text: 'İyi akşamlar', tone: 'evening', emoji: '🌅' };
 }
 
 // Saat + aktiviteye göre akıllı mesaj
@@ -87,7 +91,7 @@ export function DynamicGreeting({
     return () => clearInterval(interval);
   }, []);
 
-  const { text: greeting, tone } = getGreeting(hour);
+  const { text: greeting, tone, emoji } = getGreeting(hour);
   const subtext = getSmartSubtext({
     hour,
     weekday,
@@ -118,14 +122,14 @@ export function DynamicGreeting({
       : 'Bugün henüz sipariş yok';
 
   return (
-    <div className="mb-10">
+    <div className="mb-10" style={{ animation: 'grFadeIn 0.6s ease-out' }}>
       <div
         className="uppercase mb-3 flex items-center gap-2 flex-wrap"
         style={{
           fontFamily: 'var(--f-mono)',
           fontSize: 10,
           fontWeight: 700,
-          letterSpacing: '0.14em',
+          letterSpacing: '0.16em',
           color: toneColor,
         }}
       >
@@ -137,7 +141,7 @@ export function DynamicGreeting({
             fontFamily: 'var(--f-mono)',
             fontSize: 10,
             fontWeight: 700,
-            letterSpacing: '0.14em',
+            letterSpacing: '0.16em',
             color: 'var(--ink-2)',
             fontVariantNumeric: 'tabular-nums',
           }}
@@ -151,11 +155,30 @@ export function DynamicGreeting({
           fontWeight: 400,
           letterSpacing: '-0.02em',
           lineHeight: 1.05,
+          display: 'flex',
+          alignItems: 'baseline',
+          gap: 12,
+          flexWrap: 'wrap',
         }}
       >
-        {greeting}, {firstName}
+        <span>
+          {greeting}, {firstName}
+        </span>
+        <span
+          aria-hidden="true"
+          style={{
+            fontSize: 36,
+            display: 'inline-block',
+            animation: 'grEmojiBob 4s ease-in-out infinite',
+          }}
+        >
+          {emoji}
+        </span>
       </h1>
-      <p className="text-ink-2 text-base mt-3 flex items-center gap-2 flex-wrap">
+      <p
+        className="text-ink-2 text-base mt-3 flex items-center gap-2 flex-wrap"
+        style={{ animation: 'grSubFade 0.7s ease-out 0.2s both' }}
+      >
         <span>{subtext}</span>
         <span className="text-ink-3">·</span>
         <span
@@ -168,6 +191,36 @@ export function DynamicGreeting({
           {liveSummary}
         </span>
       </p>
+      <style jsx>{`
+        @keyframes grFadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(-4px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        @keyframes grSubFade {
+          from {
+            opacity: 0;
+            transform: translateY(4px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        @keyframes grEmojiBob {
+          0%, 100% {
+            transform: translateY(0) rotate(-2deg);
+          }
+          50% {
+            transform: translateY(-4px) rotate(3deg);
+          }
+        }
+      `}</style>
     </div>
   );
 }

@@ -1,111 +1,131 @@
-ALEG TUR 4D — Dashboard güzelleştirme (4. pas: TopProducts)
-=============================================================
+ALEG TUR 4E — Dashboard güzelleştirme (5. ve son pas: LatestReview + QuickActions + Greeting)
+==============================================================================================
 
-Popüler ürünler kartı tamamen yenilendi. #1 ürün hero treatment +
-animasyonlu sıralama listesi.
+Dashboard'ın son üç parçası canlandırıldı. Bu paketten sonra
+"canlı nefes alan dashboard" hedefi tamamlanmış oluyor.
 
 
 YENİLİKLER
 ==========
 
-[1] Champion Card (#1 en çok satan)
-    • Üstte özel kart: subtle gold/accent gradient background
-    • Sağ üstte "sparkle glow" radial pulse animasyonu (3s loop)
-    • Sol: ürün görseli (hero_image_url) > emoji (hero_icon) > ★ fallback
-      → 56x56 yuvarlak kenarlı thumbnail
-    • Ortada: 🥇 1. badge + ürün adı (italic serif 22px) + adet/ciro
-    • Mount entrance animation (spring scale + fade)
+[1] LatestReview kart — review'a göre tonlanıyor
+    • Olumlu (4-5★) → soft green background + sağ üstte yeşil glow halka
+      (3.6s loop pulse)
+    • Olumsuz (1-2★) → soft gold/uyarı tonu (dikkat çekiyor)
+    • Nötr (3★) → standart card
+    • Yıldızlar mount'ta SIRAYLA doluyor — her biri 90ms gecikme,
+      spring scale + rotate effect
+    • Boş yıldızlar yumuşak fade-in
+    • "Cevap bekliyor" sağda mono uppercase ok ile
+    • Mini pulse dot başlık yanında (cevaplanmamış varsa)
+    • Yorum metni: italic serif, sol kenarda subtle accent border
+    • Comment mount animation (0.5s gecikme, fade up)
 
-[2] Sıralama satırları (2-5)
-    • Numaralı badge (silver/bronze tonları)
-    • Mini thumbnail (emoji veya image varsa)
-    • Bar fill animasyonu — 0'dan değere staggered (80ms aralık)
-    • Hover'da hafif paper-2 background
+[2] LatestReview empty state
+    • 5 yıldız placeholder, sırayla yumuşak nefes (her biri 0.15s shift)
+    • "QR'ı okuttuğunda buradan görebilirsin" italic serif
 
-[3] Backend genişletildi
-    • Top ürün ID'leri toplanıyor
-    • products tablosundan hero_icon ve hero_image_url çekiliyor (tek query)
-    • topProducts dizisinde her ürünle birlikte dönüyor
+[3] QuickActions kart
+    • Background: accent → gold gradient (subtle)
+    • Sağ üstte sparkle radial pulse (4s loop)
+    • Başlıkta ⚡ ikonu — periyodik "şimşek" animasyonu (2.6s'de bir
+      kıvrılıyor)
+    • Kartlar mount'ta staggered (60ms aralıkla aşağıdan kayarak)
+    • Hover MICRO ANIMATIONS:
+      - Plus ikonu: scale + 90° rotate
+      - Rotate ikonları (◉ ◌): 180° spin
+      - Slide ikonu (↗): köşeye doğru slide + scale
 
-[4] Empty state daha şirin
-    • ☕ emoji 3s loop'ta yumuşak bob (sallanma)
-    • "İlk sipariş geldiğinde..." italic serif
+[4] Greeting iyileştirmeleri
+    • Selama göre EMOJİ eklendi:
+      - Sabah → ☀️
+      - Gündüz → ☕
+      - Akşam → 🌅
+      - Gece → 🌙
+    • Emoji yumuşak bob animasyonu (4s loop, ±2° rotate)
+    • Mount'ta tüm container fade-in (translateY -4)
+    • Subtext de gecikmeli fade-in (200ms sonra)
+    • Letter spacing 0.14em → 0.16em (Brutalist Spice ile uyum)
 
 
 ÖNCESİ vs SONRASI
 =================
 
-ÖNCE: Tek tip 5 satır, basit progress bar
-SONRA:
-  • #1 → büyük hero card (görsel + serif italic + badge + glow)
-  • #2-#5 → kompakt liste, bar staggered fill, mini thumbnail
-
-
-BACKEND DEĞİŞİKLİKLERİ
-======================
-
-DashboardData.topProducts tipi:
-  ÖNCE: { product_id, product_name, quantity, revenue }
-  SONRA: ... + hero_icon: string | null, hero_image_url: string | null
-
-dashboard.ts:
-  • topProductIds çıkarılıyor
-  • products tablosundan hero alanları batch query ile çekiliyor
-  • topProductsWithHero dizisi dönüş objesinde
+ÖNCE: Statik kartlar, basit hover scale, yıldızlar tek seferde
+SONRA: Her kart kendi içinde mikro animasyon, mount staggered,
+       review tonuna göre kart rengi değişiyor
 
 
 KURULUM
 =======
 
-2 dosyayı kopyala:
+3 dosyayı kopyala (üzerine yaz):
 
-  lib/actions/dashboard.ts                                  (hero lookup eklendi)
-  app/panel/(shell)/dashboard/top-products.tsx              (yeni UI)
+  app/panel/(shell)/dashboard/latest-review.tsx
+  app/panel/(shell)/dashboard/quick-actions.tsx
+  app/panel/(shell)/dashboard/greeting.tsx
 
 
 PUSH
 ====
 
   git add .
-  git commit -m "feat: tur 4d - top products with champion card"
+  git commit -m "feat: tur 4e - latest review animated, quick actions micro, greeting emoji"
   git push origin main
 
 
 TEST
 ====
 
-[A] Boş durum:
-    1. Hiç sipariş yok bugün
-    2. ✅ ☕ ikonu yumuşak sallanıyor
-    3. "İlk sipariş geldiğinde..." italic serif
+[A] Greeting:
+    1. Sayfayı yenile, üst kısma bak
+    2. ✅ "Günaydın, Ali ☀️" → emoji yanda yumuşak sallanmalı
+    3. Tüm container fade-in olmalı (1 sn'lik)
 
-[B] Tek ürün:
-    1. Bugün 1 ürün satıldı
-    2. ✅ Champion card görünüyor (gold/accent gradient)
-    3. Sparkle glow animasyonu sağ üstte
-    4. Diğer satırlar yok
+[B] LatestReview - Olumlu yorum:
+    1. 5 yıldız bir yorum gönder
+    2. ✅ Kart yeşilimsi tonda, sağ üstte glow halka
+    3. Yıldızlar SIRAYLA pop-pop-pop! mount'ta
+    4. Yorum sol kenarda accent border ile italic serif
 
-[C] Birden fazla ürün:
-    1. 4-5 farklı ürün satıldı
-    2. ✅ Champion card #1
-    3. Altında 2-5 sıralı, bar'lar staggered (sırayla) doluyor
-    4. Hover'da satırlar paper-2 background
+[C] LatestReview - Olumsuz yorum:
+    1. 2 yıldız bir yorum gönder
+    2. ✅ Kart altın/sarımtırak tonda
+    3. Olumsuzluk bilgisi diskret ama görünür
 
-[D] Ürün hero görseli varsa:
-    1. Ürünün hero_image_url'i dolu
-    2. ✅ Champion'da büyük thumbnail (56x56)
-    3. Sıralı satırlarda mini thumbnail (22x22)
-    
-    Yoksa hero_icon emoji ise:
-    4. Aynı yerlerde emoji görünmeli
-    
-    Yoksa:
-    5. Champion'da ★, sıralılarda sadece numara
+[D] LatestReview - Boş:
+    1. Hiç değerlendirme yok
+    2. ✅ 5 placeholder yıldız sırayla nefes alıyor
+    3. "QR'ı okuttuğunda..." italic serif
+
+[E] QuickActions:
+    1. Karta bak — başlıkta ⚡ ikonu var
+    2. ✅ Sayfaya geldiğinde 4 buton sırayla (60ms) aşağıdan geliyor
+    3. "Ürün ekle" üzerine hover → "+" 90° dönerken büyüyor
+    4. "QR kodları" üzerine hover → ◉ döner
+    5. "Menüyü aç" üzerine hover → ↗ köşeye kayarak büyür
+
+
+TÜM TUR 4 ÖZETİ (Dashboard güzelleştirme)
+==========================================
+
+  ✅ Tur 4A — Hero Metrikler (sparkline'lı, big+pulse+small)
+  ✅ Tur 4B — LiveOps (akış görselleştirmesi, workload meter)
+  ✅ Tur 4C — HourlyChart (custom SVG, animasyonlu, hover snap)
+  ✅ Tur 4D — TopProducts (champion card + animated rank list)
+  ✅ Tur 4E — LatestReview + QuickActions + Greeting
+
+5 paste, dashboard'ın tüm parçaları "canlı nefes alır" hâle geldi.
 
 
 SIRADAKİ
 ========
 
-  • Tur 4E: LatestReview + QuickActions micro animations
+Test edip onayladığında Tur 4 tamamlanmış olur. Ondan sonra
+gerçek kullanım esnasında yeni isteklerle yola devam ederiz.
 
-Test edip onayladığında 4E'ye geçiyorum (son pas).
+Olası sıradaki büyük işler:
+  • Süper admin paneli tasarımı (henüz pending)
+  • Dashboard'da realtime push (Supabase subscription)
+  • Empty state ipuçlarını genişletme (yeni işletmeler için)
+  • Onboarding wizard
