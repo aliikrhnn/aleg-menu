@@ -295,6 +295,14 @@ export type OrderTrackingItem = {
   unit_price: number;
 };
 
+export type RelatedOrderSummary = {
+  id: string;
+  order_no: string;
+  status: string;
+  total: number;
+  created_at: string;
+};
+
 export type OrderTrackingData = {
   id: string;
   order_no: string;
@@ -314,6 +322,8 @@ export type OrderTrackingData = {
   // Akıllı yönlendirme ayarları (4-5 yıldız → Google'a)
   review_smart_redirect: boolean;
   google_place_id: string;
+  // Aynı masada başka aktif siparişler (sadece dine_in için)
+  related_orders: RelatedOrderSummary[];
 };
 
 export async function getOrderTracking(
@@ -385,6 +395,33 @@ export async function getOrderTracking(
       .eq('order_id', orderId)
       .maybeSingle();
 
+    // Aynı masada başka aktif/yakın zamanlı siparişler — multi-order desteği
+    // dine_in olmayan siparişlerde related yok
+    let relatedOrders: RelatedOrderSummary[] = [];
+    if (order.table_id) {
+      // Son 6 saatte aynı masaya verilen, bu sipariş hariç tüm siparişler
+      // (terminal durumdakiler dahil — müşteri kim hangi siparişi verdi
+      // anlayabilsin)
+      const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
+      const { data: relatedRows } = await admin
+        .from('orders')
+        .select('id, status, total, created_at')
+        .eq('business_id', order.business_id)
+        .eq('table_id', order.table_id)
+        .neq('id', orderId)
+        .gte('created_at', sixHoursAgo)
+        .order('created_at', { ascending: false })
+        .limit(8);
+
+      relatedOrders = (relatedRows || []).map((r) => ({
+        id: r.id as string,
+        order_no: (r.id as string).slice(0, 8).toUpperCase(),
+        status: r.status as string,
+        total: Number(r.total),
+        created_at: r.created_at as string,
+      }));
+    }
+
     return {
       success: true,
       data: {
@@ -410,6 +447,7 @@ export async function getOrderTracking(
         has_review: !!existingReview,
         review_smart_redirect: reviewSmartRedirect,
         google_place_id: googlePlaceId,
+        related_orders: relatedOrders,
       },
     };
   } catch (err) {

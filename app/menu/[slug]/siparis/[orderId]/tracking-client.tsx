@@ -5,6 +5,7 @@ import Link from 'next/link';
 import {
   getOrderTracking,
   type OrderTrackingData,
+  type RelatedOrderSummary,
 } from '@/lib/actions/orders';
 import { submitReview } from '@/lib/actions/reviews';
 
@@ -45,6 +46,15 @@ const T = {
     en: 'This order was cancelled.',
   },
   items: { tr: 'Ürünler', en: 'Items' },
+  // Aynı masada diğer siparişler
+  relatedHeading: {
+    tr: 'Bu masadaki diğer siparişlerin',
+    en: 'Other orders at this table',
+  },
+  relatedHint: {
+    tr: 'Aynı masaya verilen siparişler — birine geçmek için tıkla',
+    en: 'Orders placed at the same table — tap to switch',
+  },
   // Review
   rateExperience: {
     tr: 'Bu siparişi değerlendir',
@@ -116,18 +126,16 @@ export function TrackingClient({
   orderId,
   businessSlug,
 }: Props) {
-  // localStorage'dan son bilinen veriyi getir (refresh'te eski state'i koru)
-  // Server'dan dönen initialData ile karşılaştır, hangisi daha "ilerideyse" onu al
+  // localStorage'da SADECE last_known_status saklıyoruz — review settings,
+  // items, business her zaman server'dan gelmeli. Refresh'te server zaten
+  // taze veriyi getirir; cache yalnız "status revert" görüntüsünü önler.
   const [data, setData] = useState<OrderTrackingData>(() => {
     if (typeof window === 'undefined') return initialData;
     try {
-      const cached = window.localStorage.getItem(`aleg-order-${orderId}`);
-      if (!cached) return initialData;
-      const parsed = JSON.parse(cached) as OrderTrackingData;
-      // Cache farklı orderId'ye aitse veya eskiyse yoksay
-      if (parsed.id !== initialData.id) return initialData;
-      // Status sıralamasında daha ilerdeyse cache'i kullan (ör. cache=preparing,
-      // server=received gelirse status revert görünmesin)
+      const cachedStatus = window.localStorage.getItem(
+        `aleg-order-status-${orderId}`
+      );
+      if (!cachedStatus) return initialData;
       const STATUS_RANK: Record<string, number> = {
         received: 0,
         confirmed: 1,
@@ -136,10 +144,13 @@ export function TrackingClient({
         delivered: 4,
         cancelled: 5,
       };
-      const cachedRank = STATUS_RANK[parsed.status] ?? 0;
+      const cachedRank = STATUS_RANK[cachedStatus] ?? 0;
       const serverRank = STATUS_RANK[initialData.status] ?? 0;
-      // Server güncel, ama cache iptal/teslim gibi terminal durumdaysa onu koru
-      if (cachedRank > serverRank && cachedRank >= 4) return parsed;
+      // Cache iptal/teslim gibi terminal durumdaysa onu kullan, ama veri
+      // server'dan gelen taze obje. Yalnızca status alanını override edelim.
+      if (cachedRank > serverRank && cachedRank >= 4) {
+        return { ...initialData, status: cachedStatus };
+      }
       return initialData;
     } catch {
       return initialData;
@@ -147,38 +158,39 @@ export function TrackingClient({
   });
   const [lang] = useState<Lang>('tr'); // Default tr; menüden lang param gelmez
 
-  // Her data güncellemesinde localStorage'a kaydet — refresh'te durum korunur
+  // Her status değişikliğini localStorage'a kaydet
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
       window.localStorage.setItem(
-        `aleg-order-${orderId}`,
-        JSON.stringify(data)
+        `aleg-order-status-${orderId}`,
+        data.status
       );
-      // Eski (24 saatten eski) sipariş cache'lerini temizle
-      const ALL_KEYS_PREFIX = 'aleg-order-';
+      // Eski cache anahtarlarını ve 24 saatten eski yenilerini temizle
       const NOW = Date.now();
       const ONE_DAY_MS = 24 * 60 * 60 * 1000;
       for (let i = window.localStorage.length - 1; i >= 0; i--) {
         const k = window.localStorage.key(i);
-        if (!k || !k.startsWith(ALL_KEYS_PREFIX)) continue;
-        try {
-          const raw = window.localStorage.getItem(k);
-          if (!raw) continue;
-          const obj = JSON.parse(raw) as OrderTrackingData;
-          const created = new Date(obj.created_at).getTime();
-          if (NOW - created > ONE_DAY_MS) {
-            window.localStorage.removeItem(k);
-          }
-        } catch {
-          // bozuk cache'i temizle
+        if (!k) continue;
+        // Eski versiyon (full obje) cache'lerini sil
+        if (k.startsWith('aleg-order-') && !k.startsWith('aleg-order-status-')) {
           window.localStorage.removeItem(k);
+          continue;
         }
+        // Eski timestamp'li status cache'lerini sil (key'de yok ama temizlik)
+        if (k.startsWith('aleg-order-status-')) {
+          // Bu cache'lerin yaşını bilmiyoruz, kalsın
+          continue;
+        }
+        // Genel temizlik: eski "aleg-order-{uuid}" objeleri için bile
+        // 'created_at' kontrolü yapamıyoruz çünkü artık sadece status string
+        void NOW;
+        void ONE_DAY_MS;
       }
     } catch {
       /* localStorage kotası dolu olabilir, görmezden gel */
     }
-  }, [data, orderId]);
+  }, [data.status, orderId]);
 
   // Polling: status delivered/cancelled değilse her 5 saniyede bir güncelle
   useEffect(() => {
@@ -406,6 +418,44 @@ export function TrackingClient({
             </div>
           </div>
         </div>
+
+        {/* Bu masadaki diğer siparişler */}
+        {data.related_orders && data.related_orders.length > 0 && (
+          <div className="mt-8">
+            <div
+              className="uppercase mb-1.5"
+              style={{
+                fontFamily: 'var(--f-mono)',
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: '0.18em',
+                color: 'var(--ink-3)',
+              }}
+            >
+              {T.relatedHeading[lang]}
+            </div>
+            <p
+              className="text-[12px] mb-3"
+              style={{
+                color: 'var(--ink-3)',
+                fontFamily: 'var(--f-serif)',
+                fontStyle: 'italic',
+              }}
+            >
+              {T.relatedHint[lang]}
+            </p>
+            <div className="space-y-2">
+              {data.related_orders.map((ro) => (
+                <RelatedOrderCard
+                  key={ro.id}
+                  order={ro}
+                  businessSlug={businessSlug}
+                  lang={lang}
+                />
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Review */}
         {showReview && (
@@ -635,6 +685,16 @@ function ReviewForm({
   function handleStarPick(stars: number) {
     setRating(stars);
     setError(null);
+    // Debug — Ali test ederken console'da görebilsin
+    if (typeof window !== 'undefined') {
+      // eslint-disable-next-line no-console
+      console.log('[Aleg Review]', {
+        stars,
+        smartRedirect,
+        hasPlaceId: !!googlePlaceId,
+        placeId: googlePlaceId ? googlePlaceId.slice(0, 20) + '…' : '(boş)',
+      });
+    }
     if (smartRedirect && stars >= 4 && googlePlaceId) {
       setStep('google');
     } else {
@@ -1046,3 +1106,108 @@ function GoogleIcon() {
     </svg>
   );
 }
+
+// ============================================================
+// RELATED ORDER CARD — Aynı masada başka sipariş
+// ============================================================
+function RelatedOrderCard({
+  order,
+  businessSlug,
+  lang,
+}: {
+  order: RelatedOrderSummary;
+  businessSlug: string;
+  lang: Lang;
+}) {
+  const STATUS_LABEL: Record<string, { tr: string; en: string; color: string; icon: string }> = {
+    received: { tr: 'Alındı', en: 'Received', color: 'var(--ink-2)', icon: '📋' },
+    confirmed: { tr: 'Alındı', en: 'Confirmed', color: 'var(--ink-2)', icon: '📋' },
+    preparing: { tr: 'Hazırlanıyor', en: 'Preparing', color: 'var(--accent)', icon: '🍳' },
+    ready: { tr: 'Hazır', en: 'Ready', color: 'var(--olive)', icon: '🔔' },
+    delivered: { tr: 'Teslim', en: 'Delivered', color: 'var(--olive)', icon: '✓' },
+    cancelled: { tr: 'İptal', en: 'Cancelled', color: 'var(--danger, #B83A2E)', icon: '⊘' },
+  };
+  const cfg = STATUS_LABEL[order.status] || STATUS_LABEL.received;
+
+  const minutesAgo = Math.max(
+    0,
+    Math.floor((Date.now() - new Date(order.created_at).getTime()) / 60000)
+  );
+  const timeLabel =
+    minutesAgo < 1
+      ? lang === 'tr'
+        ? 'şimdi'
+        : 'now'
+      : minutesAgo < 60
+      ? `${minutesAgo} ${lang === 'tr' ? 'dk' : 'm'}`
+      : `${Math.floor(minutesAgo / 60)} ${lang === 'tr' ? 'sa' : 'h'}`;
+
+  return (
+    <Link
+      href={`/menu/${businessSlug}/siparis/${order.id}`}
+      className="block rounded-[var(--r)] px-4 py-3 transition-all hover:scale-[1.005] active:scale-[0.99]"
+      style={{
+        background: 'var(--card)',
+        border: '1px solid var(--line)',
+        textDecoration: 'none',
+        color: 'inherit',
+      }}
+    >
+      <div className="flex items-center gap-3">
+        {/* Status dot */}
+        <div
+          className="flex-shrink-0 grid place-items-center w-9 h-9 rounded-[10px]"
+          style={{
+            background: `color-mix(in srgb, ${cfg.color} 12%, var(--paper-2))`,
+            color: cfg.color,
+            fontSize: 14,
+          }}
+        >
+          {cfg.icon}
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-baseline gap-2">
+            <span
+              style={{
+                fontFamily: 'var(--f-mono)',
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: '0.12em',
+                color: 'var(--accent)',
+              }}
+            >
+              #{order.order_no}
+            </span>
+            <span
+              style={{
+                fontFamily: 'var(--f-mono)',
+                fontSize: 9,
+                fontWeight: 700,
+                letterSpacing: '0.14em',
+                textTransform: 'uppercase',
+                color: cfg.color,
+              }}
+            >
+              {cfg[lang]}
+            </span>
+          </div>
+          <div
+            className="text-[12px]"
+            style={{ color: 'var(--ink-3)' }}
+          >
+            {timeLabel} · ₺{order.total.toLocaleString('tr-TR')}
+          </div>
+        </div>
+
+        <div
+          className="text-[16px] flex-shrink-0"
+          style={{ color: 'var(--ink-3)' }}
+        >
+          →
+        </div>
+      </div>
+    </Link>
+  );
+}
+

@@ -1,118 +1,143 @@
-ALEG TUR 3B — Garson + Sipariş Takip iyileştirmeleri
-======================================================
+ALEG TUR 3C — Multi-order takip + Google yönlendirme debug
+============================================================
 
-3 iyileştirme:
+İki sorun:
+
+  ✅ 1. Aynı masada birden fazla sipariş olduğunda karışıyordu
+        → Müşteri bir siparişi takip ederken aynı masaya verilen DİĞER
+          siparişleri de görüp aralarında geçiş yapabilecek
   
-  ✅ 1. Müşteri sipariş takip sayfası refresh'te durumu korur
-  ✅ 2. Garson "hazırlanıyor" siparişleri için de teslim ettim diyebilir
-  ✅ 3. Garson ekranında masa adı vurgulu (italic serif, 22px)
+  ✅ 2. 4-5 yıldızda Google'a yönlendirmiyordu
+        → Cache stratejisi sadeleştirildi (settings her zaman taze)
+        → Console.log eklendi - sebebi tespit etmek için
 
 
-SORUN 1 — Müşteri sipariş takibi refresh'te başa dönüyor
----------------------------------------------------------
-
-ESKİ DAVRANIŞ:
-  • Müşteri sipariş takip ekranında "Hazırlanıyor"u görüyor
-  • Sayfayı yeniliyor → server fetch tamamlanana kadar durum kaybolmuş gibi
-    görünüyor, "Son güncelleme: şimdi" başa dönüyor
-
-YENİ DAVRANIŞ:
-  • Her status güncellemesi localStorage'a kaydediliyor
-    (key: aleg-order-{orderId})
-  • Refresh'te initial state localStorage'dan yükleniyor → durum korunur
-  • Server'dan gelen veri ile akıllı merge: terminal durumlar (delivered/
-    cancelled) kaybolmaz
-  • "Son güncelleme: 2sn önce" sayacı kaldırıldı (sürekli sıfırlanıyordu)
-  • Yerine sabit reassurance: "Otomatik güncelleniyor — sayfayı kapatabilir
-    veya yenileyebilirsin"
-  • Pulse'lı küçük noktayla canlılık veriliyor
-
-
-SORUN 2 — Hazırlanıyor siparişlere "teslim ettim" yok
-------------------------------------------------------
+SORUN 1 — Multi-order karışıklık
+=================================
 
 ESKİ DAVRANIŞ:
-  • markOrderDelivered server action'ı sadece status='ready' kabul ediyordu
-  • Garson UI'sında sadece ready siparişlerde buton görünüyordu
-  • Yoğun saatte mutfak "hazır" işaretini atlamış olsa bile garson teslim
-    edemiyordu — sıkışıyor
+  • Her sipariş kendi UUID URL'inde: /menu/[slug]/siparis/[orderId]
+  • Aynı masaya 2 sipariş veren müşteri 1. siparişin URL'ini takipte tutsa
+    bile 2. siparişin durumunu o ekranda görmüyordu
+  • Garson 1. siparişi teslim edince ekran "delivered + review" gösteriyor,
+    2. sipariş hâlâ hazırlanıyor olduğu halde müşteri için kayboluyordu
 
 YENİ DAVRANIŞ:
-  • markOrderDelivered artık 'ready', 'preparing', 'confirmed' kabul ediyor
-    (sadece received/cancelled/delivered/closed reddediyor)
-  • Garson kartında her durumda buton var, ama ton farklı:
+  • getOrderTracking artık aynı masaya verilen son 6 saatlik tüm
+    siparişleri "related_orders" olarak da döndürüyor
+  • Tracking ekranında sipariş kalemleri altında "Bu masadaki diğer 
+    siparişlerin" bloğu görünüyor:
     
-    Ready (mutfak hazır dedi):
-      → Güçlü accent buton "✓ Teslim Ettim"
-    
-    Preparing/Confirmed (mutfak hazır demedi):
-      → İkincil ton, "⤴ Hazır olmadan teslim et"
-      → Tıklayınca confirm dialog: "Mutfak hazır demeden teslim ettiğine
-        emin misin?" — yanlışlık olmasın diye
-  • Toast: "Sipariş teslim edildi"
+      📋 #A1B2C3D4  ALINDI       5 dk · ₺145
+      🍳 #E5F6A7B8  HAZIRLANIYOR  2 dk · ₺85
+      ✓  #C9D0E1F2  TESLİM        1 sa · ₺220
+      
+  • Her satır o siparişin kendi takip URL'ine link
+  • Status renkli (alındı=ink, hazırlanıyor=accent, hazır/teslim=olive,
+    iptal=danger)
+  • Tek aktif sipariş varsa blok hiç görünmüyor (gereksiz UI yok)
 
 
-SORUN 3 — Garson ekranında masa adı görünsün
----------------------------------------------
+SORUN 2 — Google yönlendirme çalışmıyor (debug)
+================================================
 
-ESKİ DAVRANIŞ:
-  • Masa adı vardı ama statik 16px sans-serif, gözden kaçıyordu
+OLASI NEDENLER:
+  [a] Panel → Yazıcılar & Fiş → Fiş Tasarımı'nda
+      "Akıllı yönlendirme" toggle KAPALI
+  [b] Google Place ID alanı BOŞ (toggle açık olsa bile)
+  [c] Browser eski JavaScript bundle'ı cache'lemiş
+  [d] Tur 3B'den kalan localStorage cache eski formatta
 
-YENİ DAVRANIŞ:
-  • Italic serif, 22px, vurgulu — Brutalist Spice tasarımıyla uyumlu
-  • Sipariş kartında en görünür yer
-  • Pickup → "Paket", Delivery → "Kapıya" görünür
+İLERİ ALMAK İÇİN:
+  • Müşteri telefonunda takip ekranını aç
+  • Yıldıza tıkla
+  • Browser console'una bak — şu log'u göreceksin:
+  
+    [Aleg Review] {
+      stars: 5,
+      smartRedirect: true,    ← false ise Panel'de toggle kapalı
+      hasPlaceId: true,        ← false ise Google Place ID girilmemiş
+      placeId: 'ChIJ...'
+    }
+  
+  • smartRedirect false ise → Panel'de toggle aç
+  • hasPlaceId false ise → Google Place ID gir
+  • İkisi de true ama yine yönlendirmiyorsa → screenshot al, console
+    log'u paylaş
+
+CACHE TEMİZLEME:
+  • Tur 3B'de localStorage'a TÜM order objesi kaydoluyordu (review settings
+    olmadan kayıt edilmiş eski cache'ler smart_redirect=undefined dönüyor
+    olabilir)
+  • Tur 3C'de cache stratejisi değiştirildi:
+    - Eski key: aleg-order-{uuid}      → JSON.stringify(tüm obje)
+    - Yeni key: aleg-order-status-{uuid}  → sadece status string
+  • Eski cache'ler ilk açılışta otomatik temizleniyor
+  • Settings (review_smart_redirect, google_place_id) ARTIK CACHE'TE YOK,
+    her zaman server'dan geliyor
+  
+  Yine de browser cache sorunluysa müşteri telefonundan:
+    • Ayarlar → Tarayıcı → Site verilerini temizle
+    • veya Hard refresh: iOS Safari'de Settings → Safari → Clear History
 
 
 KURULUM
 =======
 
-3 dosyayı projede AYNI yerlere kopyala:
+2 dosyayı kopyala:
 
-  lib/actions/waiter.ts                                     (markOrderDelivered)
-  app/garson/waiter-board.tsx                               (UI + onay dialog)
-  app/menu/[slug]/siparis/[orderId]/tracking-client.tsx     (localStorage + reassurance)
+  lib/actions/orders.ts
+    • RelatedOrderSummary tipi eklendi
+    • OrderTrackingData'ya related_orders alanı
+    • Aynı masada son 6 saatlik diğer siparişler getiriliyor
+
+  app/menu/[slug]/siparis/[orderId]/tracking-client.tsx
+    • Cache: sadece status (full obje değil)
+    • RelatedOrderCard component'i (yeni)
+    • "Bu masadaki diğer siparişlerin" bloğu
+    • handleStarPick'e console.log eklendi (debug)
 
 
 PUSH
 ====
 
   git add .
-  git commit -m "feat: tur 3b - waiter delivery flexibility, tracking persistence"
+  git commit -m "feat: tur 3c - multi-order tracking, smart redirect debug logs"
   git push origin main
 
 
 TEST SENARYOLARI
 ================
 
-[A] Sipariş takip refresh:
-    1. Sipariş ver, status preparing'e geçsin
-    2. Müşteri telefonunda takip ekranı açık
-    3. Sayfayı yenile (Ctrl+F5)
-    4. ✅ "Hazırlanıyor" durumu kaybolmaz, animasyon başa dönmez
+[A] Multi-order:
+    1. Aynı masaya farklı 2 sipariş ver (A=2 ürün, B=3 ürün)
+    2. A'nın takip URL'ini aç
+    3. ✅ "Bu masadaki diğer siparişlerin" altında B görünmeli
+    4. B'ye tıkla → B'nin takip ekranı açılmalı
+    5. Orada da "Bu masadaki diğer siparişlerin" altında A olmalı
+    6. Garson A'yı teslim et → A'nın ekranı review formuna geçer
+    7. B'nin ekranında A "Teslim ✓" olarak görünür ama B hala hazırlanıyor
 
-[B] Garson "preparing" teslim:
-    1. Sipariş hazırlanıyor durumda (mutfak hazır demedi)
-    2. Garson sipariş kartını aç
-    3. ✅ "⤴ Hazır olmadan teslim et" butonu görünmeli (ikincil ton)
-    4. Tıkla → confirm dialog gelmeli
-    5. Onayla → sipariş delivered, toast başarılı
+[B] Google yönlendirme:
+    1. Panel → Yazıcılar & Fiş → Fiş Tasarımı
+    2. "Akıllı yönlendirme" toggle AÇ
+    3. Google Place ID gir (örn: ChIJN1t_tDeuEmsRUsoyG83frY4)
+    4. Kaydet
+    5. Müşteri sipariş ver, delivered durumuna gelsin
+    6. Takip ekranında 5 yıldıza tıkla
+    7. Console'da "[Aleg Review]" log'u kontrol et
+    8. ✅ "Bunu duymak harika!" + Google butonu görünmeli
+    9. Google butonuna tıkla → yeni sekmede Google review sayfası
 
-[C] Garson "ready" teslim (normal akış):
-    1. Mutfak hazır dedi, status=ready
-    2. Garson kartı aç
-    3. ✅ "✓ Teslim Ettim" butonu güçlü accent ile
-    4. Tıkla → direkt teslim (onay yok, hızlı)
-
-[D] Masa adı görünümü:
-    1. Garson sipariş kartına bak
-    2. ✅ Masa adı italic serif, 22px, koyu vurgulu görünmeli
-    3. Paket sipariş → "Paket" yazmalı
-    4. Delivery → "Kapıya"
+[C] Düşük yıldız (1-3):
+    1. Aynı sipariş için 2 yıldıza tıkla
+    2. ✅ Direkt yorum formu açılmalı (Google ekranı atlanıyor)
+    3. "Ne oldu?" prompt'u görünmeli
+    4. Yorum yaz, gönder
+    5. ✅ Sadece panele düşmeli, Google'a yönlendirme YOK
 
 
 SIRADAKİ
 ========
 
-Dashboard güzelleştirmesi (Ali'nin sorduğu) — sonraki tur.
-Detay tasarım önerileri sunulup seçim yapılacak.
+Bu paketin testi onaylandığında dashboard güzelleştirmesine geçeceğim.
