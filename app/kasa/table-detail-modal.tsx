@@ -427,6 +427,7 @@ export function TableDetailModal({
                   const isSelected = selectedItems.has(key);
                   const isPaid = fi.orderPaymentStatus === 'paid';
                   const isComplimentary = fi.item.is_complimentary;
+                  const isCancelled = fi.item.status === 'cancelled';
                   return (
                     <FlatItemRow
                       key={key}
@@ -434,8 +435,11 @@ export function TableDetailModal({
                       isSelected={isSelected}
                       isPaid={isPaid}
                       isComplimentary={isComplimentary}
+                      isCancelled={isCancelled}
                       onToggle={
-                        isPaid ? undefined : () => toggleItem(fi.orderId, fi.item.id)
+                        isPaid || isCancelled
+                          ? undefined
+                          : () => toggleItem(fi.orderId, fi.item.id)
                       }
                       onGift={() =>
                         setGiftItemContext({
@@ -1623,6 +1627,7 @@ function FlatItemRow({
   isSelected,
   isPaid,
   isComplimentary,
+  isCancelled,
   onToggle,
   onGift,
 }: {
@@ -1637,6 +1642,7 @@ function FlatItemRow({
   isSelected: boolean;
   isPaid: boolean;
   isComplimentary: boolean;
+  isCancelled: boolean;
   onToggle?: () => void;
   onGift: () => void;
 }) {
@@ -1673,17 +1679,21 @@ function FlatItemRow({
       }
       className="flex items-start gap-2.5 p-2.5 rounded-[10px] transition-all select-none"
       style={{
-        background: isSelected
-          ? 'color-mix(in srgb, var(--accent) 6%, var(--paper))'
-          : isPaid
-            ? 'color-mix(in srgb, var(--ok) 4%, transparent)'
-            : 'var(--paper)',
+        background: isCancelled
+          ? 'color-mix(in srgb, var(--ink-3) 4%, var(--paper-2))'
+          : isSelected
+            ? 'color-mix(in srgb, var(--accent) 6%, var(--paper))'
+            : isPaid
+              ? 'color-mix(in srgb, var(--ok) 4%, transparent)'
+              : 'var(--paper)',
         border: `1px solid ${
-          isSelected
-            ? 'color-mix(in srgb, var(--accent) 35%, var(--line))'
-            : 'var(--line)'
+          isCancelled
+            ? 'color-mix(in srgb, var(--ink-3) 18%, var(--line))'
+            : isSelected
+              ? 'color-mix(in srgb, var(--accent) 35%, var(--line))'
+              : 'var(--line)'
         }`,
-        opacity: isPaid ? 0.6 : 1,
+        opacity: isCancelled ? 0.55 : isPaid ? 0.6 : 1,
         cursor: onToggle ? 'pointer' : 'default',
       }}
     >
@@ -1699,26 +1709,50 @@ function FlatItemRow({
         <div className="flex items-baseline gap-2 flex-wrap">
           <span
             className="text-ink"
-            style={{ fontWeight: 600, fontSize: 14, lineHeight: 1.2 }}
+            style={{
+              fontWeight: 600,
+              fontSize: 14,
+              lineHeight: 1.2,
+              textDecoration: isCancelled ? 'line-through' : 'none',
+              color: isCancelled ? 'var(--ink-3)' : undefined,
+            }}
           >
             {item.quantity}× {item.product_name}
           </span>
-          <span
-            className="uppercase"
-            style={{
-              fontFamily: 'var(--f-mono)',
-              fontSize: 8,
-              fontWeight: 700,
-              letterSpacing: '0.12em',
-              color: itemCfg.color,
-              padding: '1px 5px',
-              borderRadius: 3,
-              background: `color-mix(in srgb, ${itemCfg.color} 12%, transparent)`,
-            }}
-          >
-            {itemCfg.label}
-          </span>
-          {isPaid && (
+          {isCancelled ? (
+            <span
+              className="uppercase"
+              style={{
+                fontFamily: 'var(--f-mono)',
+                fontSize: 8,
+                fontWeight: 700,
+                letterSpacing: '0.12em',
+                color: '#C4553A',
+                padding: '1px 5px',
+                borderRadius: 3,
+                background: 'color-mix(in srgb, #C4553A 12%, transparent)',
+              }}
+            >
+              × İPTAL
+            </span>
+          ) : (
+            <span
+              className="uppercase"
+              style={{
+                fontFamily: 'var(--f-mono)',
+                fontSize: 8,
+                fontWeight: 700,
+                letterSpacing: '0.12em',
+                color: itemCfg.color,
+                padding: '1px 5px',
+                borderRadius: 3,
+                background: `color-mix(in srgb, ${itemCfg.color} 12%, transparent)`,
+              }}
+            >
+              {itemCfg.label}
+            </span>
+          )}
+          {isPaid && !isCancelled && (
             <span
               className="uppercase"
               style={{
@@ -1735,7 +1769,7 @@ function FlatItemRow({
               ✓ ÖDENDİ
             </span>
           )}
-          {isComplimentary && (
+          {isComplimentary && !isCancelled && (
             <span
               className="uppercase"
               style={{
@@ -1761,12 +1795,27 @@ function FlatItemRow({
               fontSize: 11.5,
               fontStyle: 'italic',
               lineHeight: 1.35,
+              textDecoration: isCancelled ? 'line-through' : 'none',
+              opacity: isCancelled ? 0.7 : 1,
             }}
           >
             &ldquo;{item.note}&rdquo;
           </div>
         )}
-        {isComplimentary && item.complimentary_reason && (
+        {isCancelled && item.complimentary_reason && (
+          <div
+            className="mt-0.5"
+            style={{
+              fontSize: 10.5,
+              color: 'var(--ink-3)',
+              fontFamily: 'var(--f-mono)',
+              letterSpacing: '0.04em',
+            }}
+          >
+            × {item.complimentary_reason}
+          </div>
+        )}
+        {isComplimentary && !isCancelled && item.complimentary_reason && (
           <div
             className="mt-0.5"
             style={{
@@ -1788,13 +1837,15 @@ function FlatItemRow({
             fontFamily: 'var(--f-mono)',
             fontSize: 13,
             fontWeight: 700,
-            textDecoration: isComplimentary ? 'line-through' : 'none',
-            opacity: isComplimentary ? 0.5 : 1,
+            textDecoration:
+              isComplimentary || isCancelled ? 'line-through' : 'none',
+            opacity: isComplimentary || isCancelled ? 0.5 : 1,
+            color: isCancelled ? 'var(--ink-3)' : undefined,
           }}
         >
           {fmt(item.unit_price * item.quantity)}
         </span>
-        {!isPaid && !isComplimentary && (
+        {!isPaid && !isComplimentary && !isCancelled && (
           <button
             onClick={(e) => {
               e.stopPropagation();

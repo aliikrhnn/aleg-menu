@@ -1896,13 +1896,35 @@ export async function cancelOrderItems(input: {
     }
 
     // Kalemleri iptal et
-    await admin
+    // status = 'cancelled' yazılır. cancel_reason kolonu varsa o, yoksa
+    // complimentary_reason'a fallback (geriye uyum).
+    const cancelReasonText = input.reason?.trim() || 'Kasiyer iptal';
+
+    // Önce cancel_reason ile dene (yeni schema)
+    const { error: updateError1 } = await admin
       .from('order_items')
       .update({
         status: 'cancelled',
-        complimentary_reason: input.reason?.trim() || null,
+        cancel_reason: cancelReasonText,
       })
       .in('id', toCancel.map((it) => it.id));
+
+    if (updateError1) {
+      // cancel_reason kolonu yoksa eski yöntem dene (sadece status)
+      const { error: updateError2 } = await admin
+        .from('order_items')
+        .update({
+          status: 'cancelled',
+        })
+        .in('id', toCancel.map((it) => it.id));
+
+      if (updateError2) {
+        return {
+          success: false,
+          error: `Kalem iptal hatası: ${updateError2.message}`,
+        };
+      }
+    }
 
     // Sipariş bazlı total güncelle
     const closedOrderIds: string[] = [];
