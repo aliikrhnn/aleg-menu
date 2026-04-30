@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { logAction, fetchPerformerInfo } from './audit-log';
 import { revalidatePath } from 'next/cache';
 
 // ============================================================
@@ -2145,7 +2146,7 @@ export async function applyAdjustmentsBeforeSplit(input: {
       return { success: false, error: updateError.message };
     }
 
-    // Adjustment log
+    // Adjustment log (eski payment_logs)
     await admin.from('payment_logs').insert({
       business_id: businessId,
       order_id: input.orderId,
@@ -2157,6 +2158,44 @@ export async function applyAdjustmentsBeforeSplit(input: {
       note: `Bölme öncesi: indirim ₺${input.discountAmount.toFixed(2)}${input.discountReason ? ' (' + input.discountReason + ')' : ''}, bahşiş ₺${input.tipAmount.toFixed(2)}`,
       performed_by: memberId,
       performed_at: new Date().toISOString(),
+    });
+
+    // AUDIT LOG (yeni order_logs)
+    const performer = await fetchPerformerInfo(memberId);
+    if (input.discountAmount > 0) {
+      void logAction({
+        businessId,
+        orderId: input.orderId,
+        action: 'discount_applied',
+        details: {
+          amount: input.discountAmount,
+          reason: input.discountReason || null,
+          context: 'before_split',
+        },
+        ...performer,
+      });
+    }
+    if (input.tipAmount > 0) {
+      void logAction({
+        businessId,
+        orderId: input.orderId,
+        action: 'tip_applied',
+        details: {
+          amount: input.tipAmount,
+          context: 'before_split',
+        },
+        ...performer,
+      });
+    }
+    void logAction({
+      businessId,
+      orderId: input.orderId,
+      action: 'split_payment_started',
+      details: {
+        newTotal,
+        previousSubtotal: subtotal,
+      },
+      ...performer,
     });
 
     revalidatePath('/panel/pos');

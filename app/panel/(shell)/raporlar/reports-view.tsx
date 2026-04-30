@@ -134,6 +134,64 @@ export function ReportsView({
         <p className="text-ink-2 text-[15px]">
           {rangeDescription(data.range)} Satış trendleri, en sevilen ürünler ve yoğun saatler.
         </p>
+
+        {/* İşlem Geçmişi CTA */}
+        <a
+          href="/panel/raporlar/islem-gecmisi"
+          className="mt-4 inline-flex items-center gap-3 px-4 py-3 rounded-[10px] transition-all hover:opacity-90 group"
+          style={{
+            background:
+              'color-mix(in srgb, var(--accent) 8%, var(--card))',
+            border:
+              '1px solid color-mix(in srgb, var(--accent) 28%, var(--line))',
+            textDecoration: 'none',
+          }}
+        >
+          <span
+            className="grid place-items-center flex-shrink-0"
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 6,
+              background: 'var(--accent)',
+              color: 'var(--paper)',
+              fontSize: 14,
+              fontWeight: 700,
+            }}
+          >
+            ⌥
+          </span>
+          <div className="flex-1">
+            <div
+              className="text-[10px] uppercase font-bold mb-0.5"
+              style={{
+                fontFamily: 'var(--f-mono)',
+                letterSpacing: '0.16em',
+                color: 'var(--accent)',
+              }}
+            >
+              YENİ
+            </div>
+            <div
+              className="text-[14px] font-semibold"
+              style={{ color: 'var(--ink)' }}
+            >
+              İşlem Geçmişi (Audit Log)
+            </div>
+            <div
+              className="text-[11px] mt-0.5"
+              style={{ color: 'var(--ink-3)' }}
+            >
+              Hangi çalışan ne yaptı, ne zaman yaptı — iptal, ikram, indirim takibi.
+            </div>
+          </div>
+          <span
+            className="flex-shrink-0 transition-transform group-hover:translate-x-1"
+            style={{ color: 'var(--accent)', fontSize: 16 }}
+          >
+            →
+          </span>
+        </a>
       </div>
 
       {/* Tarih Filtresi */}

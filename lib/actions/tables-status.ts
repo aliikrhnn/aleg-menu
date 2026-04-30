@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { closeOrderAndMaybeFreeTable } from './payments';
+import { logAction, fetchPerformerInfo } from './audit-log';
 import { revalidatePath } from 'next/cache';
 
 // ============================================================
@@ -1032,7 +1033,7 @@ export async function makeItemsComplimentary(input: {
   error?: string;
 }> {
   try {
-    const { businessId } = await requireBusinessAccess();
+    const { businessId, memberId } = await requireBusinessAccess();
     const admin = createAdminClient();
 
     if (!input.itemIds || input.itemIds.length === 0) {
@@ -1059,7 +1060,7 @@ export async function makeItemsComplimentary(input: {
     // İkram edilecek kalemlerin bilgisini al (önceden ikramlıysa atla)
     const { data: items } = await admin
       .from('order_items')
-      .select('id, order_id, unit_price, quantity, is_complimentary')
+      .select('id, order_id, product_name, unit_price, quantity, is_complimentary')
       .in('id', input.itemIds)
       .eq('order_id', input.orderId);
 
@@ -1100,6 +1101,25 @@ export async function makeItemsComplimentary(input: {
         complimentary_total: newComp,
       })
       .eq('id', input.orderId);
+
+    // AUDIT LOG: ikram edilen her kalem
+    const performer = await fetchPerformerInfo(memberId);
+    for (const it of toFlip) {
+      void logAction({
+        businessId,
+        orderId: input.orderId,
+        action: 'item_complimentary',
+        details: {
+          itemId: it.id,
+          productName: it.product_name,
+          quantity: it.quantity,
+          unitPrice: Number(it.unit_price),
+          amount: Number(it.unit_price) * it.quantity,
+          reason: input.reason.trim(),
+        },
+        ...performer,
+      });
+    }
 
     revalidatePath('/kasa');
     revalidatePath('/panel/pos');
@@ -1852,7 +1872,7 @@ export async function cancelOrderItems(input: {
   error?: string;
 }> {
   try {
-    const { businessId } = await requireBusinessAccess();
+    const { businessId, memberId } = await requireBusinessAccess();
     const admin = createAdminClient();
 
     if (!input.itemIds || input.itemIds.length === 0) {
@@ -1862,7 +1882,7 @@ export async function cancelOrderItems(input: {
     // Kalemleri al + sipariş güvenlik kontrolü
     const { data: items } = await admin
       .from('order_items')
-      .select('id, order_id, unit_price, quantity, is_complimentary, status, paid_by_log_id')
+      .select('id, order_id, product_name, unit_price, quantity, is_complimentary, status, paid_by_log_id')
       .in('id', input.itemIds);
 
     if (!items || items.length === 0) {
@@ -2023,6 +2043,26 @@ export async function cancelOrderItems(input: {
             .eq('id', tableId);
         }
       }
+    }
+
+    // AUDIT LOG: her iptal edilen kalem için ayrı kayıt
+    const performer = await fetchPerformerInfo(memberId);
+    for (const it of toCancel) {
+      void logAction({
+        businessId,
+        orderId: it.order_id,
+        action: 'item_cancelled',
+        details: {
+          itemId: it.id,
+          productName: it.product_name,
+          quantity: it.quantity,
+          unitPrice: Number(it.unit_price),
+          amount: Number(it.unit_price) * it.quantity,
+          reason: cancelReasonText,
+          wasComplimentary: it.is_complimentary || false,
+        },
+        ...performer,
+      });
     }
 
     return {
