@@ -1,146 +1,119 @@
-ALEG TUR 17c — Müşteri Ekranı: Al Götür Sil + Sınır 10 + Yazı Değişiklikleri
-==============================================================================
+ALEG TUR 17d — Müşteri Menü: Kalan "Sepete Ekle" + Çağrı Butonu Çakışma
+=========================================================================
 
-3 değişiklik:
+İki düzeltme:
 
-  1. "Al götür" sipariş türü kaldırıldı (UI'dan)
-  2. Sepete ürün eklerken her kalem için max 10 adet sınırı
-  3. "Sepete ekle" → "Masaya ekle"
-     "Sepeti görüntüle" → "Masayı görüntüle"
-     Toast: "sepete eklendi" → "masaya eklendi"
-     Boş durum: "Sepetin boş" → "Masanız boş"
-     Temizle: "Sepeti boşalt" → "Masayı temizle"
+  1. Ürün seçim modal'ında (varyasyonlu ürün) "Sepete Ekle" hâlâ
+     görünüyordu → "Masaya Ekle" olarak güncellendi
+  2. "SİPARİŞLERİM" floating badge'i ile çağrı butonu üst üste
+     biniyordu → çağrı butonu siparişlerim üstüne kaydırıldı
 
 
-[1] AL GÖTÜR KALDIRMA
-======================
+[1] OPTIONPICKER MODAL - SEPETE EKLE
+======================================
 
-ÖNCESİ:
-  Müşteri menüsünde 3 sipariş türü tabı:
-    [Masada]  [Al götür]  [Paket]
+ÖNCESİ (kalmış):
+  Ürüne tıkla → varyasyon seç modalı açılır
+  Footer butonu: [Sepete Ekle  ₺250]
 
 SONRASI:
-  Sadece masada veya paket:
-    [Masada]  [Paket]
+  [Masaya Ekle  ₺250]    (TR)
+  [Add to Table  ₺250]   (EN)
 
-Mantık: Aleg masa-bazlı bir kafe sistemi. "Al götür" ile masa
-tutmadan sipariş alınması karışıklık yaratıyordu (kasa hangi
-masaya yazacak, kim alacak vs).
-
-Backend type sistemi 'pickup' destekliyor (legacy), sadece UI
-seçenekten kaldırıldı. Zaten orderConfig.modes.pickup = false
-yapılırsa veriden de gelmiyor.
+Ayrıca eksik olan dil desteği eklendi (eskiden hardcoded TR'di).
 
 
-[2] SEPET QTY SINIRI - 10
+[2] ÇAĞRI BUTONU ÇAKIŞMA
 ==========================
 
-ÖNCESİ:
-  Müşteri ürün adetini sınırsız arttırabiliyordu.
-  Yanlış tıklamalar veya kötü niyet → 50+ ürünlü siparişler.
+SORUN (kullanıcı görüntüsü):
+  ┌──────────────────────────────┐
+  │                              │
+  │                              │
+  │                              │
+  │              [✋ ÇAĞRI]      │ ← bu görünmüyor
+  │       [📋 SİPARİŞLERİM (1)]  │ ← bu üstüne biniyor
+  └──────────────────────────────┘
 
-SONRASI:
-  Her kalem için max 10 adet:
-  • addToCart: Mevcut qty 10'sa daha fazla eklenmez
-  • addConfiguredProduct (preset'li): Aynı limit
-  • handleQtyChange: Math.min(newQty, 10) ile cap'lenir
-  • UI'da + butonuna basılınca 10'da takılır (sessizce)
+Çağrı butonu: right:16, bottom:24
+Siparişlerim:  right:16, bottom:16 (yüksek 48px)
+→ Üst üste binmiş
 
-Not: Müşteri farklı varyasyonlarla aynı üründen 2 farklı kalem
-oluşturabilir. Her kalem ayrı ayrı 10 sınırı.
+ÇÖZÜM:
+  Çağrı butonu konum mantığı yenilendi:
+  
+  • cart YOK + siparişlerim YOK     → bottom: 24
+  • cart YOK + siparişlerim VAR     → bottom: 84  ← yeni
+  • cart VAR + scroll yok           → bottom: 84
+  • cart VAR + scroll çok           → bottom: 144
+  • cart YOK + siparişlerim VAR + scroll çok → bottom: 144
 
-
-[3] YAZI DEĞİŞİKLİKLERİ
-========================
-
-Aleg masa-bazlı. "Sepet" e-ticaret terminolojisi ve yanıltıcı.
-Müşteri sepete koyduğu ürünleri masaya bağlıyor — masaya ekliyor.
-
-  TR                                   EN
-  ───────────────────────              ─────────────────────
-  Sepete ekle      → Masaya ekle       Add to cart  → Add to table
-  Sepeti görüntüle → Masayı görüntüle  View cart    → View table
-  sepete eklendi   → masaya eklendi    added to cart → added to table
-  Sepetin boş      → Masanız boş       Cart is empty → Your table is empty
-  Sepeti boşalt    → Masayı temizle    Clear cart    → Clear table
-  Sepeti boşalt-mı? → Masayı temizle-mi? Clear cart? → Clear table?
+Sonuç:
+  ┌──────────────────────────────┐
+  │                              │
+  │                              │
+  │              [✋ ÇAĞRI]      │ ← üstte
+  │       [📋 SİPARİŞLERİM (1)]  │ ← altta
+  └──────────────────────────────┘
+  
+  Her iki buton da tıklanabilir.
 
 
-KOD DEĞİŞİKLİKLERİ
-==================
+KOD DEĞİŞİKLİĞİ
+================
 
 [1] app/menu/[slug]/menu-view.tsx
-  • allModes array'inden { id: 'pickup', tr: 'Al götür' } satırı silindi
-  • addToCart: existing.qty >= 10 kontrolü
-  • addConfiguredProduct: aynı kontrol
-  • handleQtyChange: Math.min(newQty, 10)
-  • 4 farklı yerde "Sepete ekle" / "Sepeti görüntüle" yazısı güncellendi
-  • Toast mesajı güncellendi
 
-[2] app/menu/[slug]/cart-drawer.tsx
-  • T sözlüğü güncellendi: empty, clear
-  • confirm dialog metni güncellendi
+  - OptionPickerModal footer butonu:
+    "Sepete Ekle" → "Masaya Ekle" (TR/EN ayrımıyla)
+
+  - Çağrı butonu bottom hesabı:
+    Önceki:
+      bottom: cartCount > 0
+        ? (scrollY > 600 ? 144 : 84)
+        : (scrollY > 600 ? 84 : 24)
+
+    Sonraki:
+      bottom: (() => {
+        const hasFloatingMyOrders = cartCount === 0 && myOrdersCount > 0;
+        if (cartCount > 0) return scrollY > 600 ? 144 : 84;
+        if (hasFloatingMyOrders) return scrollY > 600 ? 144 : 84;
+        return scrollY > 600 ? 84 : 24;
+      })()
 
 
 KURULUM
 =======
 
-Migration veya yeni paket gerekmez. 2 dosyayı üzerine yaz:
+Migration veya yeni paket gerekmez. 1 dosyayı üzerine yaz:
 
   app/menu/[slug]/menu-view.tsx
-  app/menu/[slug]/cart-drawer.tsx
 
 
 PUSH
 ====
 
-  git add app/menu/
-  git commit -m "feat: tur 17c - remove pickup, cap qty at 10, sepet→masa rename"
+  git add app/menu/[slug]/menu-view.tsx
+  git commit -m "fix: tur 17d - option picker label + service btn position"
   git push origin main
 
 
 TEST
 ====
 
-[A] Al götür kaldırma:
-    1. Müşteri menü aç (örn. cafename.alegstudio.com)
-    2. Üst tabları kontrol et
-    3. ✅ "Al götür" görünmemeli
-    4. Sadece [Masada] [Paket] (paket de orderConfig'de açıksa)
+[A] OptionPicker masaya ekle:
+    1. Müşteri menüde varyasyonlu bir ürüne tıkla (örn. süt seçimli kahve)
+    2. Modal açılır
+    3. ✅ Alt buton: "Masaya Ekle  ₺X" (Sepete Ekle değil)
+    4. EN dilinde: "Add to Table"
 
-[B] Sepet sınırı 10:
-    1. Bir ürünü 10 kez ekle (+ butonuna 10 kez bas)
-    2. ✅ Her ekleme qty'i 1 arttırır
-    3. 11. tıklama
-    4. ✅ Qty hâlâ 10 (artmaz, sessiz)
-    5. Sepet drawer'ı aç → + butonuna bas
-    6. ✅ Yine 10'da takılır
-    7. Manuel input (yoksa atla) → 50 yaz
-    8. ✅ 10 olarak set olur
-
-[C] Yazı değişiklikleri:
-    1. Bir ürün ekle
-    2. ✅ Toast: "{Ürün} masaya eklendi"
-    3. ✅ Alt çubukta "Masayı görüntüle"
-    4. Tıkla → drawer açılır
-    5. Sepet boşken
-    6. ✅ "Masanız boş"
-    7. "Masayı temizle" butonu
-    8. Tıkla → ✅ "Masayı temizlemek istiyor musun?"
-
-[D] EN dil:
-    1. Dil değiştir → EN
-    2. ✅ "Add to table", "View table", "added to table"
-    3. ✅ "Your table is empty", "Clear table"
-
-
-NOT
-====
-
-Backend'de zaten qty sınırı yoktu — saldırgan API'ye doğrudan
-istek atarsa 100 ekleyebilir. UI sınırı kasıtlı kullanım hatasını
-engeller. Backend'e de eklemek için sonraki turda input.items
-döngüsünde her item.quantity > 10 kontrolü yapılabilir.
-
-Şu an UI sınırı yeterli: müşteri kötü niyetle bunu bypass etse
-bile mutfak siparişi görür ve şüpheliyse iptal eder.
+[B] Çağrı butonu çakışma testi:
+    1. QR ile gir (qrTable olsun)
+    2. Bir sipariş ver → tracking sayfası → menüye dön
+    3. Şimdi: cart boş + siparişlerim 1 var
+    4. ✅ Sağ alt köşede iki buton üst üste binmemiş:
+       - Üstte: ✋ Çağrı butonu (turuncu, yuvarlak)
+       - Altta: 📋 SİPARİŞLERİM (1) badge
+    5. ✅ Her ikisine de tıklanabilir
+    6. Sayfayı kaydır (600px+)
+    7. ✅ İkisi de yukarı kayar, hâlâ üst üste binmemiş

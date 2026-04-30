@@ -1199,15 +1199,23 @@ export function MenuView({
             className="fixed z-40 grid place-items-center transition-all active:scale-90"
             style={{
               right: 16,
-              // Cart bar varsa 84px yukarı, scroll-top varsa onun da üstünde
-              bottom:
-                cartCount > 0
-                  ? scrollY > 600
-                    ? 144
-                    : 84
-                  : scrollY > 600
-                    ? 84
-                    : 24,
+              // Konum hesabı:
+              //   - Cart bar varsa (cartCount > 0): scroll-top butonuyla üst üste binmesin
+              //   - Cart yok ama Siparişlerim floating badge'i varsa: onun üstüne kay
+              //   - Hiçbiri yoksa: alt 24px
+              bottom: (() => {
+                const hasFloatingMyOrders =
+                  cartCount === 0 && myOrdersCount > 0;
+                if (cartCount > 0) {
+                  // cart bar 60-70px + içinde siparişlerim mini-bar varsa ek 48px
+                  return scrollY > 600 ? 144 : 84;
+                }
+                if (hasFloatingMyOrders) {
+                  // Floating siparişlerim ~48px yüksek + 16px alt + 16px gap
+                  return scrollY > 600 ? 144 : 84;
+                }
+                return scrollY > 600 ? 84 : 24;
+              })(),
               width: 56,
               height: 56,
               borderRadius: 28,
@@ -2387,8 +2395,10 @@ function OptionPickerModal({
           >
             <span className="text-[14px]">
               {missingRequired
-                ? `Lütfen ${tt(missingRequired.name, lang)} seç`
-                : 'Sepete Ekle'}
+                ? `${lang === 'tr' ? 'Lütfen' : 'Please choose'} ${tt(missingRequired.name, lang)}${lang === 'tr' ? ' seç' : ''}`
+                : lang === 'tr'
+                  ? 'Masaya Ekle'
+                  : 'Add to Table'}
             </span>
             <span
               style={{
