@@ -491,7 +491,7 @@ export function AuditLogClient({
                       >
                         {cfg.label}
                       </span>
-                      {log.details.productName && (
+                      {Boolean(log.details.productName) && (
                         <span
                           className="text-sm"
                           style={{ color: 'var(--ink-2)' }}
@@ -545,14 +545,14 @@ export function AuditLogClient({
                           <span>Masa {log.table_name}</span>
                         </>
                       )}
-                      {log.details.reason ? (
+                      {Boolean(log.details.reason) && (
                         <>
                           <span>·</span>
                           <span style={{ fontStyle: 'italic' }}>
                             &ldquo;{String(log.details.reason)}&rdquo;
                           </span>
                         </>
-                      ) : null}
+                      )}
                     </div>
                   </div>
 

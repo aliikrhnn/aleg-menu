@@ -1,165 +1,43 @@
-ALEG TUR 17a — AUDIT LOG ALTYAPISI
-=====================================
+ALEG TUR 17a-fix — TypeScript build hatası düzeltmesi
+========================================================
 
-Canlıya geçişin EN ÖNEMLİ önkoşulu: kim, ne zaman, ne yaptı izlemesi.
+SORUN
+=====
 
-Bu turla:
-  ✓ order_logs tablosu (operasyonel audit log)
-  ✓ logAction() helper — tüm action'lardan çağrılır
-  ✓ Üç kritik action'a entegre edildi: cancelOrderItems,
-    makeItemsComplimentary, applyAdjustmentsBeforeSplit
-  ✓ /panel/raporlar/islem-gecmisi rapor sayfası
-    - Tarih filtresi (bugün/dün/son 7 gün)
-    - Aksiyon tipi filtresi
-    - Çalışan bazlı özet (kim ne kadar iptal/ikram etti)
-    - Detaylı log listesi (kronolojik)
+  ./app/panel/(shell)/raporlar/islem-gecmisi/client.tsx:494:23
+  Type error: Type 'unknown' is not assignable to type 'ReactNode'.
 
+log.details.productName tipinde 'unknown' (jsonb'den geliyor).
+JSX'te bunu doğrudan koşul olarak yazınca render çıktısı 'unknown'
+oluyor, ReactNode değil.
 
-NEDEN ÖNEMLİ?
-==============
+ÇÖZÜM
+=====
 
-Bir kafede en sık görülen suistimal:
-  • Garson sürekli "ikram" yapıp parayı cebine atar
-  • Kasiyer "iptal" yapıp ödediği parayı saklar
-  • Birinci vardiyacı son müşteri parasını "iptal edildi" gösterir
+Truthy kontrolünü Boolean() ile sarmalayarak ReactNode döndürdüğü
+kesinleştirildi:
 
-Audit log olmadan: bunu YAKALAYAMAZSIN.
+  // ÖNCE (hata):
+  {log.details.productName && <span>...</span>}
 
-Audit log ile: günlük rapora bakınca "Faruk bugün ₺3,200 iptal etmiş"
-gibi anormallikler hemen göze çarpar. Performance review için.
+  // SONRA:
+  {Boolean(log.details.productName) && <span>...</span>}
 
+Aynı şekilde reason için ternary -> Boolean dönüştürüldü.
 
-KOD DEĞİŞİKLİKLERİ
-==================
-
-[1] supabase/migrations/0038_order_logs.sql (YENİ)
-  • order_logs tablosu
-  • action enum: 16 farklı işlem türü
-  • details jsonb (esnek payload)
-  • performed_by + snapshot (üye silinse bile rapor için kalır)
-  • RLS policy
-
-[2] lib/actions/audit-log.ts (YENİ)
-  • logAction() — server action'lardan çağrılır, hata olursa konsola düşer
-  • fetchPerformerInfo() — member adı + role çek
-  • getOrderLogs() — filtreli sorgu
-  • getAuditSummary() — çalışan bazlı özet
-
-[3] lib/actions/tables-status.ts
-  • cancelOrderItems içine logAction çağrısı (her iptal için)
-  • makeItemsComplimentary içine logAction çağrısı (her ikram için)
-
-[4] lib/actions/payments.ts
-  • applyAdjustmentsBeforeSplit içine 3 log çağrısı:
-    - discount_applied (varsa)
-    - tip_applied (varsa)
-    - split_payment_started
-
-[5] app/panel/(shell)/raporlar/islem-gecmisi/page.tsx (YENİ)
-  • Server page — bugünün loglarını + özetini çeker
-
-[6] app/panel/(shell)/raporlar/islem-gecmisi/client.tsx (YENİ)
-  • Tarih filtreleri (bugün/dün/7gün)
-  • Aksiyon filtresi
-  • 3 özet kart (toplam iptal/ikram/indirim)
-  • Çalışan bazlı tablo
-  • Detaylı log listesi
-  • Türkçe dilinde, Brutalist Spice tasarım
-
-[7] app/panel/(shell)/raporlar/reports-view.tsx
-  • Header'a "İşlem Geçmişi" CTA banner eklendi
+KOD ETKİSİ: Davranış değişmedi, sadece TypeScript memnun.
 
 
 KURULUM
 =======
 
-[1] DB MIGRATION (KRİTİK):
-    Supabase SQL Editor → 0038_order_logs.sql → run
-
-[2] DOSYALAR (üzerine yaz / yeni):
-    YENİ:
-      supabase/migrations/0038_order_logs.sql
-      lib/actions/audit-log.ts
-      app/panel/(shell)/raporlar/islem-gecmisi/page.tsx
-      app/panel/(shell)/raporlar/islem-gecmisi/client.tsx
-    GÜNCELLEMELER:
-      lib/actions/tables-status.ts
-      lib/actions/payments.ts
-      app/panel/(shell)/raporlar/reports-view.tsx
+1 dosyayı üzerine yaz:
+  app/panel/(shell)/raporlar/islem-gecmisi/client.tsx
 
 
 PUSH
 ====
 
-  git add .
-  git commit -m "feat: tur 17a - audit log infrastructure + report page"
+  git add app/panel/(shell)/raporlar/islem-gecmisi/client.tsx
+  git commit -m "fix: tur 17a-fix - TypeScript unknown to ReactNode in audit log UI"
   git push origin main
-
-
-TEST
-====
-
-[A] Migration ve sayfa erişimi:
-    1. Migration uygula
-    2. /panel/raporlar aç → "İşlem Geçmişi" CTA görünmeli
-    3. Tıkla → /panel/raporlar/islem-gecmisi açılır
-    4. ✅ Boş liste görünür (henüz log yok)
-
-[B] İlk audit log:
-    1. Bir masada bir kalem ikram et
-    2. /panel/raporlar/islem-gecmisi'ne dön
-    3. ✅ "Kalem ikram" kaydı listede görünür
-    4. ✅ Çalışan adın doğru
-    5. ✅ Saat, ürün, tutar doğru
-    6. ✅ Çalışan bazlı özet kartında 1 ikram yazıyor
-
-[C] Tarih filtreleri:
-    1. "Dün" filtresi → bugünün kayıtları gizlenir
-    2. "Son 7 gün" → tüm kayıtlar
-    3. "Bugün" → varsayılan
-
-[D] Aksiyon filtresi:
-    1. "Kalem iptal" seç
-    2. ✅ Sadece iptal kayıtları gözükür
-
-[E] Bölmeli ödeme + indirim/bahşiş:
-    1. Bir siparişe indirim+bahşiş uygula → BÖLEREK ÖDE
-    2. Audit log'a 3 yeni satır eklenmeli:
-       • discount_applied
-       • tip_applied
-       • split_payment_started
-
-[F] DB doğrulama:
-    SELECT action, count(*), sum((details->>'amount')::numeric)
-    FROM order_logs
-    WHERE business_id = '<id>'
-      AND performed_at >= NOW() - interval '1 day'
-    GROUP BY action;
-
-
-SONRAKİ
-========
-
-Tur 17b — kalan kritik bug'lar:
-  • Bug #4 garson "ilgilendim" akışı (acknowledged eklenecek)
-  • Bug #7 hızlı satış menü
-  • Bug #9 kasiyer yetki bypass
-  • Bug #10 kasa cari kart/nakit
-  • Bug #12 istasyon ekranı bar/mutfak/pastane
-
-Bug fix'leri tek tek yapıp tek tur halinde gönderelim, daha ufak
-değişiklikler olduğu için karışmaz.
-
-
-NOT
-====
-
-Daha sonra logAction çağrılarını şu yerlere de ekleriz:
-  • createManualOrder → order_created
-  • addItemsToOrder → item_added
-  • changeOrderTable → table_moved
-  • mergeTables, splitItemsFromMultipleOrders
-  • payments.takePayment, takePartialPayment
-
-Şu an EN KRİTİK 3 yerde (iptal/ikram/indirim+bahşiş+bölme) çalışıyor.
-Diğerleri yapılınca bu rapor zenginleşir.
