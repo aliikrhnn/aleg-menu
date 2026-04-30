@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { resolveQrSlug } from '@/lib/actions/qr';
 import { getPublicCallButtons } from '@/lib/actions/call-buttons';
 import { MenuView } from './menu-view';
+import { MenuThemeWrapper } from './menu-theme-wrapper';
 import { resolveTheme, buildThemeCSS } from '@/lib/menu-themes';
 import type { LocalizedText } from '@/types/database';
 
@@ -184,16 +185,27 @@ export default async function CustomerMenuPage({ params, searchParams }: Props) 
 
   // Tema yükle ve CSS oluştur
   // Önizleme parametreleri varsa onları kullan (panelden iframe ile çağrılırken)
-  const validPresets = ['brutalist', 'elite', 'modern', 'vintage', 'minimal'];
+  const validPresets = [
+    'brutalist',
+    'elite',
+    'modern',
+    'vintage',
+    'minimal',
+    'mediterranean',
+    'darkluxe',
+  ];
+  type ValidPreset =
+    | 'brutalist'
+    | 'elite'
+    | 'modern'
+    | 'vintage'
+    | 'minimal'
+    | 'mediterranean'
+    | 'darkluxe';
   const previewPreset =
     searchParams.preview_theme &&
     validPresets.includes(searchParams.preview_theme)
-      ? (searchParams.preview_theme as
-          | 'brutalist'
-          | 'elite'
-          | 'modern'
-          | 'vintage'
-          | 'minimal')
+      ? (searchParams.preview_theme as ValidPreset)
       : null;
   const previewAccent =
     searchParams.preview_accent === 'default'
@@ -208,15 +220,10 @@ export default async function CustomerMenuPage({ params, searchParams }: Props) 
     accent_override?: string | null;
   } | null) || null;
 
-  const finalPreset =
+  const finalPreset: ValidPreset =
     previewPreset ||
     (themeConfig?.preset && validPresets.includes(themeConfig.preset)
-      ? (themeConfig.preset as
-          | 'brutalist'
-          | 'elite'
-          | 'modern'
-          | 'vintage'
-          | 'minimal')
+      ? (themeConfig.preset as ValidPreset)
       : 'brutalist');
   const finalAccent =
     previewAccent !== undefined
@@ -233,25 +240,31 @@ export default async function CustomerMenuPage({ params, searchParams }: Props) 
     <>
       {/* Tema CSS scope'lu olarak uygulanır */}
       <style dangerouslySetInnerHTML={{ __html: themeCSS }} />
-      <div data-menu-theme={resolvedTheme.id}>
-        <MenuView
-          business={{
-            id: business.id,
-            name: business.name,
-            slug: business.slug,
-            logo_url: business.logo_url,
-            city: business.city,
-          }}
-          categories={formattedCategories}
-          products={formattedProducts}
-          qrTable={qrTable}
-          orderConfig={
-            business.order_config || {
-              modes: { dinein: true, pickup: true, delivery: false },
+      <div data-menu-theme={resolvedTheme.id} style={{ position: 'relative', minHeight: '100vh' }}>
+        <MenuThemeWrapper
+          theme={resolvedTheme}
+          businessName={business.name}
+          isPreview={!!previewPreset}
+        >
+          <MenuView
+            business={{
+              id: business.id,
+              name: business.name,
+              slug: business.slug,
+              logo_url: business.logo_url,
+              city: business.city,
+            }}
+            categories={formattedCategories}
+            products={formattedProducts}
+            qrTable={qrTable}
+            orderConfig={
+              business.order_config || {
+                modes: { dinein: true, pickup: true, delivery: false },
+              }
             }
-          }
-          callButtons={callButtons}
-        />
+            callButtons={callButtons}
+          />
+        </MenuThemeWrapper>
       </div>
     </>
   );

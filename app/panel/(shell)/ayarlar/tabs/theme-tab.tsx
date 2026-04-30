@@ -22,9 +22,9 @@ type Props = {
   rootDomain: string;
 };
 
-// Önerilen renk paleti
+// Önerilen renk paleti - genişletildi
 const SUGGESTED_COLORS = [
-  '#C4553A', // brutalist accent
+  '#C4553A', // brutalist
   '#C9A961', // gold
   '#4ABDAC', // mint
   '#8B2635', // deep red
@@ -33,15 +33,12 @@ const SUGGESTED_COLORS = [
   '#7A5C9F', // dusty purple
   '#D97757', // terracotta
   '#0F766E', // emerald
-  '#92400E', // amber brown
+  '#E04F5F', // dark luxe red
+  '#E8B547', // mediterranean yellow
+  '#1F70B7', // mediterranean blue
 ];
 
-export function ThemeTab({
-  theme,
-  onChange,
-  slug,
-  rootDomain,
-}: Props) {
+export function ThemeTab({ theme, onChange, slug, rootDomain }: Props) {
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [customColor, setCustomColor] = useState(
     theme.accent_override || '#C4553A'
@@ -69,10 +66,10 @@ export function ThemeTab({
         <SectionHeader
           eyebrow="Adım 1"
           title="Tema seç"
-          description="Müşteri menüsünün karakteri ve atmosferi. İstediğin zaman değiştirebilirsin."
+          description="Müşteri menüsünün karakteri ve atmosferi. Her tema kendi renklerini, fontlarını, dekoratif öğelerini ve animasyonlarını taşır."
         />
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
           {THEME_LIST.map((t) => (
             <ThemeCard
               key={t.id}
@@ -89,46 +86,80 @@ export function ThemeTab({
         <SectionHeader
           eyebrow="Adım 2"
           title="Vurgu rengi"
-          description="İstersen temanın varsayılan rengini değiştir. Butonlarda, başlıklarda ve detaylarda kullanılır."
+          description="İstersen temanın varsayılan rengini değiştir. Butonlarda, vurgularda ve dekoratif öğelerde kullanılır."
         />
 
-        <div className="rounded-[var(--r)] p-5" style={{ background: 'var(--card)', border: '1px solid var(--line)' }}>
-          <div className="flex items-start gap-4 flex-wrap">
-            {/* Default - tema rengini kullan */}
+        <div
+          className="rounded-[var(--r)] p-5"
+          style={{
+            background: 'var(--card)',
+            border: '1px solid var(--line)',
+          }}
+        >
+          <div className="flex items-start gap-3 flex-wrap">
+            {/* Default */}
             <button
               type="button"
               onClick={() => handleAccentChange(null)}
-              className="flex flex-col items-center gap-2 group"
+              className="flex flex-col items-center gap-2"
             >
               <div
-                className="rounded-full transition-all"
+                className="rounded-full transition-all relative"
                 style={{
-                  width: 56,
-                  height: 56,
-                  background: resolveTheme({ preset: theme.preset, accent_override: null }).colors.accent,
+                  width: 48,
+                  height: 48,
+                  background: resolveTheme({
+                    preset: theme.preset,
+                    accent_override: null,
+                  }).colors.accent,
                   border:
                     theme.accent_override === null
                       ? '3px solid var(--ink)'
                       : '3px solid transparent',
-                  boxShadow: theme.accent_override === null
-                    ? '0 0 0 2px var(--paper)'
-                    : 'none',
-                  transform: theme.accent_override === null ? 'scale(1.05)' : 'scale(1)',
-                }}
-              />
-              <span
-                className="text-[10px] uppercase font-bold"
-                style={{
-                  fontFamily: 'var(--f-mono)',
-                  letterSpacing: '0.14em',
-                  color: theme.accent_override === null ? 'var(--ink)' : 'var(--ink-3)',
+                  boxShadow:
+                    theme.accent_override === null
+                      ? '0 0 0 2px var(--paper), 0 4px 12px rgba(42,31,24,0.12)'
+                      : 'none',
+                  transform:
+                    theme.accent_override === null ? 'scale(1.05)' : 'scale(1)',
                 }}
               >
-                Varsayılan
+                {theme.accent_override === null && (
+                  <span
+                    className="absolute"
+                    style={{
+                      top: -4,
+                      right: -4,
+                      width: 18,
+                      height: 18,
+                      borderRadius: '50%',
+                      background: 'var(--ink)',
+                      color: 'var(--paper)',
+                      fontSize: 10,
+                      fontWeight: 700,
+                      display: 'grid',
+                      placeItems: 'center',
+                    }}
+                  >
+                    ✓
+                  </span>
+                )}
+              </div>
+              <span
+                className="text-[9px] uppercase font-bold"
+                style={{
+                  fontFamily: 'var(--f-mono)',
+                  letterSpacing: '0.16em',
+                  color:
+                    theme.accent_override === null
+                      ? 'var(--ink)'
+                      : 'var(--ink-3)',
+                }}
+              >
+                Tema
               </span>
             </button>
 
-            {/* Önerilen renkler */}
             {SUGGESTED_COLORS.map((color) => {
               const selected = theme.accent_override === color;
               return (
@@ -136,40 +167,50 @@ export function ThemeTab({
                   key={color}
                   type="button"
                   onClick={() => handleAccentChange(color)}
-                  className="flex flex-col items-center gap-2 group"
+                  className="flex flex-col items-center gap-2"
                   title={color}
                 >
                   <div
-                    className="rounded-full transition-all"
+                    className="rounded-full transition-all relative"
                     style={{
-                      width: 56,
-                      height: 56,
+                      width: 48,
+                      height: 48,
                       background: color,
                       border: selected
                         ? '3px solid var(--ink)'
                         : '3px solid transparent',
                       boxShadow: selected
-                        ? '0 0 0 2px var(--paper)'
+                        ? '0 0 0 2px var(--paper), 0 4px 12px rgba(42,31,24,0.12)'
                         : 'none',
                       transform: selected ? 'scale(1.05)' : 'scale(1)',
                     }}
-                  />
-                  <span
-                    className="text-[9px] uppercase"
-                    style={{
-                      fontFamily: 'var(--f-mono)',
-                      letterSpacing: '0.06em',
-                      color: 'var(--ink-3)',
-                      textTransform: 'lowercase',
-                    }}
                   >
-                    {color}
-                  </span>
+                    {selected && (
+                      <span
+                        className="absolute"
+                        style={{
+                          top: -4,
+                          right: -4,
+                          width: 18,
+                          height: 18,
+                          borderRadius: '50%',
+                          background: 'var(--ink)',
+                          color: 'var(--paper)',
+                          fontSize: 10,
+                          fontWeight: 700,
+                          display: 'grid',
+                          placeItems: 'center',
+                        }}
+                      >
+                        ✓
+                      </span>
+                    )}
+                  </div>
                 </button>
               );
             })}
 
-            {/* Özel renk */}
+            {/* Özel */}
             <button
               type="button"
               onClick={() => setShowColorPicker(!showColorPicker)}
@@ -178,31 +219,31 @@ export function ThemeTab({
               <div
                 className="rounded-full grid place-items-center transition-all"
                 style={{
-                  width: 56,
-                  height: 56,
+                  width: 48,
+                  height: 48,
                   background:
                     'conic-gradient(from 0deg, #ef4444, #f59e0b, #84cc16, #06b6d4, #6366f1, #d946ef, #ef4444)',
-                  border: '3px solid var(--line)',
+                  border: '3px solid transparent',
                 }}
               >
                 <span
                   className="grid place-items-center rounded-full"
                   style={{
-                    width: 32,
-                    height: 32,
+                    width: 26,
+                    height: 26,
                     background: 'var(--card)',
                     color: 'var(--ink)',
-                    fontSize: 14,
+                    fontSize: 16,
                   }}
                 >
                   +
                 </span>
               </div>
               <span
-                className="text-[10px] uppercase font-bold"
+                className="text-[9px] uppercase font-bold"
                 style={{
                   fontFamily: 'var(--f-mono)',
-                  letterSpacing: '0.14em',
+                  letterSpacing: '0.16em',
                   color: 'var(--ink-3)',
                 }}
               >
@@ -211,7 +252,6 @@ export function ThemeTab({
             </button>
           </div>
 
-          {/* Özel renk picker */}
           {showColorPicker && (
             <div
               className="mt-4 p-4 rounded-[10px] flex items-center gap-3 flex-wrap"
@@ -282,8 +322,8 @@ export function ThemeTab({
       <section>
         <SectionHeader
           eyebrow="Adım 3"
-          title="Önizleme"
-          description="Müşteri menüsü bu şekilde görünecek. Kaydet'e basana kadar değişiklikler canlı olmaz."
+          title="Canlı önizleme"
+          description="Müşterinin gerçek telefonunda gördüğü menü. Welcome animasyonu, dekoratif öğeler, tüm tema dokunuşları."
         />
 
         <ThemePreview
@@ -338,7 +378,7 @@ function SectionHeader({
       </h3>
       <p
         className="text-[13px] mt-1"
-        style={{ color: 'var(--ink-3)', maxWidth: 560 }}
+        style={{ color: 'var(--ink-3)', maxWidth: 580 }}
       >
         {description}
       </p>
@@ -347,7 +387,7 @@ function SectionHeader({
 }
 
 // ============================================================
-// THEME CARD - büyük tema seçim kartı
+// THEME CARD - mini canlı önizleme kartı
 // ============================================================
 function ThemeCard({
   theme,
@@ -362,100 +402,137 @@ function ThemeCard({
     <button
       type="button"
       onClick={onClick}
-      className="text-left rounded-[14px] overflow-hidden transition-all relative group/card"
+      className="text-left rounded-[14px] overflow-hidden transition-all relative group"
       style={{
         border: selected
           ? '2px solid var(--ink)'
           : '2px solid var(--line)',
         background: 'var(--card)',
         boxShadow: selected
-          ? '0 8px 24px rgba(42,31,24,0.12)'
+          ? '0 12px 32px -8px rgba(42,31,24,0.18), 0 0 0 1px var(--ink)'
           : '0 2px 8px rgba(42,31,24,0.04)',
         transform: selected ? 'scale(1.01)' : 'scale(1)',
       }}
     >
-      {/* Tema mini preview - gerçek temanın renkleriyle */}
+      {/* Tema mini önizleme - gerçek tema renkleriyle */}
       <div
         className="relative px-4 pt-5 pb-4"
         style={{
           background: theme.colors.paper,
           color: theme.colors.ink,
           fontFamily: theme.fonts.serif,
-          height: 140,
+          height: 156,
         }}
       >
-        {/* Mini eyebrow */}
-        <div
-          style={{
-            fontFamily: theme.fonts.mono,
-            fontSize: 8,
-            fontWeight: 700,
-            letterSpacing: '0.16em',
-            color: theme.colors.ink3,
-            textTransform: theme.uppercaseEyebrows ? 'uppercase' : 'none',
-            marginBottom: 4,
-          }}
-        >
-          MENÜ
+        {/* Pattern hint - bazı temalarda */}
+        {theme.background === 'waves' && (
+          <svg
+            aria-hidden
+            width="100%"
+            height="100%"
+            viewBox="0 0 200 80"
+            style={{
+              position: 'absolute',
+              inset: 0,
+              opacity: 0.07,
+              pointerEvents: 'none',
+            }}
+          >
+            <path
+              d="M 0 40 Q 25 20, 50 40 T 100 40 T 150 40 T 200 40"
+              stroke={theme.colors.decor}
+              fill="none"
+              strokeWidth="2"
+            />
+          </svg>
+        )}
+        {theme.background === 'dots' && (
+          <div
+            aria-hidden
+            style={{
+              position: 'absolute',
+              inset: 0,
+              backgroundImage: `radial-gradient(${theme.colors.line} 1px, transparent 1px)`,
+              backgroundSize: '14px 14px',
+              opacity: 0.5,
+              pointerEvents: 'none',
+            }}
+          />
+        )}
+
+        <div style={{ position: 'relative', zIndex: 1 }}>
+          {/* Mini eyebrow */}
+          <div
+            style={{
+              fontFamily: theme.fonts.mono,
+              fontSize: 7.5,
+              fontWeight: 700,
+              letterSpacing: '0.18em',
+              color: theme.colors.decor,
+              textTransform: theme.uppercaseEyebrows ? 'uppercase' : 'none',
+              marginBottom: 4,
+            }}
+          >
+            {theme.id === 'mediterranean' ? '☼ MENÜ' : 'MENÜ'}
+          </div>
+
+          {/* Mini title */}
+          <div
+            style={{
+              fontFamily: theme.fonts.serif,
+              fontSize: 22,
+              fontWeight: 400,
+              fontStyle: theme.fonts.italicSerifHeadings ? 'italic' : 'normal',
+              letterSpacing: theme.letterSpacingHeadings,
+              lineHeight: 1.05,
+              color: theme.colors.ink,
+              marginBottom: 8,
+            }}
+          >
+            Aleg Cafe
+          </div>
+
+          {/* Mini divider preview */}
+          <MiniDivider theme={theme} />
+
+          {/* Mini ürün satırı */}
+          <div
+            className="flex items-baseline justify-between"
+            style={{
+              fontFamily: theme.fonts.sans,
+              fontSize: 11,
+              color: theme.colors.ink2,
+              marginTop: 8,
+            }}
+          >
+            <span>Latte</span>
+            <span
+              style={{
+                fontFamily: theme.fonts.mono,
+                color: theme.colors.ink,
+                fontWeight: 700,
+              }}
+            >
+              ₺85
+            </span>
+          </div>
         </div>
 
-        {/* Mini title */}
-        <div
-          style={{
-            fontFamily: theme.fonts.serif,
-            fontSize: 22,
-            fontWeight: 400,
-            fontStyle: theme.fonts.italicSerifHeadings ? 'italic' : 'normal',
-            letterSpacing: theme.letterSpacingHeadings,
-            lineHeight: 1.05,
-            color: theme.colors.ink,
-            marginBottom: 8,
-          }}
-        >
-          Aleg Cafe
-        </div>
-
-        {/* Mini ürün satırı */}
-        <div
-          className="flex items-baseline justify-between"
-          style={{
-            fontFamily: theme.fonts.sans,
-            fontSize: 11,
-            color: theme.colors.ink2,
-            paddingTop: 6,
-            borderTop: `1px solid ${theme.colors.line}`,
-          }}
-        >
-          <span>Latte</span>
-          <span style={{ fontFamily: theme.fonts.mono, color: theme.colors.ink }}>
-            ₺85
-          </span>
-        </div>
-        <div
-          className="flex items-baseline justify-between mt-1"
-          style={{
-            fontFamily: theme.fonts.sans,
-            fontSize: 11,
-            color: theme.colors.ink2,
-          }}
-        >
-          <span>Cheesecake</span>
-          <span style={{ fontFamily: theme.fonts.mono, color: theme.colors.ink }}>
-            ₺120
-          </span>
-        </div>
-
-        {/* Accent badge */}
+        {/* Accent badge köşede */}
         <div
           className="absolute"
           style={{
             top: 12,
             right: 12,
-            width: 28,
-            height: 28,
-            borderRadius: theme.radius.base === '2px' ? 2 : 999,
+            width: 24,
+            height: 24,
+            borderRadius:
+              theme.radius.base === '2px' || theme.radius.base === '4px'
+                ? 4
+                : 999,
             background: theme.colors.accent,
             border: `2px solid ${theme.colors.paper}`,
+            boxShadow: `0 0 0 1px ${theme.colors.line}`,
           }}
         />
       </div>
@@ -499,14 +576,101 @@ function ThemeCard({
         </div>
         <p
           className="text-[11px]"
-          style={{
-            color: 'var(--ink-3)',
-            lineHeight: 1.4,
-          }}
+          style={{ color: 'var(--ink-3)', lineHeight: 1.4 }}
         >
           {theme.description}
         </p>
       </div>
     </button>
+  );
+}
+
+// ============================================================
+// MINI DIVIDER - tema kartı içinde mini ayraç önizleme
+// ============================================================
+function MiniDivider({ theme }: { theme: ThemeDefinition }) {
+  const color = theme.colors.decor;
+
+  if (theme.divider === 'line') {
+    return (
+      <div
+        style={{ height: 1, background: theme.colors.line, opacity: 0.7 }}
+      />
+    );
+  }
+  if (theme.divider === 'dotted') {
+    return (
+      <div
+        style={{
+          borderTop: `1px dotted ${theme.colors.line}`,
+        }}
+      />
+    );
+  }
+  if (theme.divider === 'doubleline') {
+    return (
+      <div>
+        <div style={{ height: 1, background: color, opacity: 0.6 }} />
+        <div
+          style={{ height: 1, background: color, marginTop: 2, opacity: 0.4 }}
+        />
+      </div>
+    );
+  }
+
+  let centerEl: React.ReactNode = null;
+  if (theme.divider === 'star') {
+    centerEl = (
+      <span style={{ color, fontSize: 10, lineHeight: 1 }}>★</span>
+    );
+  } else if (theme.divider === 'diamond') {
+    centerEl = (
+      <span style={{ color, fontSize: 8, lineHeight: 1 }}>◆</span>
+    );
+  } else if (theme.divider === 'wave') {
+    centerEl = (
+      <svg width="24" height="6" viewBox="0 0 24 6" fill="none">
+        <path
+          d="M 1 3 Q 4 1, 7 3 T 13 3 T 19 3 T 23 3"
+          stroke={color}
+          strokeWidth="1"
+          fill="none"
+        />
+      </svg>
+    );
+  } else if (theme.divider === 'ornament') {
+    centerEl = (
+      <svg width="26" height="8" viewBox="0 0 26 8" fill={color}>
+        <circle cx="13" cy="4" r="1.5" />
+        <path
+          d="M 7 4 Q 10 1, 13 4 Q 16 7, 19 4"
+          stroke={color}
+          strokeWidth="0.7"
+          fill="none"
+        />
+      </svg>
+    );
+  } else if (theme.divider === 'monogram') {
+    centerEl = (
+      <span
+        style={{
+          color,
+          fontFamily: theme.fonts.serif,
+          fontStyle: theme.fonts.italicSerifHeadings ? 'italic' : 'normal',
+          fontSize: 11,
+          padding: '0 4px',
+        }}
+      >
+        A
+      </span>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <div style={{ flex: 1, height: 1, background: theme.colors.line, opacity: 0.7 }} />
+      {centerEl}
+      <div style={{ flex: 1, height: 1, background: theme.colors.line, opacity: 0.7 }} />
+    </div>
   );
 }

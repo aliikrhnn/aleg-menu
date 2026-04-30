@@ -64,7 +64,14 @@ export type BusinessSettings = {
 
   // Menü tema kişiselleştirme
   menu_theme: {
-    preset: 'brutalist' | 'elite' | 'modern' | 'vintage' | 'minimal';
+    preset:
+      | 'brutalist'
+      | 'elite'
+      | 'modern'
+      | 'vintage'
+      | 'minimal'
+      | 'mediterranean'
+      | 'darkluxe';
     accent_override: string | null;
   };
 };
@@ -143,6 +150,8 @@ export async function getBusinessSettings(): Promise<{
       'modern',
       'vintage',
       'minimal',
+      'mediterranean',
+      'darkluxe',
     ];
     const themePreset = validPresets.includes(rawTheme?.preset || '')
       ? (rawTheme!.preset as BusinessSettings['menu_theme']['preset'])
@@ -206,7 +215,14 @@ export type SettingsUpdate = Partial<{
   order_config: OrderConfig;
   currency: string;
   menu_theme: {
-    preset: 'brutalist' | 'elite' | 'modern' | 'vintage' | 'minimal';
+    preset:
+      | 'brutalist'
+      | 'elite'
+      | 'modern'
+      | 'vintage'
+      | 'minimal'
+      | 'mediterranean'
+      | 'darkluxe';
     accent_override: string | null;
   };
 }>;
@@ -242,6 +258,8 @@ export async function updateBusinessSettings(
         'modern',
         'vintage',
         'minimal',
+        'mediterranean',
+        'darkluxe',
       ];
       if (!validPresets.includes(updates.menu_theme.preset)) {
         return { success: false, error: 'Geçersiz tema seçimi' };

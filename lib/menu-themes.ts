@@ -1,11 +1,15 @@
 /**
- * QR Menü Tema Sistemi
+ * QR Menü Tema Sistemi - v2
  * 
- * Her tema bir preset olarak tanımlanır. İşletme bir preset seçer ve
- * isterse accent rengini override eder.
- * 
- * Tema değişkenleri müşteri menüsünde --paper, --ink, --accent vb.
- * CSS variable'larına yazılır.
+ * 7 tema (5 mevcut + 2 yeni) + ornament & dekoratif sistem.
+ * Her tema kendi karakter dilini taşıyor:
+ *  - Renkler
+ *  - Tipografi  
+ *  - Hero stili (logo + slogan üst bölge)
+ *  - Kategori ayracı (SVG ornament)
+ *  - Ürün satırı varyantı
+ *  - Background pattern (opsiyonel)
+ *  - Welcome animasyon karakteri
  */
 
 export type ThemePreset =
@@ -13,7 +17,9 @@ export type ThemePreset =
   | 'elite'
   | 'modern'
   | 'vintage'
-  | 'minimal';
+  | 'minimal'
+  | 'mediterranean'
+  | 'darkluxe';
 
 export type MenuThemeConfig = {
   preset: ThemePreset;
@@ -33,37 +39,80 @@ export type ThemeColors = {
   accentInk: string;
   ok: string;
   gold: string;
+  // YENİ: dekoratif öğeler için
+  decor: string; // ornament/divider rengi
+  glow: string;  // halka/parlama rengi
 };
 
 export type ThemeFonts = {
   serif: string;
   sans: string;
   mono: string;
-  // Italic serif kullanılır mı (Brutalist Spice tarzı)?
   italicSerifHeadings: boolean;
 };
 
 export type ThemeRadius = {
-  base: string; // '14px' gibi
-  card: string; // ürün kartları
+  base: string;
+  card: string;
 };
+
+// YENİ: Dekoratif öğe seçimi
+export type DividerStyle =
+  | 'line'        // Düz çizgi (default)
+  | 'dotted'      // Noktalı çizgi
+  | 'doubleline'  // Çift ince çizgi
+  | 'ornament'    // SVG ornament ortada (vintage)
+  | 'star'        // ★ ortada
+  | 'wave'        // Dalga (mediterranean)
+  | 'diamond'     // ◇ ortada
+  | 'monogram';   // İşletmenin baş harfi
+
+export type HeroStyle =
+  | 'centered'     // Logo+ad merkez (klasik)
+  | 'left'         // Sol hizalı (modern)
+  | 'badge'        // Modern grid badge
+  | 'editorial'    // Tarihli editorial (dergi)
+  | 'monogram'     // Büyük monogram + ad altta
+  | 'circular';    // Daire içinde (mediterranean)
+
+export type ProductRowStyle =
+  | 'classic'    // Ad sol, fiyat sağ
+  | 'card'       // Kart içinde (modern)
+  | 'numbered'   // Numaralı liste (vintage menü kart)
+  | 'spotlight'; // Featured ürün öne çıkar
+
+export type BackgroundPattern =
+  | 'none'
+  | 'noise'      // İnce gren
+  | 'paper'      // Kağıt dokusu
+  | 'grid'       // Çok ince grid
+  | 'dots'       // Noktalar
+  | 'waves';     // Dalgalar (mediterranean)
 
 export type ThemeDefinition = {
   id: ThemePreset;
   name: string;
   nameEn: string;
   description: string;
-  preview: { paper: string; ink: string; accent: string }; // mini önizleme için
+  preview: { paper: string; ink: string; accent: string };
   colors: ThemeColors;
   fonts: ThemeFonts;
   radius: ThemeRadius;
-  // Opsiyonel: bazı temalar farklı tipografi davranışı ister
-  uppercaseEyebrows: boolean; // mono tag'ler büyük harf mi
+  uppercaseEyebrows: boolean;
   letterSpacingHeadings: string;
+  // YENİ alanlar
+  hero: HeroStyle;
+  divider: DividerStyle;
+  productRow: ProductRowStyle;
+  background: BackgroundPattern;
+  // Welcome animasyon karakteri
+  welcomeAnim: 'fade' | 'slide' | 'reveal' | 'spotlight' | 'curtain';
+  // Featured/öne çıkan ürün ikon karakteri
+  featuredMark: '★' | '✦' | '✧' | '◆' | '☼' | '※';
 };
 
 // ============================================================
-// TEMA 1: BRUTALIST SPICE (default - mevcut)
+// TEMA 1: BRUTALIST SPICE
 // ============================================================
 const brutalist: ThemeDefinition = {
   id: 'brutalist',
@@ -84,23 +133,28 @@ const brutalist: ThemeDefinition = {
     accentInk: '#FAF5EA',
     ok: '#5C8C3A',
     gold: '#B8903E',
+    decor: '#C4553A',
+    glow: '#C4553A',
   },
   fonts: {
     serif: '"Instrument Serif", Georgia, serif',
-    sans: '"Bricolage Grotesque", system-ui, -apple-system, sans-serif',
+    sans: '"Bricolage Grotesque", system-ui, sans-serif',
     mono: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace',
     italicSerifHeadings: true,
   },
-  radius: {
-    base: '14px',
-    card: '16px',
-  },
+  radius: { base: '14px', card: '16px' },
   uppercaseEyebrows: true,
   letterSpacingHeadings: '-0.02em',
+  hero: 'editorial',
+  divider: 'star',
+  productRow: 'spotlight',
+  background: 'paper',
+  welcomeAnim: 'reveal',
+  featuredMark: '★',
 };
 
 // ============================================================
-// TEMA 2: ELITE RESTAURANT
+// TEMA 2: ELITE
 // ============================================================
 const elite: ThemeDefinition = {
   id: 'elite',
@@ -117,10 +171,12 @@ const elite: ThemeDefinition = {
     ink2: '#C7BFAF',
     ink3: '#8B8377',
     line: '#3A352D',
-    accent: '#C9A961', // gold
+    accent: '#C9A961',
     accentInk: '#1A1814',
     ok: '#9DAA77',
     gold: '#D4B86A',
+    decor: '#C9A961',
+    glow: '#C9A961',
   },
   fonts: {
     serif: '"Playfair Display", "Cormorant Garamond", Georgia, serif',
@@ -128,12 +184,15 @@ const elite: ThemeDefinition = {
     mono: 'ui-monospace, SFMono-Regular, Menlo, monospace',
     italicSerifHeadings: false,
   },
-  radius: {
-    base: '4px', // çok az köşe — sert, ciddi
-    card: '6px',
-  },
+  radius: { base: '4px', card: '6px' },
   uppercaseEyebrows: true,
   letterSpacingHeadings: '0.01em',
+  hero: 'centered',
+  divider: 'doubleline',
+  productRow: 'classic',
+  background: 'noise',
+  welcomeAnim: 'curtain',
+  featuredMark: '✦',
 };
 
 // ============================================================
@@ -154,10 +213,12 @@ const modern: ThemeDefinition = {
     ink2: '#404040',
     ink3: '#737373',
     line: '#E5E5E5',
-    accent: '#4ABDAC', // mint
+    accent: '#4ABDAC',
     accentInk: '#FFFFFF',
     ok: '#22C55E',
     gold: '#EAB308',
+    decor: '#4ABDAC',
+    glow: '#4ABDAC',
   },
   fonts: {
     serif: '"Crimson Pro", Georgia, serif',
@@ -165,12 +226,15 @@ const modern: ThemeDefinition = {
     mono: '"JetBrains Mono", ui-monospace, monospace',
     italicSerifHeadings: false,
   },
-  radius: {
-    base: '12px',
-    card: '12px',
-  },
+  radius: { base: '12px', card: '12px' },
   uppercaseEyebrows: true,
   letterSpacingHeadings: '-0.03em',
+  hero: 'badge',
+  divider: 'line',
+  productRow: 'card',
+  background: 'grid',
+  welcomeAnim: 'slide',
+  featuredMark: '◆',
 };
 
 // ============================================================
@@ -191,23 +255,28 @@ const vintage: ThemeDefinition = {
     ink2: '#6B4F33',
     ink3: '#A08A6F',
     line: '#DCC9A6',
-    accent: '#8B2635', // deep red
+    accent: '#8B2635',
     accentInk: '#F8F0E3',
     ok: '#7A8B3A',
     gold: '#C9A961',
+    decor: '#8B2635',
+    glow: '#C9A961',
   },
   fonts: {
     serif: '"DM Serif Display", "Lora", Georgia, serif',
-    sans: '"Lora", Georgia, serif', // bilinçli serif sans yerine
+    sans: '"Lora", Georgia, serif',
     mono: '"Courier Prime", "Courier New", monospace',
     italicSerifHeadings: true,
   },
-  radius: {
-    base: '2px', // neredeyse köşeli — vintage
-    card: '4px',
-  },
+  radius: { base: '2px', card: '4px' },
   uppercaseEyebrows: true,
   letterSpacingHeadings: '0',
+  hero: 'monogram',
+  divider: 'ornament',
+  productRow: 'numbered',
+  background: 'paper',
+  welcomeAnim: 'curtain',
+  featuredMark: '※',
 };
 
 // ============================================================
@@ -228,23 +297,112 @@ const minimal: ThemeDefinition = {
     ink2: '#5C5C5C',
     ink3: '#9C9C9C',
     line: '#E0E0DD',
-    accent: '#B7C4A0', // sage
+    accent: '#B7C4A0',
     accentInk: '#2C2C2C',
     ok: '#7A9B6E',
     gold: '#C8B891',
+    decor: '#B7C4A0',
+    glow: '#B7C4A0',
   },
   fonts: {
-    serif: '"Söhne", "Inter", system-ui, sans-serif', // serif değil, sade sans
+    serif: '"Söhne", "Inter", system-ui, sans-serif',
     sans: '"Söhne", "Inter", system-ui, sans-serif',
     mono: '"Söhne Mono", ui-monospace, monospace',
     italicSerifHeadings: false,
   },
-  radius: {
-    base: '8px',
-    card: '10px',
-  },
-  uppercaseEyebrows: false, // küçük harf — minimal
+  radius: { base: '8px', card: '10px' },
+  uppercaseEyebrows: false,
   letterSpacingHeadings: '-0.01em',
+  hero: 'left',
+  divider: 'line',
+  productRow: 'classic',
+  background: 'none',
+  welcomeAnim: 'fade',
+  featuredMark: '◆',
+};
+
+// ============================================================
+// TEMA 6: MEDITERRANEAN (YENİ)
+// ============================================================
+const mediterranean: ThemeDefinition = {
+  id: 'mediterranean',
+  name: 'Mediterranean',
+  nameEn: 'Mediterranean',
+  description: 'Beyaz, gök mavisi, güneşli sarı. Sahil, balık, meze.',
+  preview: { paper: '#FAFBFE', ink: '#0E3A5F', accent: '#E8B547' },
+  colors: {
+    paper: '#FAFBFE',
+    paper2: '#F0F4FA',
+    card: '#FFFFFF',
+    card2: '#F5F8FC',
+    ink: '#0E3A5F',
+    ink2: '#345B7C',
+    ink3: '#7A92A8',
+    line: '#D5DEEA',
+    accent: '#E8B547', // güneşli sarı
+    accentInk: '#0E3A5F',
+    ok: '#3D8B7A',
+    gold: '#E8B547',
+    decor: '#1F70B7', // gök mavisi
+    glow: '#E8B547',
+  },
+  fonts: {
+    serif: '"Cormorant Garamond", "Playfair Display", Georgia, serif',
+    sans: '"Inter", system-ui, sans-serif',
+    mono: 'ui-monospace, "SF Mono", Menlo, monospace',
+    italicSerifHeadings: true,
+  },
+  radius: { base: '20px', card: '20px' }, // yumuşak
+  uppercaseEyebrows: true,
+  letterSpacingHeadings: '-0.015em',
+  hero: 'circular',
+  divider: 'wave',
+  productRow: 'classic',
+  background: 'waves',
+  welcomeAnim: 'spotlight',
+  featuredMark: '☼',
+};
+
+// ============================================================
+// TEMA 7: DARK LUXE (YENİ)
+// ============================================================
+const darkluxe: ThemeDefinition = {
+  id: 'darkluxe',
+  name: 'Dark Luxe',
+  nameEn: 'Dark Luxe',
+  description: 'Modern karanlık. Hayat tarzı kafe, bar, lounge.',
+  preview: { paper: '#0E0E10', ink: '#FAFAFA', accent: '#E04F5F' },
+  colors: {
+    paper: '#0E0E10',
+    paper2: '#16161A',
+    card: '#1A1A1F',
+    card2: '#202028',
+    ink: '#FAFAFA',
+    ink2: '#B8B8BC',
+    ink3: '#7A7A82',
+    line: '#28282F',
+    accent: '#E04F5F',
+    accentInk: '#FAFAFA',
+    ok: '#5DD39E',
+    gold: '#E0B45F',
+    decor: '#E04F5F',
+    glow: '#E04F5F',
+  },
+  fonts: {
+    serif: '"Inter", system-ui, sans-serif', // serif yok, sade
+    sans: '"Inter", system-ui, sans-serif',
+    mono: '"JetBrains Mono", ui-monospace, monospace',
+    italicSerifHeadings: false,
+  },
+  radius: { base: '16px', card: '18px' },
+  uppercaseEyebrows: true,
+  letterSpacingHeadings: '-0.025em',
+  hero: 'left',
+  divider: 'diamond',
+  productRow: 'card',
+  background: 'dots',
+  welcomeAnim: 'slide',
+  featuredMark: '✧',
 };
 
 // ============================================================
@@ -256,6 +414,8 @@ export const THEMES: Record<ThemePreset, ThemeDefinition> = {
   modern,
   vintage,
   minimal,
+  mediterranean,
+  darkluxe,
 };
 
 export const THEME_LIST: ThemeDefinition[] = [
@@ -264,6 +424,8 @@ export const THEME_LIST: ThemeDefinition[] = [
   modern,
   vintage,
   minimal,
+  mediterranean,
+  darkluxe,
 ];
 
 export const DEFAULT_THEME: MenuThemeConfig = {
@@ -271,27 +433,29 @@ export const DEFAULT_THEME: MenuThemeConfig = {
   accent_override: null,
 };
 
-/**
- * MenuThemeConfig'i CSS variable'larına dönüştürür.
- * accent_override varsa preset'in accent'ini değiştirir.
- */
-export function resolveTheme(config: MenuThemeConfig | null | undefined): ThemeDefinition {
+export function resolveTheme(
+  config: MenuThemeConfig | null | undefined
+): ThemeDefinition {
   const preset: ThemePreset =
     config?.preset && THEMES[config.preset] ? config.preset : 'brutalist';
   const base = THEMES[preset];
-  if (config?.accent_override && /^#[0-9A-Fa-f]{6}$/.test(config.accent_override)) {
+  if (
+    config?.accent_override &&
+    /^#[0-9A-Fa-f]{6}$/.test(config.accent_override)
+  ) {
     return {
       ...base,
-      colors: { ...base.colors, accent: config.accent_override },
+      colors: {
+        ...base.colors,
+        accent: config.accent_override,
+        decor: config.accent_override,
+        glow: config.accent_override,
+      },
     };
   }
   return base;
 }
 
-/**
- * Tema CSS string oluşturur — <style> tag'i içinde inline kullanılır.
- * data attribute scope'ta uygulanır ki kapsam izole olsun.
- */
 export function buildThemeCSS(theme: ThemeDefinition, scope = ':root'): string {
   const c = theme.colors;
   const f = theme.fonts;
@@ -311,6 +475,8 @@ export function buildThemeCSS(theme: ThemeDefinition, scope = ':root'): string {
   --ok: ${c.ok};
   --olive: ${c.ok};
   --gold: ${c.gold};
+  --decor: ${c.decor};
+  --glow: ${c.glow};
   --r: ${r.base};
   --r-card: ${r.card};
   --f-serif: ${f.serif};

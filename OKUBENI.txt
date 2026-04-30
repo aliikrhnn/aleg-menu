@@ -1,188 +1,219 @@
-ALEG TUR 6 — Basılı Menü Tasarımları
-=====================================
+ALEG TUR 7 — QR Menü Tema Sistemini Yenileme
+==============================================
 
-İşletme sahibi panelden 5 farklı şablon × 3 farklı boyut seçerek
-profesyonel basılı menü PDF/PNG indirebilir. Üstte ürünler ve
-fiyatlar, altta QR ile dijital menüye yönlendirme.
-
-
-5 ŞABLON
-========
-
-1. CLASSIC (Klasik Liste)
-   Brutalist Spice paleti (cream + ink + accent kırmızı)
-   Dot leaders ile geleneksel menü
-   Restoranlar için zamansız
-
-2. ELITE (Fine Dining)
-   Koyu zemin + gold accent + watermark
-   Geniş whitespace, Playfair Display
-   À la carte, lüks restoranlar
-
-3. MODERN GRID
-   Beyaz + mint, kart sistem (2 sütun)
-   Inter + JetBrains Mono
-   Specialty kafe, brunch
-
-4. VINTAGE BISTRO
-   Eski Paris kafesi, krem + deep red
-   Köşeli QR çerçevesi, DM Serif Display
-   Bistro, şarküteri, pastane
-
-5. MINIMAL (Skandinav)
-   Çıplak, sadece tipografi
-   Sage tones, sadece Inter
-   Modern, sade konseptler
+QR menü tema sistemi büyük çaplı yenilendi. 2 yeni tema, dekoratif
+öğeler, welcome animasyonu, background pattern, köşe süslemeleri.
 
 
-3 BOYUT
-=======
+YENİ EKLENENLER
+================
 
-  • A4 Dikey  (210 × 297 mm)  — En yaygın, pano/çerçeve
-  • A5 Dikey  (148 × 210 mm)  — Kompakt masa üstü
-  • Pláka     (240 × 360 mm)  — Büyük masa menüsü
+[1] 2 YENİ TEMA
+   • MEDITERRANEAN (sahil/balık restoranları)
+     Beyaz + gök mavisi + güneşli sarı
+     Cormorant Garamond + Inter
+     Yumuşak köşeler (20px), daire monogram hero
+     Dalga ayraçlar, dalga background pattern
+     Köşe ornament süslemeleri
+     Spotlight welcome animasyonu (☼ Featured mark)
+
+   • DARK LUXE (modern karanlık)
+     Siyah + kırmızı accent
+     Inter + JetBrains Mono
+     Dots background pattern
+     Diamond ayraçlar (◆)
+     Slide welcome animasyonu (✧ Featured mark)
+     Bar/lounge/cocktail için ideal
+
+[2] DEKORATİF ÖĞELER (her tema kendi karakteriyle)
+
+   Kategori ayraçları:
+   • line       — Düz çizgi (default - minimal/modern)
+   • dotted     — Noktalı (klasik)
+   • doubleline — Çift çizgi (elite)
+   • star       — ★ ortada twinkle animasyonu (brutalist)
+   • diamond    — ◆ ortada (dark luxe)
+   • wave       — Dalga SVG (mediterranean)
+   • ornament   — Süslü SVG (vintage)
+   • monogram   — İşletme baş harfi (özel hisli)
+
+   Featured mark (öne çıkan ürünlerde):
+   • brutalist → ★
+   • elite → ✦
+   • modern → ◆
+   • vintage → ※
+   • minimal → ◆
+   • mediterranean → ☼
+   • darkluxe → ✧
+
+[3] BACKGROUND PATTERN sistemi
+   • none    — Düz (minimal)
+   • noise   — İnce gren (elite)
+   • paper   — Kağıt dokusu (brutalist, vintage)
+   • grid    — Çok ince grid (modern)
+   • dots    — Noktalar (darkluxe)
+   • waves   — Dalgalar SVG repeat (mediterranean)
+
+   Tüm pattern'ler fixed position, opacity ayarlı, mixed-blend
+   uygulamasıyla göze batmıyor — dokuyu hissettiriyor.
+
+[4] WELCOME RITUAL — menü ilk açıldığında 1.6s'lik karşılama
+   • Tema'nın paper rengi tüm ekranı kaplar
+   • Ortada işletme adının ilk harfi yuvarlak içinde (monogram)
+   • Halo pulse efekti
+   • İşletme adı altta + "MENÜ" mono uppercase
+   • Tema'ya göre animasyon karakteri:
+     - fade (minimal)
+     - slide (modern, darkluxe)
+     - reveal (brutalist)
+     - spotlight (mediterranean)
+     - curtain (elite, vintage) - perde gibi yukarı çekiliyor
+   
+   localStorage'da 2 saat cache'leniyor — aynı tema için tekrar
+   gösterilmiyor (kullanıcıyı yormamak için).
+   Önizlemede her tema değişiminde gösteriliyor.
+
+[5] CORNER ORNAMENTS — sayfa köşelerinde dekoratif öğeler
+   Sadece vintage ve mediterranean temalarda görünür.
+   Sabit pozisyonda (fixed), pointer-events yok, 0.4 opacity.
+   Üçgen + çizgiler + nokta kompozisyonu.
+
+[6] HERO BLOK STİLLERİ (tema'da tanımlı)
+   • centered, left, badge, editorial, monogram, circular
 
 
-SAYFA YAPISI
-============
+PANEL UI YENİLEME
+=================
 
-URL: /panel/menu-tasarim
-Sidebar: MENÜ → "Menü Tasarımı"
+Tema kart layout: 3-4 sütun (önceki 3'tü, artık daha kompakt)
+Her tema kartında:
+  • Gerçek tema renkleriyle 156px yükseklikte mini önizleme
+  • Pattern hint (dalga/dots) bazı temalarda görsel
+  • MINI DIVIDER ÖNİZLEMESİ (7 farklı stil canlı görünüyor!)
+  • Mini ürün satırı (Latte, ₺85)
+  • Accent badge köşede
 
-Layout:
-  [Sol panel - 340px - kontroller]    [Sağ panel - canlı önizleme]
-   ┌────────────────────────┐         ┌─────────────────────────┐
-   │ Adım 1: Şablon         │         │                          │
-   │  • Klasik Liste ✓      │         │  [Tam ölçekli mini       │
-   │  • Elit                │         │   menü önizlemesi]       │
-   │  • Modern Grid         │         │                          │
-   │  • Vintage Bistro      │         │  Pencere boyutuna göre   │
-   │  • Minimal             │         │  otomatik scale ediliyor │
-   ├────────────────────────┤         │                          │
-   │ Adım 2: Boyut          │         │                          │
-   │  • A4 Dikey ✓          │         │                          │
-   │  • A5 Dikey            │         │                          │
-   │  • Pláka 24x36         │         │                          │
-   ├────────────────────────┤         │                          │
-   │ Adım 3: İndir          │         │                          │
-   │  [PDF olarak indir ↓]  │         │                          │
-   │  [PNG olarak indir ↓]  │         │                          │
-   └────────────────────────┘         └─────────────────────────┘
+Renk paleti genişledi (12 önerilen renk).
+"Varsayılan" butonu üzerinde ✓ check var.
+
+Section header'lar daha rafine:
+  Adım 1: "Tema seç" → her tema kendi animasyonlarını taşır
+  Adım 2: "Vurgu rengi" → 12 renk + Özel
+  Adım 3: "Canlı önizleme" → gerçek telefon mockup
 
 
-VERİ AKIŞI
-==========
+MÜŞTERİ MENÜSÜ TARAFI
+======================
 
-  1. Server: getPrintableMenuData()
-     • İşletme bilgisi (ad, logo, slogan, adres, telefon, IG)
-     • Aktif kategoriler (sıralı)
-     • Aktif ürünler (kategorilere yerleştirilmiş)
-     • QR URL (https://{slug}.alegstudio.com)
-  
-  2. Client: 
-     • QRCode lib ile QR PNG dataURL üretilir
-     • PrintMenuDocument component'i şablon + boyut + qrDataUrl ile render
-     • Önizleme: docElement + scale ile küçük gösterim
-     • İndirme: html-to-image ile docElement → PNG dataURL
-                jsPDF ile PNG → PDF (gerçek mm boyutunda)
+Yeni dosya: app/menu/[slug]/menu-theme-wrapper.tsx
+  • BackgroundPatternLayer
+  • CornerOrnament (vintage / mediterranean için 4 köşe)
+  • WelcomeRitual (localStorage TTL ile)
+  • Tüm bunlar mevcut MenuView'ı sarıyor — MenuView dokunulmadı
+
+page.tsx güncellendi:
+  • 7 valid preset
+  • MenuThemeWrapper kullanılıyor
 
 
-ÖNEMLİ — PAKET KURULUMU
-========================
+VERİ MODELİ
+===========
 
-Yeni dependency: html-to-image
-
-  npm install html-to-image
-
-(package.json'da zaten ekledim)
+DB değişikliği YOK — mevcut menu_theme jsonb'si yeterli.
+Sadece preset değerleri 5'ten 7'ye çıktı:
+  brutalist | elite | modern | vintage | minimal | mediterranean | darkluxe
 
 
 KURULUM
 =======
 
-ÖNCE npm install çalıştır (yeni paket için):
-
-  cd aleg-menu-main
-  npm install
-
-SONRA dosyaları kopyala:
+6 dosya:
 
   YENİ:
-    lib/actions/printable-menu.ts
-    lib/printable-menu/templates.ts
-    lib/printable-menu/print-menu-document.tsx
-    app/panel/(shell)/menu-tasarim/page.tsx
-    app/panel/(shell)/menu-tasarim/client.tsx
-  
-  GÜNCELLEME:
-    components/panel/nav-config.ts (yeni nav öğesi)
-    package.json (html-to-image dep'i)
+    lib/menu-theme-decorations.tsx
+    app/menu/[slug]/menu-theme-wrapper.tsx
+
+  GÜNCELLEMELER:
+    lib/menu-themes.ts (büyük genişleme - 7 tema, dekoratif sistem)
+    lib/actions/settings.ts (validPresets x2 yer)
+    app/panel/(shell)/ayarlar/tabs/theme-tab.tsx (yeni UI)
+    app/menu/[slug]/page.tsx (wrapper kullan, 7 preset)
 
 
 PUSH
 ====
 
   git add .
-  git commit -m "feat: tur 6 - printable menu designer (5 templates × 3 sizes)"
+  git commit -m "feat: tur 7 - menu theme renaissance (7 themes, ornaments, welcome ritual)"
   git push origin main
 
 
 TEST
 ====
 
-[A] Boş işletme:
-    1. Hiç ürün yok
-    2. /panel/menu-tasarim aç
-    3. ✅ "Önce menüye ürün ekle" uyarısı
-    4. İndir butonları disabled
+[A] Yeni temalar:
+    1. Panel → Ayarlar → Menü Teması
+    2. ✅ 7 tema kartı görünmeli (önceki 5 + Mediterranean + Dark Luxe)
+    3. Mini önizleme her temada farklı pattern/divider gösteriyor
+    4. Mediterranean kartında dalga SVG görünüyor
+    5. Dark Luxe kartında dots pattern görünüyor
 
-[B] İlk yükleme:
-    1. Birkaç kategori + ürün var
-    2. /panel/menu-tasarim aç
-    3. ✅ Sol panelde 3 adım: Şablon, Boyut, İndir
-    4. Sağ panelde Klasik + A4 önizleme görünüyor
-    5. QR kod altta, ürünler ve fiyatlar üstte
+[B] Welcome ritual:
+    1. {slug}.alegstudio.com aç
+    2. ✅ Sayfa yüklenince 1.6s welcome ritual gösteriliyor
+       • İşletme adının ilk harfi monogram halka
+       • Halo pulse efekti
+       • Tema'nın animasyon karakteri (curtain, fade, reveal vs.)
+    3. 2 saat içinde tekrar girince GÖSTERİLMEMELİ
+    4. localStorage temizlenince tekrar görünür
 
-[C] Şablon değişimi:
-    1. "Elit" tıkla
-    2. ✅ Önizleme koyu temaya döner, gold accent, watermark
-    3. "Modern Grid" tıkla
-    4. ✅ Ürünler 2 sütun karta dönüşür
+[C] Background pattern:
+    1. Modern Cafe seç → grid pattern (subtle çizgi)
+    2. Dark Luxe seç → dots pattern
+    3. Mediterranean seç → wave pattern (dalga)
+    4. Minimal seç → pattern yok, düz
 
-[D] Boyut değişimi:
-    1. "A5" seç
-    2. ✅ Önizleme küçülür, oran değişir
-    3. "Pláka 24x36" seç
-    4. ✅ Önizleme büyür, daha geniş layout
+[D] Köşe süslemeleri:
+    1. Vintage tema seç + müşteri menüsünü aç
+    2. ✅ 4 köşede SVG süsleme (üçgen + çizgi + nokta)
+    3. Mediterranean'da da görünmeli
+    4. Diğer temalarda görünmemeli
 
-[E] PDF indir:
-    1. "PDF olarak indir" tıkla
-    2. ✅ Buton "Hazırlanıyor…" yazıyor
-    3. Browser PDF dosyası indirir
-    4. Aç → tam doğru boyutta, profesyonel görünüm
-    5. Yazıcıya gönder → kağıda doğru basıyor
+[E] Featured mark:
+    1. Bir ürünü "öne çıkan" yap
+    2. Müşteri menüsünde tema'ya göre farklı ★/✦/◆/※/☼/✧ görünmeli
 
-[F] PNG indir:
-    1. "PNG olarak indir" tıkla
-    2. ✅ Yüksek çözünürlüklü PNG indirilir (3x pixelRatio)
-    3. Sosyal medyada paylaşılabilir
+[F] Önizleme cnam:
+    1. Panel'de tema değiştir
+    2. ✅ iframe yenileniyor
+    3. Welcome animasyonu her tema değişiminde gösteriliyor (önizleme)
+    4. Pattern, ornament, fontlar canlı değişmeli
+
+[G] Renk override:
+    1. Mediterranean + accent #1F70B7 (mavi)
+    2. ✅ Gold yerine mavi her yerde uygulanmalı (decor + glow dahil)
+    3. Welcome ritual halkası da mavi olmalı
 
 
-TEKNİK NOT
+ÖZEL DETAY
 ==========
 
-  • html-to-image: SVG/CSS'i pixel-perfect PNG'ye çevirir
-  • jsPDF: PNG'i mm cinsinden tam boyutlu PDF'e gömer
-  • pixelRatio: 3 → yüksek çözünürlük (yazıcı kalitesi)
-  • Önizleme dinamik scale: pencere boyutuna göre auto-fit
-  • Tüm tasarım React component'i — özelleştirilmesi kolay
-  • Fontlar: globals.css'te zaten yüklü (Tur 5'te eklendi)
+WelcomeRitual'a localStorage anahtarı tema bazlı:
+  aleg-welcome-shown-{theme.id}
+
+Yani brutalist'ten elite'e geçince welcome tekrar gösterilir
+(yeni tema, yeni izlenim).
 
 
-SIRADAKİ
-========
+SIRADAKİ — TUR 8
+================
 
-Test edip onayladığında dashboard'daki "POS" rotasını kaldırma
-(Tur 4F'in tamamlanması) veya başka bir özellik konuşacağız.
+Basılı menü yenilenmesi:
+  • Logo entegrasyonu (gerçek görsel)
+  • Allergen/diet badges + şefin önerisi
+  • Çoklu sayfa + yatay layout
+  • Header/footer varyasyonları
+  • Watermark/imza alanı
+  • Toplu indirme
 
-İyi testler!
+Bu Tur 7'yi test edip onayladığında geçiyoruz.
