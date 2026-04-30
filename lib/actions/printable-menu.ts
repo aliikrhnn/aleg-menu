@@ -3,6 +3,15 @@
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
+export type DietaryTag =
+  | 'vegan'
+  | 'vegetarian'
+  | 'gluten_free'
+  | 'lactose_free'
+  | 'halal'
+  | 'organic'
+  | 'homemade';
+
 export type PrintableMenuProduct = {
   id: string;
   name: string;
@@ -10,6 +19,9 @@ export type PrintableMenuProduct = {
   price: number;
   hero_icon: string | null;
   is_featured: boolean;
+  is_chef_recommend: boolean;
+  dietary_tags: DietaryTag[];
+  spicy_level: number; // 0..3
   status: string;
 };
 
@@ -33,6 +45,7 @@ export type PrintableMenuData = {
     phone: string | null;
     instagram: string | null;
     website: string | null;
+    created_year: number;
   };
   categories: PrintableMenuCategory[];
   qr_url: string;
@@ -40,7 +53,6 @@ export type PrintableMenuData = {
 
 /**
  * Basılı menü için tüm veriyi tek seferde çeker.
- * Sadece aktif kategoriler ve aktif ürünler — tükendi olanlar gösterilmez.
  */
 export async function getPrintableMenuData(): Promise<{
   success: boolean;
@@ -71,12 +83,11 @@ export async function getPrintableMenuData(): Promise<{
     const admin = createAdminClient();
     const businessId = membership.business_id as string;
 
-    // Paralel sorgular
     const [businessRes, categoriesRes, productsRes] = await Promise.all([
       admin
         .from('businesses')
         .select(
-          'id, name, slug, logo_url, city, tagline_tr, address, phone, instagram, website'
+          'id, name, slug, logo_url, city, tagline_tr, address, phone, instagram, website, created_at'
         )
         .eq('id', businessId)
         .maybeSingle(),
@@ -89,10 +100,10 @@ export async function getPrintableMenuData(): Promise<{
       admin
         .from('products')
         .select(
-          'id, category_id, name, description, price, hero_icon, is_featured, status, sort_order'
+          'id, category_id, name, description, price, hero_icon, is_featured, is_chef_recommend, dietary_tags, spicy_level, status, sort_order'
         )
         .eq('business_id', businessId)
-        .eq('status', 'active') // sadece aktif - tükendiler basılmaz
+        .eq('status', 'active')
         .order('sort_order', { ascending: true }),
     ]);
 
@@ -101,7 +112,6 @@ export async function getPrintableMenuData(): Promise<{
       return { success: false, error: 'İşletme bulunamadı' };
     }
 
-    // i18n alanlarını TR'ye çöz (basılı menü TR)
     const pickTr = (
       raw: string | { tr?: string; en?: string } | null | undefined
     ): string => {
@@ -121,13 +131,39 @@ export async function getPrintableMenuData(): Promise<{
       })
     );
 
-    // Ürünleri kategorilere yerleştir
+    const validTags: DietaryTag[] = [
+      'vegan',
+      'vegetarian',
+      'gluten_free',
+      'lactose_free',
+      'halal',
+      'organic',
+      'homemade',
+    ];
+
     const catMap = new Map<string, PrintableMenuCategory>(
       categories.map((c) => [c.id, c])
     );
     (productsRes.data || []).forEach((p) => {
       const cat = catMap.get(p.category_id as string);
       if (!cat) return;
+
+      // Dietary tags - güvenli parse
+      let dietaryTags: DietaryTag[] = [];
+      try {
+        const raw = p.dietary_tags;
+        if (Array.isArray(raw)) {
+          dietaryTags = raw.filter((t): t is DietaryTag =>
+            validTags.includes(t as DietaryTag)
+          );
+        }
+      } catch {
+        dietaryTags = [];
+      }
+
+      const spicy = Number(p.spicy_level || 0);
+      const safeSpicy = spicy >= 0 && spicy <= 3 ? spicy : 0;
+
       cat.products.push({
         id: p.id as string,
         name: pickTr(p.name as never),
@@ -135,16 +171,21 @@ export async function getPrintableMenuData(): Promise<{
         price: parseFloat(String(p.price || 0)),
         hero_icon: (p.hero_icon as string) || null,
         is_featured: !!p.is_featured,
+        is_chef_recommend: !!p.is_chef_recommend,
+        dietary_tags: dietaryTags,
+        spicy_level: safeSpicy,
         status: p.status as string,
       });
     });
 
-    // Boş kategorileri filtrele
     const nonEmpty = categories.filter((c) => c.products.length > 0);
 
-    // QR URL
     const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'alegstudio.com';
     const qrUrl = `https://${business.slug}.${rootDomain}`;
+
+    const createdYear = business.created_at
+      ? new Date(business.created_at as string).getFullYear()
+      : new Date().getFullYear();
 
     return {
       success: true,
@@ -160,6 +201,7 @@ export async function getPrintableMenuData(): Promise<{
           phone: (business.phone as string) || null,
           instagram: (business.instagram as string) || null,
           website: (business.website as string) || null,
+          created_year: createdYear,
         },
         categories: nonEmpty,
         qr_url: qrUrl,
@@ -169,6 +211,34 @@ export async function getPrintableMenuData(): Promise<{
     return {
       success: false,
       error: err instanceof Error ? err.message : 'Bilinmeyen hata',
+    };
+  }
+}
+
+// ============================================================
+// Logo'yu base64 dataURL olarak fetch et (PDF için)
+// ============================================================
+export async function fetchLogoAsDataUrl(
+  logoUrl: string
+): Promise<{ success: boolean; dataUrl?: string; error?: string }> {
+  try {
+    if (!logoUrl) return { success: false, error: 'Logo URL yok' };
+
+    const res = await fetch(logoUrl);
+    if (!res.ok) {
+      return { success: false, error: 'Logo indirilemedi' };
+    }
+    const buf = await res.arrayBuffer();
+    const base64 = Buffer.from(buf).toString('base64');
+    const mime = res.headers.get('content-type') || 'image/png';
+    return {
+      success: true,
+      dataUrl: `data:${mime};base64,${base64}`,
+    };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Logo hatası',
     };
   }
 }

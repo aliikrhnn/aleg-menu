@@ -1,23 +1,16 @@
 /**
- * Basılı Menü Şablon Sistemi
- * 
- * 5 şablon × 3 boyut = 15 kombinasyon
- * 
- * Şablonlar:
- *  1. classic   — Klasik liste (dot leaders, kategoriler ayraç)
- *  2. elite     — Elit çizgisel (fine dining, watermark, gold)
- *  3. modern    — Modern grid (kart sistem, color block)
- *  4. vintage   — Vintage bistro (eski Paris, ornaments)
- *  5. minimal   — Minimal Skandinav (sade, sadece tipografi)
- * 
- * Boyutlar:
- *  - a4   : A4 dikey  (210 × 297 mm)
- *  - a5   : A5 dikey  (148 × 210 mm)
- *  - plate: Pláka     (240 × 360 mm) — masa menüsü
+ * Basılı Menü Şablon Sistemi - v2
+ *
+ * 5 şablon × 4 boyut × header/footer varyasyonları
+ *
+ * Şablonlar: classic, elite, modern, vintage, minimal
+ * Boyutlar: a4 dikey, a4 yatay, a5, plate
  */
 
 export type TemplateId = 'classic' | 'elite' | 'modern' | 'vintage' | 'minimal';
-export type PaperSize = 'a4' | 'a5' | 'plate';
+export type PaperSize = 'a4' | 'a4_landscape' | 'a5' | 'plate';
+export type HeaderVariant = 'centered' | 'split' | 'monogram';
+export type FooterVariant = 'minimal' | 'social' | 'full';
 
 export type SizeSpec = {
   id: PaperSize;
@@ -25,6 +18,7 @@ export type SizeSpec = {
   width_mm: number;
   height_mm: number;
   description: string;
+  isLandscape: boolean;
 };
 
 export const SIZES: Record<PaperSize, SizeSpec> = {
@@ -33,7 +27,16 @@ export const SIZES: Record<PaperSize, SizeSpec> = {
     name: 'A4 Dikey',
     width_mm: 210,
     height_mm: 297,
-    description: 'En yaygın boyut. Pano, çerçeve, masa için.',
+    description: 'En yaygın boyut. Pano, çerçeve, masa.',
+    isLandscape: false,
+  },
+  a4_landscape: {
+    id: 'a4_landscape',
+    name: 'A4 Yatay',
+    width_mm: 297,
+    height_mm: 210,
+    description: 'Geniş layout. 2 sütun ürün, masa altlığı.',
+    isLandscape: true,
   },
   a5: {
     id: 'a5',
@@ -41,13 +44,15 @@ export const SIZES: Record<PaperSize, SizeSpec> = {
     width_mm: 148,
     height_mm: 210,
     description: 'Kompakt. Masa üstü, broşür.',
+    isLandscape: false,
   },
   plate: {
     id: 'plate',
     name: 'Pláka 24×36',
     width_mm: 240,
     height_mm: 360,
-    description: 'Büyük masa menüsü. Restoranlar için.',
+    description: 'Büyük masa menüsü. Restoranlar.',
+    isLandscape: false,
   },
 };
 
@@ -55,7 +60,6 @@ export type TemplateSpec = {
   id: TemplateId;
   name: string;
   description: string;
-  // Renk paleti
   colors: {
     paper: string;
     ink: string;
@@ -63,38 +67,36 @@ export type TemplateSpec = {
     ink_muted: string;
     accent: string;
     line: string;
-    surface: string; // ürün satırı arka planı
+    surface: string;
+    chef: string; // şefin önerisi rozeti rengi
   };
-  // Tipografi
   fonts: {
     serif: string;
     sans: string;
     mono: string;
     italicHeadings: boolean;
   };
-  // Stil parametreleri
   style: {
-    radius: number; // mm
-    productGap: number; // mm
-    categoryGap: number; // mm
-    pagePadding: number; // mm
-    showDotLeaders: boolean; // ürün - fiyat arası noktalar
+    radius: number;
+    productGap: number;
+    categoryGap: number;
+    pagePadding: number;
+    showDotLeaders: boolean;
     showProductBorders: boolean;
     showWatermark: boolean;
-    headerStyle: 'centered' | 'left' | 'badge';
     qrFrame: 'plain' | 'bordered' | 'badge' | 'corner';
   };
-  // Önizleme için mini renkler (kart üstünde gösterilir)
   preview: {
     paper: string;
     ink: string;
     accent: string;
   };
+  // Şefin önerisi rozeti karakteri
+  chefMark: string; // ★ ✦ ◆ ※ ◇
+  // Yıldız/öne çıkanı SVG mi yoksa karakter mi?
+  ornamentChar: string;
 };
 
-// ============================================================
-// 1. CLASSIC (klasik liste)
-// ============================================================
 const classic: TemplateSpec = {
   id: 'classic',
   name: 'Klasik Liste',
@@ -107,6 +109,7 @@ const classic: TemplateSpec = {
     accent: '#C4553A',
     line: '#D8CDB7',
     surface: 'transparent',
+    chef: '#B8903E',
   },
   fonts: {
     serif: '"Instrument Serif", Georgia, serif',
@@ -122,15 +125,13 @@ const classic: TemplateSpec = {
     showDotLeaders: true,
     showProductBorders: false,
     showWatermark: false,
-    headerStyle: 'centered',
     qrFrame: 'plain',
   },
   preview: { paper: '#FAF5EA', ink: '#2A1F18', accent: '#C4553A' },
+  chefMark: '★',
+  ornamentChar: '✦',
 };
 
-// ============================================================
-// 2. ELITE (fine dining)
-// ============================================================
 const elite: TemplateSpec = {
   id: 'elite',
   name: 'Elit',
@@ -143,6 +144,7 @@ const elite: TemplateSpec = {
     accent: '#C9A961',
     line: '#3A352D',
     surface: 'transparent',
+    chef: '#D4B86A',
   },
   fonts: {
     serif: '"Playfair Display", "Cormorant Garamond", Georgia, serif',
@@ -158,15 +160,13 @@ const elite: TemplateSpec = {
     showDotLeaders: false,
     showProductBorders: false,
     showWatermark: true,
-    headerStyle: 'centered',
     qrFrame: 'bordered',
   },
   preview: { paper: '#1A1814', ink: '#F2EAD8', accent: '#C9A961' },
+  chefMark: '✦',
+  ornamentChar: '✦',
 };
 
-// ============================================================
-// 3. MODERN (grid sistem)
-// ============================================================
 const modern: TemplateSpec = {
   id: 'modern',
   name: 'Modern Grid',
@@ -179,6 +179,7 @@ const modern: TemplateSpec = {
     accent: '#4ABDAC',
     line: '#E5E5E5',
     surface: '#FAFAFA',
+    chef: '#4ABDAC',
   },
   fonts: {
     serif: '"Crimson Pro", Georgia, serif',
@@ -194,15 +195,13 @@ const modern: TemplateSpec = {
     showDotLeaders: false,
     showProductBorders: true,
     showWatermark: false,
-    headerStyle: 'badge',
     qrFrame: 'badge',
   },
   preview: { paper: '#FFFFFF', ink: '#0A0A0A', accent: '#4ABDAC' },
+  chefMark: '◆',
+  ornamentChar: '◆',
 };
 
-// ============================================================
-// 4. VINTAGE (Paris bistro)
-// ============================================================
 const vintage: TemplateSpec = {
   id: 'vintage',
   name: 'Vintage Bistro',
@@ -215,6 +214,7 @@ const vintage: TemplateSpec = {
     accent: '#8B2635',
     line: '#C5AA82',
     surface: 'transparent',
+    chef: '#C9A961',
   },
   fonts: {
     serif: '"DM Serif Display", "Lora", Georgia, serif',
@@ -230,15 +230,13 @@ const vintage: TemplateSpec = {
     showDotLeaders: true,
     showProductBorders: false,
     showWatermark: false,
-    headerStyle: 'centered',
     qrFrame: 'corner',
   },
   preview: { paper: '#F8F0E3', ink: '#3D2817', accent: '#8B2635' },
+  chefMark: '※',
+  ornamentChar: '✦',
 };
 
-// ============================================================
-// 5. MINIMAL (Skandinav)
-// ============================================================
 const minimal: TemplateSpec = {
   id: 'minimal',
   name: 'Minimal',
@@ -248,9 +246,10 @@ const minimal: TemplateSpec = {
     ink: '#1A1A1A',
     ink_soft: '#5C5C5C',
     ink_muted: '#9C9C9C',
-    accent: '#1A1A1A', // accent yok, sadece ink
+    accent: '#1A1A1A',
     line: '#E0E0DD',
     surface: 'transparent',
+    chef: '#1A1A1A',
   },
   fonts: {
     serif: '"Inter", system-ui, sans-serif',
@@ -266,10 +265,11 @@ const minimal: TemplateSpec = {
     showDotLeaders: false,
     showProductBorders: false,
     showWatermark: false,
-    headerStyle: 'left',
     qrFrame: 'plain',
   },
   preview: { paper: '#FAFAFA', ink: '#1A1A1A', accent: '#1A1A1A' },
+  chefMark: '◇',
+  ornamentChar: '◆',
 };
 
 export const TEMPLATES: Record<TemplateId, TemplateSpec> = {
@@ -288,4 +288,72 @@ export const TEMPLATE_LIST: TemplateSpec[] = [
   minimal,
 ];
 
-export const SIZE_LIST: SizeSpec[] = [SIZES.a4, SIZES.a5, SIZES.plate];
+export const SIZE_LIST: SizeSpec[] = [
+  SIZES.a4,
+  SIZES.a4_landscape,
+  SIZES.a5,
+  SIZES.plate,
+];
+
+// ============================================================
+// HEADER VARIANT META
+// ============================================================
+export const HEADER_VARIANTS: Array<{
+  id: HeaderVariant;
+  name: string;
+  description: string;
+}> = [
+  {
+    id: 'centered',
+    name: 'Merkezde',
+    description: 'Logo ortada, ad altında, slogan en altta. Klasik.',
+  },
+  {
+    id: 'split',
+    name: 'Yan yana',
+    description: 'Sol logo, sağ ad+slogan. Modern editorial.',
+  },
+  {
+    id: 'monogram',
+    name: 'Monogram',
+    description: 'Büyük baş harf, ad altta. Lüks his.',
+  },
+];
+
+export const FOOTER_VARIANTS: Array<{
+  id: FooterVariant;
+  name: string;
+  description: string;
+}> = [
+  {
+    id: 'minimal',
+    name: 'Sadece QR',
+    description: 'QR kod ve kısa CTA. Temiz.',
+  },
+  {
+    id: 'social',
+    name: 'QR + sosyal',
+    description: 'QR + telefon + Instagram + adres. Standart.',
+  },
+  {
+    id: 'full',
+    name: 'Tam bilgi',
+    description: 'QR + tüm iletişim + watermark imza.',
+  },
+];
+
+// ============================================================
+// DIETARY TAG ETIKETLERI
+// ============================================================
+export const DIETARY_TAG_INFO: Record<
+  string,
+  { icon: string; label: string; color: string }
+> = {
+  vegan: { icon: '🌱', label: 'Vegan', color: '#4A8C2A' },
+  vegetarian: { icon: '🥬', label: 'Vejetaryen', color: '#5C8C3A' },
+  gluten_free: { icon: 'GF', label: 'Glütensiz', color: '#B8903E' },
+  lactose_free: { icon: 'LF', label: 'Laktozsuz', color: '#1F70B7' },
+  halal: { icon: '☪', label: 'Helal', color: '#1F70B7' },
+  organic: { icon: '✿', label: 'Organik', color: '#5C8C3A' },
+  homemade: { icon: '⌂', label: 'Ev yapımı', color: '#B8903E' },
+};

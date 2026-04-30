@@ -246,6 +246,9 @@ export type ProductInput = {
   print_station?: string;
   station_id?: string | null;
   is_featured?: boolean;
+  is_chef_recommend?: boolean;
+  dietary_tags?: string[];
+  spicy_level?: number;
   hero_icon?: string;
 };
 
@@ -308,6 +311,10 @@ export async function createProduct(
         print_station: input.print_station || null,
         station_id: input.station_id || null,
         is_featured: input.is_featured || false,
+        is_chef_recommend: input.is_chef_recommend || false,
+        dietary_tags: input.dietary_tags || [],
+        spicy_level:
+          typeof input.spicy_level === 'number' ? input.spicy_level : 0,
         hero_icon: input.hero_icon || null,
         sort_order: sortOrder,
       })
@@ -381,6 +388,11 @@ export async function updateProduct(
     if (input.print_station !== undefined) updates.print_station = input.print_station || null;
     if (input.station_id !== undefined) updates.station_id = input.station_id || null;
     if (input.is_featured !== undefined) updates.is_featured = input.is_featured;
+    if (input.is_chef_recommend !== undefined)
+      updates.is_chef_recommend = input.is_chef_recommend;
+    if (input.dietary_tags !== undefined)
+      updates.dietary_tags = input.dietary_tags;
+    if (input.spicy_level !== undefined) updates.spicy_level = input.spicy_level;
     if (input.hero_icon !== undefined) updates.hero_icon = input.hero_icon || null;
 
     const { error } = await supabase.from('products').update(updates).eq('id', productId);

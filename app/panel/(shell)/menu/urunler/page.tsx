@@ -29,7 +29,7 @@ export default async function ProductsPage() {
   // Ürünler
   const { data: products } = await supabase
     .from('products')
-    .select('id, category_id, name, description, price, status, is_featured, print_station, station_id, hero_icon, hero_image_url, sort_order')
+    .select('id, category_id, name, description, price, status, is_featured, is_chef_recommend, dietary_tags, spicy_level, print_station, station_id, hero_icon, hero_image_url, sort_order')
     .eq('business_id', businessId || '')
     .order('sort_order', { ascending: true });
 
@@ -65,6 +65,11 @@ export default async function ProductsPage() {
     ...p,
     name: p.name as LocalizedText,
     description: p.description as LocalizedText | null,
+    is_chef_recommend: !!p.is_chef_recommend,
+    dietary_tags: Array.isArray(p.dietary_tags)
+      ? (p.dietary_tags as string[])
+      : [],
+    spicy_level: typeof p.spicy_level === 'number' ? p.spicy_level : 0,
     preset_count: presetCountMap.get(p.id) || 0,
   }));
 

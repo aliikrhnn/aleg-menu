@@ -1,219 +1,47 @@
-ALEG TUR 7 — QR Menü Tema Sistemini Yenileme
-==============================================
+ALEG TUR 8 — Migration düzeltmesi (text[] uyumlu)
+====================================================
 
-QR menü tema sistemi büyük çaplı yenilendi. 2 yeni tema, dekoratif
-öğeler, welcome animasyonu, background pattern, köşe süslemeleri.
+SORUN
+-----
 
+Migration çalıştırırken hata:
+  ERROR: column "dietary_tags" is of type text[] but expression is of type jsonb
 
-YENİ EKLENENLER
-================
+Sebep: dietary_tags kolonu daha önceden text[] (PostgreSQL native array)
+olarak oluşturulmuş. Migration ise jsonb değer atamaya çalışıyordu.
 
-[1] 2 YENİ TEMA
-   • MEDITERRANEAN (sahil/balık restoranları)
-     Beyaz + gök mavisi + güneşli sarı
-     Cormorant Garamond + Inter
-     Yumuşak köşeler (20px), daire monogram hero
-     Dalga ayraçlar, dalga background pattern
-     Köşe ornament süslemeleri
-     Spotlight welcome animasyonu (☼ Featured mark)
+ÇÖZÜM
+-----
 
-   • DARK LUXE (modern karanlık)
-     Siyah + kırmızı accent
-     Inter + JetBrains Mono
-     Dots background pattern
-     Diamond ayraçlar (◆)
-     Slide welcome animasyonu (✧ Featured mark)
-     Bar/lounge/cocktail için ideal
+Migration text[] tipiyle uyumlu hale getirildi:
+  • dietary_tags text[] DEFAULT '{}'::text[]   (jsonb yerine)
+  • UPDATE'lerde '{}'::text[] kullanıldı
 
-[2] DEKORATİF ÖĞELER (her tema kendi karakteriyle)
+KOD TARAFI
+==========
 
-   Kategori ayraçları:
-   • line       — Düz çizgi (default - minimal/modern)
-   • dotted     — Noktalı (klasik)
-   • doubleline — Çift çizgi (elite)
-   • star       — ★ ortada twinkle animasyonu (brutalist)
-   • diamond    — ◆ ortada (dark luxe)
-   • wave       — Dalga SVG (mediterranean)
-   • ornament   — Süslü SVG (vintage)
-   • monogram   — İşletme baş harfi (özel hisli)
+Action ve client kodu zaten text[] uyumluydu (Array kullanılıyor),
+hiçbir şey değişmedi. Sadece migration düzeltildi.
 
-   Featured mark (öne çıkan ürünlerde):
-   • brutalist → ★
-   • elite → ✦
-   • modern → ◆
-   • vintage → ※
-   • minimal → ◆
-   • mediterranean → ☼
-   • darkluxe → ✧
+Yani önceki Tur 8 paketindeki diğer dosyalar AYNEN GEÇERLİ.
+Sadece bu dosyayı eskiyle değiştir:
 
-[3] BACKGROUND PATTERN sistemi
-   • none    — Düz (minimal)
-   • noise   — İnce gren (elite)
-   • paper   — Kağıt dokusu (brutalist, vintage)
-   • grid    — Çok ince grid (modern)
-   • dots    — Noktalar (darkluxe)
-   • waves   — Dalgalar SVG repeat (mediterranean)
+  supabase/migrations/0033_product_dietary_tags.sql
 
-   Tüm pattern'ler fixed position, opacity ayarlı, mixed-blend
-   uygulamasıyla göze batmıyor — dokuyu hissettiriyor.
-
-[4] WELCOME RITUAL — menü ilk açıldığında 1.6s'lik karşılama
-   • Tema'nın paper rengi tüm ekranı kaplar
-   • Ortada işletme adının ilk harfi yuvarlak içinde (monogram)
-   • Halo pulse efekti
-   • İşletme adı altta + "MENÜ" mono uppercase
-   • Tema'ya göre animasyon karakteri:
-     - fade (minimal)
-     - slide (modern, darkluxe)
-     - reveal (brutalist)
-     - spotlight (mediterranean)
-     - curtain (elite, vintage) - perde gibi yukarı çekiliyor
-   
-   localStorage'da 2 saat cache'leniyor — aynı tema için tekrar
-   gösterilmiyor (kullanıcıyı yormamak için).
-   Önizlemede her tema değişiminde gösteriliyor.
-
-[5] CORNER ORNAMENTS — sayfa köşelerinde dekoratif öğeler
-   Sadece vintage ve mediterranean temalarda görünür.
-   Sabit pozisyonda (fixed), pointer-events yok, 0.4 opacity.
-   Üçgen + çizgiler + nokta kompozisyonu.
-
-[6] HERO BLOK STİLLERİ (tema'da tanımlı)
-   • centered, left, badge, editorial, monogram, circular
-
-
-PANEL UI YENİLEME
-=================
-
-Tema kart layout: 3-4 sütun (önceki 3'tü, artık daha kompakt)
-Her tema kartında:
-  • Gerçek tema renkleriyle 156px yükseklikte mini önizleme
-  • Pattern hint (dalga/dots) bazı temalarda görsel
-  • MINI DIVIDER ÖNİZLEMESİ (7 farklı stil canlı görünüyor!)
-  • Mini ürün satırı (Latte, ₺85)
-  • Accent badge köşede
-
-Renk paleti genişledi (12 önerilen renk).
-"Varsayılan" butonu üzerinde ✓ check var.
-
-Section header'lar daha rafine:
-  Adım 1: "Tema seç" → her tema kendi animasyonlarını taşır
-  Adım 2: "Vurgu rengi" → 12 renk + Özel
-  Adım 3: "Canlı önizleme" → gerçek telefon mockup
-
-
-MÜŞTERİ MENÜSÜ TARAFI
-======================
-
-Yeni dosya: app/menu/[slug]/menu-theme-wrapper.tsx
-  • BackgroundPatternLayer
-  • CornerOrnament (vintage / mediterranean için 4 köşe)
-  • WelcomeRitual (localStorage TTL ile)
-  • Tüm bunlar mevcut MenuView'ı sarıyor — MenuView dokunulmadı
-
-page.tsx güncellendi:
-  • 7 valid preset
-  • MenuThemeWrapper kullanılıyor
-
-
-VERİ MODELİ
-===========
-
-DB değişikliği YOK — mevcut menu_theme jsonb'si yeterli.
-Sadece preset değerleri 5'ten 7'ye çıktı:
-  brutalist | elite | modern | vintage | minimal | mediterranean | darkluxe
-
-
-KURULUM
-=======
-
-6 dosya:
-
-  YENİ:
-    lib/menu-theme-decorations.tsx
-    app/menu/[slug]/menu-theme-wrapper.tsx
-
-  GÜNCELLEMELER:
-    lib/menu-themes.ts (büyük genişleme - 7 tema, dekoratif sistem)
-    lib/actions/settings.ts (validPresets x2 yer)
-    app/panel/(shell)/ayarlar/tabs/theme-tab.tsx (yeni UI)
-    app/menu/[slug]/page.tsx (wrapper kullan, 7 preset)
-
+Sonra Supabase SQL Editor'da çalıştır.
 
 PUSH
 ====
 
-  git add .
-  git commit -m "feat: tur 7 - menu theme renaissance (7 themes, ornaments, welcome ritual)"
+  git add supabase/migrations/0033_product_dietary_tags.sql
+  git commit -m "fix: tur 8 migration - dietary_tags as text[] not jsonb"
   git push origin main
-
 
 TEST
 ====
 
-[A] Yeni temalar:
-    1. Panel → Ayarlar → Menü Teması
-    2. ✅ 7 tema kartı görünmeli (önceki 5 + Mediterranean + Dark Luxe)
-    3. Mini önizleme her temada farklı pattern/divider gösteriyor
-    4. Mediterranean kartında dalga SVG görünüyor
-    5. Dark Luxe kartında dots pattern görünüyor
-
-[B] Welcome ritual:
-    1. {slug}.alegstudio.com aç
-    2. ✅ Sayfa yüklenince 1.6s welcome ritual gösteriliyor
-       • İşletme adının ilk harfi monogram halka
-       • Halo pulse efekti
-       • Tema'nın animasyon karakteri (curtain, fade, reveal vs.)
-    3. 2 saat içinde tekrar girince GÖSTERİLMEMELİ
-    4. localStorage temizlenince tekrar görünür
-
-[C] Background pattern:
-    1. Modern Cafe seç → grid pattern (subtle çizgi)
-    2. Dark Luxe seç → dots pattern
-    3. Mediterranean seç → wave pattern (dalga)
-    4. Minimal seç → pattern yok, düz
-
-[D] Köşe süslemeleri:
-    1. Vintage tema seç + müşteri menüsünü aç
-    2. ✅ 4 köşede SVG süsleme (üçgen + çizgi + nokta)
-    3. Mediterranean'da da görünmeli
-    4. Diğer temalarda görünmemeli
-
-[E] Featured mark:
-    1. Bir ürünü "öne çıkan" yap
-    2. Müşteri menüsünde tema'ya göre farklı ★/✦/◆/※/☼/✧ görünmeli
-
-[F] Önizleme cnam:
-    1. Panel'de tema değiştir
-    2. ✅ iframe yenileniyor
-    3. Welcome animasyonu her tema değişiminde gösteriliyor (önizleme)
-    4. Pattern, ornament, fontlar canlı değişmeli
-
-[G] Renk override:
-    1. Mediterranean + accent #1F70B7 (mavi)
-    2. ✅ Gold yerine mavi her yerde uygulanmalı (decor + glow dahil)
-    3. Welcome ritual halkası da mavi olmalı
-
-
-ÖZEL DETAY
-==========
-
-WelcomeRitual'a localStorage anahtarı tema bazlı:
-  aleg-welcome-shown-{theme.id}
-
-Yani brutalist'ten elite'e geçince welcome tekrar gösterilir
-(yeni tema, yeni izlenim).
-
-
-SIRADAKİ — TUR 8
-================
-
-Basılı menü yenilenmesi:
-  • Logo entegrasyonu (gerçek görsel)
-  • Allergen/diet badges + şefin önerisi
-  • Çoklu sayfa + yatay layout
-  • Header/footer varyasyonları
-  • Watermark/imza alanı
-  • Toplu indirme
-
-Bu Tur 7'yi test edip onayladığında geçiyoruz.
+1. Supabase SQL Editor'da migration'ı çalıştır
+2. Hata vermez ✅
+3. /panel/menu/urunler → ürün düzenle
+4. Diyet etiketleri seç + kaydet → DB'ye yazılır
+5. /panel/menu-tasarim → önizlemede rozetler görünür

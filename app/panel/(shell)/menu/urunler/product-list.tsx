@@ -35,6 +35,9 @@ type Product = {
   price: number;
   status: 'active' | 'soldout' | 'draft' | 'archived';
   is_featured: boolean;
+  is_chef_recommend: boolean;
+  dietary_tags: string[];
+  spicy_level: number;
   print_station: string | null;
   station_id: string | null;
   hero_icon: string | null;
@@ -1121,6 +1124,9 @@ function ProductFormModal({
     print_station: initial?.print_station || '',
     station_id: initial?.station_id || null,
     is_featured: initial?.is_featured || false,
+    is_chef_recommend: initial?.is_chef_recommend || false,
+    dietary_tags: initial?.dietary_tags || [],
+    spicy_level: initial?.spicy_level || 0,
     hero_icon: initial?.hero_icon || '',
   });
 
@@ -1405,6 +1411,86 @@ function ProductFormModal({
                 />
                 <span className="text-sm text-ink-2">Menüde öne çıkar</span>
               </label>
+            </Field>
+
+            <Field label="Şefin Önerisi">
+              <label className="flex items-center gap-3 h-11 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.is_chef_recommend || false}
+                  onChange={(e) => setForm((f) => ({ ...f, is_chef_recommend: e.target.checked }))}
+                  className="w-5 h-5 rounded border-line accent-accent"
+                />
+                <span className="text-sm text-ink-2">Basılı menüde özel rozet</span>
+              </label>
+            </Field>
+
+            <Field label="Acılık Derecesi">
+              <select
+                value={form.spicy_level || 0}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, spicy_level: parseInt(e.target.value, 10) }))
+                }
+                className="form-input"
+              >
+                <option value={0}>Yok</option>
+                <option value={1}>🌶 Az acı</option>
+                <option value={2}>🌶🌶 Orta</option>
+                <option value={3}>🌶🌶🌶 Çok acı</option>
+              </select>
+            </Field>
+          </div>
+
+          {/* Diet/allergen tags - tam genişlik */}
+          <div className="px-6 pb-6">
+            <Field label="Diyet / Allergen Etiketleri">
+              <div className="flex flex-wrap gap-2 pt-1">
+                {[
+                  { id: 'vegan', icon: '🌱', label: 'Vegan' },
+                  { id: 'vegetarian', icon: '🥬', label: 'Vejetaryen' },
+                  { id: 'gluten_free', icon: 'GF', label: 'Glütensiz' },
+                  { id: 'lactose_free', icon: 'LF', label: 'Laktozsuz' },
+                  { id: 'halal', icon: '☪', label: 'Helal' },
+                  { id: 'organic', icon: '✿', label: 'Organik' },
+                  { id: 'homemade', icon: '⌂', label: 'Ev yapımı' },
+                ].map((tag) => {
+                  const checked = (form.dietary_tags || []).includes(tag.id);
+                  return (
+                    <button
+                      key={tag.id}
+                      type="button"
+                      onClick={() => {
+                        setForm((f) => {
+                          const current = f.dietary_tags || [];
+                          const next = checked
+                            ? current.filter((t: string) => t !== tag.id)
+                            : [...current, tag.id];
+                          return { ...f, dietary_tags: next };
+                        });
+                      }}
+                      className="px-3 h-9 inline-flex items-center gap-1.5 rounded-[8px] text-[12px] font-semibold transition-all"
+                      style={{
+                        background: checked
+                          ? 'var(--ink)'
+                          : 'var(--card)',
+                        color: checked ? 'var(--paper)' : 'var(--ink)',
+                        border: checked
+                          ? '1px solid var(--ink)'
+                          : '1px solid var(--line)',
+                      }}
+                    >
+                      <span>{tag.icon}</span>
+                      {tag.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p
+                className="mt-2 text-[11px]"
+                style={{ color: 'var(--ink-3)' }}
+              >
+                Basılı menüde bu rozetler görünür. Birden fazla seçilebilir.
+              </p>
             </Field>
           </div>
         </div>
