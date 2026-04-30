@@ -557,6 +557,56 @@ export function TableDetailModal({
                 <>
                   <button
                     onClick={async () => {
+                      // PARTIAL QTY MODU
+                      // Tek kalem seçildi ve qty > 1 ise kaç adet ikram?
+                      if (
+                        selectedFlatItems.length === 1 &&
+                        selectedFlatItems[0].item.quantity > 1
+                      ) {
+                        const fi = selectedFlatItems[0];
+                        const totalQty = fi.item.quantity;
+                        const userInput = window.prompt(
+                          `${fi.item.product_name} — toplam ${totalQty} adet var.\n\nKaç adet ikram etmek istiyorsun?`,
+                          '1'
+                        );
+                        if (userInput == null) return; // Vazgeç
+                        const giftQty = parseInt(userInput, 10);
+                        if (
+                          !Number.isInteger(giftQty) ||
+                          giftQty < 1 ||
+                          giftQty > totalQty
+                        ) {
+                          toast.error(
+                            `1 ile ${totalQty} arasında bir sayı gir`
+                          );
+                          return;
+                        }
+                        const ok = await confirmDialog({
+                          title: 'İkram onayı',
+                          body: `${giftQty} × ${fi.item.product_name} ikram edilecek (toplam ${totalQty} adetten).`,
+                          confirmLabel: 'İkram Et',
+                          cancelLabel: 'Vazgeç',
+                        });
+                        if (!ok) return;
+                        const r = await makeItemsComplimentary({
+                          orderId: fi.orderId,
+                          itemIds: [fi.item.id],
+                          reason: 'Kasiyer ikram',
+                          partialQty: giftQty,
+                        });
+                        if (r.success) {
+                          toast.success(
+                            `${giftQty} adet ${fi.item.product_name} ikram edildi`
+                          );
+                        } else {
+                          toast.error(r.error || 'İkram hatası');
+                        }
+                        clearSelection();
+                        load();
+                        return;
+                      }
+
+                      // ÇOKLU KALEM MODU (eski davranış — hepsi ikram)
                       // Seçili kalemleri ikram et (orderId bazında grupla)
                       const grouped = new Map<string, string[]>();
                       selectedFlatItems.forEach((fi) => {
@@ -564,9 +614,14 @@ export function TableDetailModal({
                           grouped.set(fi.orderId, []);
                         grouped.get(fi.orderId)!.push(fi.item.id);
                       });
+                      // Toplam ikram edilecek adet
+                      const totalGiftQty = selectedFlatItems.reduce(
+                        (s, fi) => s + fi.item.quantity,
+                        0
+                      );
                       const ok = await confirmDialog({
                         title: 'Seçili kalemleri ikram?',
-                        body: `${selectedFlatItems.length} kalem ikram edilecek.`,
+                        body: `${totalGiftQty} adet ikram edilecek (${selectedFlatItems.length} kalem).`,
                         confirmLabel: 'İkram Et',
                         cancelLabel: 'Vazgeç',
                       });
@@ -584,9 +639,7 @@ export function TableDetailModal({
                         }
                       }
                       if (allOk) {
-                        toast.success(
-                          `${selectedFlatItems.length} kalem ikram edildi`
-                        );
+                        toast.success(`${totalGiftQty} adet ikram edildi`);
                       }
                       clearSelection();
                       load();
@@ -605,10 +658,63 @@ export function TableDetailModal({
                   </button>
                   <button
                     onClick={async () => {
-                      // Seçili kalemleri iptal et
+                      // PARTIAL QTY MODU
+                      // Tek kalem seçildi ve qty > 1 ise kaç adet iptal?
+                      if (
+                        selectedFlatItems.length === 1 &&
+                        selectedFlatItems[0].item.quantity > 1
+                      ) {
+                        const fi = selectedFlatItems[0];
+                        const totalQty = fi.item.quantity;
+                        const userInput = window.prompt(
+                          `${fi.item.product_name} — toplam ${totalQty} adet var.\n\nKaç adet iptal etmek istiyorsun?`,
+                          '1'
+                        );
+                        if (userInput == null) return; // Vazgeç
+                        const cancelQty = parseInt(userInput, 10);
+                        if (
+                          !Number.isInteger(cancelQty) ||
+                          cancelQty < 1 ||
+                          cancelQty > totalQty
+                        ) {
+                          toast.error(
+                            `1 ile ${totalQty} arasında bir sayı gir`
+                          );
+                          return;
+                        }
+                        const ok = await confirmDialog({
+                          title: 'İptal onayı',
+                          body: `${cancelQty} × ${fi.item.product_name} iptal edilecek (toplam ${totalQty} adetten). Bu işlem geri alınamaz.`,
+                          confirmLabel: 'İptal Et',
+                          cancelLabel: 'Vazgeç',
+                          tone: 'danger',
+                        });
+                        if (!ok) return;
+                        const r = await cancelOrderItems({
+                          itemIds: [fi.item.id],
+                          reason: 'Kasiyer iptal',
+                          partialQty: cancelQty,
+                        });
+                        if (r.success) {
+                          toast.success(
+                            `${cancelQty} adet ${fi.item.product_name} iptal edildi`
+                          );
+                        } else {
+                          toast.error(r.error || 'İptal hatası');
+                        }
+                        clearSelection();
+                        load();
+                        return;
+                      }
+
+                      // ÇOKLU KALEM MODU (eski davranış)
+                      const totalCancelQty = selectedFlatItems.reduce(
+                        (s, fi) => s + fi.item.quantity,
+                        0
+                      );
                       const ok = await confirmDialog({
                         title: 'Seçili kalemleri iptal?',
-                        body: `${selectedFlatItems.length} kalem iptal edilecek. Bu işlem geri alınamaz.`,
+                        body: `${totalCancelQty} adet iptal edilecek (${selectedFlatItems.length} kalem). Bu işlem geri alınamaz.`,
                         confirmLabel: 'İptal Et',
                         cancelLabel: 'Vazgeç',
                         tone: 'danger',
@@ -621,7 +727,7 @@ export function TableDetailModal({
                       });
                       if (r.success) {
                         toast.success(
-                          `${r.cancelledCount || ids.length} kalem iptal edildi`
+                          `${totalCancelQty} adet iptal edildi`
                         );
                       } else {
                         toast.error(r.error || 'İptal hatası');

@@ -1026,6 +1026,10 @@ export async function makeItemsComplimentary(input: {
   orderId: string;
   itemIds: string[];
   reason: string;
+  // Eğer set edilirse: itemIds'in TEK bir kalemi olmalı, o kalemden
+  // sadece partialQty kadar ikram edilir, kalanı normal kalem olarak
+  // ayrı satıra bölünür.
+  partialQty?: number;
 }): Promise<{
   success: boolean;
   newTotal?: number;
@@ -1041,6 +1045,15 @@ export async function makeItemsComplimentary(input: {
     }
     if (!input.reason || !input.reason.trim()) {
       return { success: false, error: 'İkram sebebi gerekli' };
+    }
+    if (input.partialQty != null && input.itemIds.length !== 1) {
+      return {
+        success: false,
+        error: 'Partial ikramda sadece tek kalem seç',
+      };
+    }
+    if (input.partialQty != null && input.partialQty < 1) {
+      return { success: false, error: 'Partial qty 1 veya daha büyük olmalı' };
     }
 
     // Order güvenliği
@@ -1060,7 +1073,7 @@ export async function makeItemsComplimentary(input: {
     // İkram edilecek kalemlerin bilgisini al (önceden ikramlıysa atla)
     const { data: items } = await admin
       .from('order_items')
-      .select('id, order_id, product_name, unit_price, quantity, is_complimentary')
+      .select('*')
       .in('id', input.itemIds)
       .eq('order_id', input.orderId);
 
@@ -1073,7 +1086,139 @@ export async function makeItemsComplimentary(input: {
       return { success: false, error: 'Seçili kalemlerin hepsi zaten ikram' };
     }
 
-    // İkram edilen tutar toplamı
+    // PARTIAL QTY MODU
+    // ───────────────────────────────────────────────────
+    // Tek kalem var, partialQty < quantity → kalemi böl:
+    //   • Mevcut kalem quantity = partialQty, is_complimentary=true
+    //   • Yeni satır: quantity = (quantity - partialQty), is_complimentary=false
+    if (input.partialQty != null && toFlip.length === 1) {
+      const orig = toFlip[0];
+      const origQty = orig.quantity;
+      const giftQty = input.partialQty;
+
+      if (giftQty > origQty) {
+        return {
+          success: false,
+          error: `Bu kalemde sadece ${origQty} adet var, ${giftQty} ikram edilemez`,
+        };
+      }
+
+      // Tüm qty istendiyse normal akışa düş (bölme yok, hepsi ikram)
+      if (giftQty === origQty) {
+        // partialQty'i null gibi davran — aşağıdaki normal akış halleder
+      } else {
+        // BÖL
+        const remainingQty = origQty - giftQty;
+        const giftAmount = Number(orig.unit_price) * giftQty;
+
+        // 1) Mevcut kalemi ikrama çevir + qty düşür
+        const { error: updErr } = await admin
+          .from('order_items')
+          .update({
+            quantity: giftQty,
+            is_complimentary: true,
+            complimentary_reason: input.reason.trim(),
+          })
+          .eq('id', orig.id);
+
+        if (updErr) {
+          return {
+            success: false,
+            error: `Kalem güncelleme hatası: ${updErr.message}`,
+          };
+        }
+
+        // 2) Kalan qty için yeni satır ekle (normal, ödenecek)
+        // Mevcut kalemin tüm bilgilerini kopyalayıp sadece qty + flag değiştir
+        const newRow = {
+          ...orig,
+          // id'yi sil, DB yeni UUID üretsin
+          id: undefined,
+          quantity: remainingQty,
+          is_complimentary: false,
+          complimentary_reason: null,
+          paid_by_log_id: null,
+          // created_at ve diğer otomatik alanlar
+          created_at: undefined,
+        };
+        // undefined kolonları temizle
+        Object.keys(newRow).forEach((k) => {
+          if ((newRow as Record<string, unknown>)[k] === undefined) {
+            delete (newRow as Record<string, unknown>)[k];
+          }
+        });
+
+        const { error: insErr } = await admin
+          .from('order_items')
+          .insert(newRow);
+
+        if (insErr) {
+          // Rollback
+          await admin
+            .from('order_items')
+            .update({
+              quantity: origQty,
+              is_complimentary: false,
+              complimentary_reason: null,
+            })
+            .eq('id', orig.id);
+          return {
+            success: false,
+            error: `Yeni satır eklenemedi: ${insErr.message}`,
+          };
+        }
+
+        // Order totallarını güncelle
+        // Subtotal/Total: gift kadar düşer
+        // Complimentary_total: gift kadar artar
+        const newSubtotal = Math.max(
+          0,
+          Number(order.subtotal) - giftAmount
+        );
+        const newTotal = Math.max(0, Number(order.total) - giftAmount);
+        const newComp =
+          Number(order.complimentary_total || 0) + giftAmount;
+
+        await admin
+          .from('orders')
+          .update({
+            subtotal: newSubtotal,
+            total: newTotal,
+            complimentary_total: newComp,
+          })
+          .eq('id', input.orderId);
+
+        // AUDIT LOG
+        const performer = await fetchPerformerInfo(memberId);
+        void logAction({
+          businessId,
+          orderId: input.orderId,
+          action: 'item_complimentary',
+          details: {
+            itemId: orig.id,
+            productName: orig.product_name,
+            quantity: giftQty,
+            unitPrice: Number(orig.unit_price),
+            amount: giftAmount,
+            reason: input.reason.trim(),
+            partial: true,
+            originalQty: origQty,
+          },
+          ...performer,
+        });
+
+        revalidatePath('/kasa');
+        revalidatePath('/panel/pos');
+
+        return {
+          success: true,
+          newTotal,
+          newComplimentaryTotal: newComp,
+        };
+      }
+    }
+
+    // İkram edilen tutar toplamı (normal akış)
     const flippedTotal = toFlip.reduce(
       (s, it) => s + Number(it.unit_price) * it.quantity,
       0
@@ -1866,6 +2011,10 @@ export async function splitItemsFromMultipleOrders(input: {
 export async function cancelOrderItems(input: {
   itemIds: string[];
   reason?: string;
+  // Eğer set edilirse: itemIds tek kalem olmalı, o kalemden sadece
+  // partialQty kadar iptal edilir, kalanı normal kalem olarak ayrı
+  // satıra bölünür.
+  partialQty?: number;
 }): Promise<{
   success: boolean;
   cancelledCount?: number;
@@ -1878,11 +2027,20 @@ export async function cancelOrderItems(input: {
     if (!input.itemIds || input.itemIds.length === 0) {
       return { success: false, error: 'En az bir kalem seç' };
     }
+    if (input.partialQty != null && input.itemIds.length !== 1) {
+      return {
+        success: false,
+        error: 'Partial iptalde sadece tek kalem seç',
+      };
+    }
+    if (input.partialQty != null && input.partialQty < 1) {
+      return { success: false, error: 'Partial qty 1 veya daha büyük olmalı' };
+    }
 
     // Kalemleri al + sipariş güvenlik kontrolü
     const { data: items } = await admin
       .from('order_items')
-      .select('id, order_id, product_name, unit_price, quantity, is_complimentary, status, paid_by_log_id')
+      .select('*')
       .in('id', input.itemIds);
 
     if (!items || items.length === 0) {
@@ -1915,11 +2073,153 @@ export async function cancelOrderItems(input: {
       return { success: false, error: 'Ödenmiş sipariş kalemleri iptal edilemez' };
     }
 
-    // Kalemleri iptal et
-    // status = 'cancelled' yazılır. cancel_reason kolonu varsa o, yoksa
-    // complimentary_reason'a fallback (geriye uyum).
     const cancelReasonText = input.reason?.trim() || 'Kasiyer iptal';
 
+    // ═══════════════════════════════════════════════════
+    // PARTIAL QTY MODU
+    // ═══════════════════════════════════════════════════
+    // Tek kalem var, partialQty < quantity → kalemi böl:
+    //   • Mevcut kalem: quantity = partialQty, status='cancelled'
+    //   • Yeni satır:   quantity = (orig - partialQty), status normal
+    if (input.partialQty != null && toCancel.length === 1) {
+      const orig = toCancel[0];
+      const origQty = orig.quantity;
+      const cancelQty = input.partialQty;
+
+      if (cancelQty > origQty) {
+        return {
+          success: false,
+          error: `Bu kalemde sadece ${origQty} adet var, ${cancelQty} iptal edilemez`,
+        };
+      }
+
+      // Tüm qty istendiyse normal akışa düş (bölme yok)
+      if (cancelQty < origQty) {
+        const remainingQty = origQty - cancelQty;
+        const cancelAmount = orig.is_complimentary
+          ? 0
+          : Number(orig.unit_price) * cancelQty;
+        const cancelCompAmount = orig.is_complimentary
+          ? Number(orig.unit_price) * cancelQty
+          : 0;
+
+        // 1) Mevcut kalemi cancel et + qty düşür
+        // Önce cancel_reason ile dene
+        const { error: updErr1 } = await admin
+          .from('order_items')
+          .update({
+            quantity: cancelQty,
+            status: 'cancelled',
+            cancel_reason: cancelReasonText,
+          })
+          .eq('id', orig.id);
+
+        if (updErr1) {
+          // Fallback: cancel_reason kolonu yoksa
+          const { error: updErr2 } = await admin
+            .from('order_items')
+            .update({
+              quantity: cancelQty,
+              status: 'cancelled',
+            })
+            .eq('id', orig.id);
+          if (updErr2) {
+            return {
+              success: false,
+              error: `Kalem güncelleme hatası: ${updErr2.message}`,
+            };
+          }
+        }
+
+        // 2) Kalan qty için yeni satır ekle (normal)
+        const newRow = {
+          ...orig,
+          id: undefined,
+          quantity: remainingQty,
+          status: orig.status === 'cancelled' ? 'ordered' : orig.status,
+          cancel_reason: null,
+          paid_by_log_id: null,
+          created_at: undefined,
+        };
+        Object.keys(newRow).forEach((k) => {
+          if ((newRow as Record<string, unknown>)[k] === undefined) {
+            delete (newRow as Record<string, unknown>)[k];
+          }
+        });
+
+        const { error: insErr } = await admin
+          .from('order_items')
+          .insert(newRow);
+
+        if (insErr) {
+          // Rollback
+          await admin
+            .from('order_items')
+            .update({
+              quantity: origQty,
+              status: orig.status,
+              cancel_reason: null,
+            })
+            .eq('id', orig.id);
+          return {
+            success: false,
+            error: `Yeni satır eklenemedi: ${insErr.message}`,
+          };
+        }
+
+        // Order totallarını güncelle
+        const order = orders.find((o) => o.id === orig.order_id);
+        if (order) {
+          const newSubtotal = Math.max(
+            0,
+            Number(order.subtotal) - cancelAmount
+          );
+          const newTotal = Math.max(0, Number(order.total) - cancelAmount);
+          const newComp = Math.max(
+            0,
+            Number(order.complimentary_total || 0) - cancelCompAmount
+          );
+
+          await admin
+            .from('orders')
+            .update({
+              subtotal: newSubtotal,
+              total: newTotal,
+              complimentary_total: newComp,
+            })
+            .eq('id', orig.order_id);
+        }
+
+        // AUDIT LOG
+        const performer = await fetchPerformerInfo(memberId);
+        void logAction({
+          businessId,
+          orderId: orig.order_id,
+          action: 'item_cancelled',
+          details: {
+            itemId: orig.id,
+            productName: orig.product_name,
+            quantity: cancelQty,
+            unitPrice: Number(orig.unit_price),
+            amount: cancelAmount,
+            reason: cancelReasonText,
+            wasComplimentary: orig.is_complimentary || false,
+            partial: true,
+            originalQty: origQty,
+          },
+          ...performer,
+        });
+
+        return {
+          success: true,
+          cancelledCount: cancelQty,
+        };
+      }
+    }
+
+    // ═══════════════════════════════════════════════════
+    // NORMAL AKIŞ (tüm seçili kalemleri iptal)
+    // ═══════════════════════════════════════════════════
     // Önce cancel_reason ile dene (yeni schema)
     const { error: updateError1 } = await admin
       .from('order_items')
