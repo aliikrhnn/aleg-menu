@@ -1800,6 +1800,7 @@ export async function cancelOrderItems(input: {
       .in('id', toCancel.map((it) => it.id));
 
     // Sipariş bazlı total güncelle
+    const closedOrderIds: string[] = [];
     for (const order of orders) {
       const orderItems = toCancel.filter((it) => it.order_id === order.id);
       const cancelledAmount = orderItems.reduce((s, it) => {
@@ -1818,17 +1819,89 @@ export async function cancelOrderItems(input: {
         Number(order.complimentary_total) - cancelledComp
       );
 
+      // Siparişin geri kalan aktif kalemlerini kontrol et
+      // Eğer hiç aktif kalem kalmadıysa siparişi de kapatalım
+      const { data: remainingItems } = await admin
+        .from('order_items')
+        .select('id, status')
+        .eq('order_id', order.id);
+
+      const stillActive = (remainingItems || []).filter(
+        (it) => it.status !== 'cancelled'
+      );
+
+      const updatePayload: {
+        subtotal: number;
+        total: number;
+        complimentary_total: number;
+        payment_status?: string;
+        status?: string;
+        cancelled_at?: string;
+        cancel_reason?: string;
+      } = {
+        subtotal: newSubtotal,
+        total: newTotal,
+        complimentary_total: newComp,
+      };
+
+      if (stillActive.length === 0) {
+        // Hiç aktif kalem yok — siparişi tümüyle iptal say
+        updatePayload.status = 'cancelled';
+        updatePayload.cancelled_at = new Date().toISOString();
+        updatePayload.cancel_reason =
+          input.reason?.trim() || 'Tüm kalemler iptal';
+        closedOrderIds.push(order.id);
+      }
+
       await admin
         .from('orders')
-        .update({
-          subtotal: newSubtotal,
-          total: newTotal,
-          complimentary_total: newComp,
-        })
+        .update(updatePayload)
         .eq('id', order.id);
     }
 
-    return { success: true, cancelledCount: toCancel.length };
+    // Tüm kalemleri iptal edilen siparişlerin masalarını boşaltmayı dene
+    // (closeOrderAndMaybeFreeTable benzeri logic, ama tabloyu sadece
+    // o masada başka aktif sipariş yoksa boşalt)
+    if (closedOrderIds.length > 0) {
+      // Bu siparişlerin table_id'lerini al
+      const { data: closedOrders } = await admin
+        .from('orders')
+        .select('id, table_id')
+        .in('id', closedOrderIds);
+
+      const tableIds = [
+        ...new Set(
+          (closedOrders || [])
+            .map((o) => o.table_id as string | null)
+            .filter((tid): tid is string => !!tid)
+        ),
+      ];
+
+      for (const tableId of tableIds) {
+        // Bu masada başka aktif sipariş var mı?
+        const { data: activeOrders } = await admin
+          .from('orders')
+          .select('id')
+          .eq('table_id', tableId)
+          .eq('business_id', businessId)
+          .not('status', 'in', '(cancelled,delivered)')
+          .neq('payment_status', 'paid')
+          .limit(1);
+
+        if (!activeOrders || activeOrders.length === 0) {
+          // Masayı boşalt
+          await admin
+            .from('tables')
+            .update({ status: 'available' })
+            .eq('id', tableId);
+        }
+      }
+    }
+
+    return {
+      success: true,
+      cancelledCount: toCancel.length,
+    };
   } catch (e) {
     return {
       success: false,

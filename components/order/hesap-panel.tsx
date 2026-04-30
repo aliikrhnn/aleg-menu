@@ -1817,7 +1817,10 @@ function PartialPaymentModal({
       toast.error('Geçerli tutar gir');
       return;
     }
-    if (amt > remaining + 0.01) {
+    // Cent toleransı: kuruşa yuvarlayıp karşılaştır
+    const amtCents = Math.round(amt * 100);
+    const remainingCents = Math.round(remaining * 100);
+    if (amtCents > remainingCents) {
       toast.error(`Maksimum ${fmt(remaining)} ekleyebilirsin`);
       return;
     }
@@ -1832,12 +1835,49 @@ function PartialPaymentModal({
     setEntries((prev) => prev.filter((e) => e.id !== id));
   };
 
+  // Küsuratlı bölme: 0.01'lere yuvarlama, son parça kalanı kapatır
+  const splitInto = (n: number, methods?: ('cash' | 'card')[]): PartialEntry[] => {
+    if (n < 1) return [];
+    // Toplam tutarı kuruşta tut: integer cent'ler
+    const totalCents = Math.round(totalDue * 100);
+    const baseCents = Math.floor(totalCents / n);
+    const remainderCents = totalCents - baseCents * (n - 1); // son parçaya kalanı ver
+    const out: PartialEntry[] = [];
+    for (let i = 0; i < n; i++) {
+      const cents = i === n - 1 ? remainderCents : baseCents;
+      const method = methods?.[i] || 'cash';
+      out.push({
+        id: `s${Date.now()}_${i}`,
+        method,
+        amount: cents / 100,
+      });
+    }
+    return out;
+  };
+
   const splitHalfHalf = () => {
-    const half = Math.round(totalDue / 2);
-    setEntries([
-      { id: 'h1', method: 'cash', amount: half },
-      { id: 'h2', method: 'card', amount: totalDue - half },
-    ]);
+    setEntries(splitInto(2, ['cash', 'card']));
+  };
+
+  const splitEqualHalf = () => {
+    setEntries(splitInto(2));
+  };
+
+  const splitEqualThird = () => {
+    setEntries(splitInto(3));
+  };
+
+  // Özel sayı bölme
+  const [customSplitOpen, setCustomSplitOpen] = useState(false);
+  const [customSplitN, setCustomSplitN] = useState('4');
+  const applyCustomSplit = () => {
+    const n = parseInt(customSplitN);
+    if (!n || n < 2 || n > 50) {
+      toast.error('2 ile 50 arasında bir sayı gir');
+      return;
+    }
+    setEntries(splitInto(n));
+    setCustomSplitOpen(false);
   };
 
   return (
@@ -1893,11 +1933,11 @@ function PartialPaymentModal({
 
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
           {/* Hızlı seçimler */}
-          <div className="flex gap-1.5">
+          <div className="flex flex-wrap gap-1.5">
             <button
               type="button"
               onClick={splitHalfHalf}
-              className="flex-1 h-9 rounded-[6px] text-xs"
+              className="flex-1 min-w-[140px] h-9 rounded-[6px] text-xs"
               style={{
                 background: 'var(--card)',
                 border: '1px solid var(--line)',
@@ -1910,7 +1950,7 @@ function PartialPaymentModal({
             </button>
             <button
               type="button"
-              onClick={() => setDraftAmount(String(Math.round(totalDue / 2)))}
+              onClick={splitEqualHalf}
               className="h-9 px-3 rounded-[6px] text-xs"
               style={{
                 background: 'var(--card)',
@@ -1919,12 +1959,13 @@ function PartialPaymentModal({
                 fontFamily: 'var(--f-mono)',
                 fontWeight: 700,
               }}
+              title="2'ye eşit böl"
             >
               ½
             </button>
             <button
               type="button"
-              onClick={() => setDraftAmount(String(Math.round(totalDue / 3)))}
+              onClick={splitEqualThird}
               className="h-9 px-3 rounded-[6px] text-xs"
               style={{
                 background: 'var(--card)',
@@ -1933,10 +1974,113 @@ function PartialPaymentModal({
                 fontFamily: 'var(--f-mono)',
                 fontWeight: 700,
               }}
+              title="3'e eşit böl"
             >
               ⅓
             </button>
+            <button
+              type="button"
+              onClick={() => setCustomSplitOpen(true)}
+              className="h-9 px-3 rounded-[6px] text-xs"
+              style={{
+                background: 'var(--card)',
+                border: '1px solid var(--super)',
+                color: 'var(--super)',
+                fontFamily: 'var(--f-mono)',
+                fontWeight: 700,
+              }}
+              title="Belirli bir kişi sayısına böl"
+            >
+              ÷ N
+            </button>
           </div>
+
+          {/* Özel sayı bölme inline panel */}
+          {customSplitOpen && (
+            <div
+              className="rounded-[10px] p-3 space-y-2"
+              style={{
+                background: 'color-mix(in srgb, var(--super) 6%, var(--paper-2))',
+                border: '1px solid var(--super)',
+              }}
+            >
+              <div
+                className="text-[10px] uppercase font-bold"
+                style={{
+                  fontFamily: 'var(--f-mono)',
+                  letterSpacing: '0.16em',
+                  color: 'var(--super)',
+                }}
+              >
+                KAÇ KİŞİYE BÖLÜNECEK?
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  min={2}
+                  max={50}
+                  value={customSplitN}
+                  onChange={(e) => setCustomSplitN(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') applyCustomSplit();
+                    if (e.key === 'Escape') setCustomSplitOpen(false);
+                  }}
+                  autoFocus
+                  className="flex-1 h-10 px-3 rounded-[8px] text-base font-semibold"
+                  style={{
+                    background: 'var(--paper)',
+                    border: '1.5px solid var(--super)',
+                    color: 'var(--ink)',
+                    fontFamily: 'var(--f-mono)',
+                    textAlign: 'center',
+                  }}
+                  placeholder="4"
+                />
+                <button
+                  type="button"
+                  onClick={applyCustomSplit}
+                  className="h-10 px-4 rounded-[8px] text-xs font-bold"
+                  style={{
+                    background: 'var(--super)',
+                    color: '#FAF5EA',
+                    fontFamily: 'var(--f-mono)',
+                    letterSpacing: '0.08em',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  Böl
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCustomSplitOpen(false)}
+                  className="h-10 px-3 rounded-[8px] text-xs"
+                  style={{
+                    background: 'var(--paper)',
+                    border: '1px solid var(--line)',
+                    color: 'var(--ink-3)',
+                    fontFamily: 'var(--f-mono)',
+                  }}
+                >
+                  İptal
+                </button>
+              </div>
+              {customSplitN && parseInt(customSplitN) >= 2 && parseInt(customSplitN) <= 50 && (
+                <div
+                  className="text-[11px]"
+                  style={{ color: 'var(--ink-3)' }}
+                >
+                  {parseInt(customSplitN)} kişi · kişi başı{' '}
+                  <strong style={{ color: 'var(--ink)' }}>
+                    {fmt(
+                      Math.floor((totalDue * 100) / parseInt(customSplitN)) /
+                        100
+                    )}
+                  </strong>{' '}
+                  · son kişi farkı kapatır
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Yeni parça ekle */}
           {remaining > 0 && (
@@ -1988,9 +2132,14 @@ function PartialPaymentModal({
               <div className="flex gap-2">
                 <input
                   type="number"
+                  step="0.01"
+                  min="0"
                   value={draftAmount}
                   onChange={(e) => setDraftAmount(e.target.value)}
-                  placeholder="₺ tutar"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') addEntry();
+                  }}
+                  placeholder="₺ tutar (küsuratlı olabilir)"
                   className="flex-1 h-10 px-3 rounded-[8px] text-base font-semibold"
                   style={{
                     background: 'var(--paper)',

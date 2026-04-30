@@ -5,6 +5,7 @@ import { useEscapeKey } from '@/lib/hooks/use-escape-key';
 import {
   getTableOrders,
   makeItemsComplimentary,
+  cancelOrderItems,
   mergeTables,
   splitItemsFromMultipleOrders,
   listTablesForMove,
@@ -569,6 +570,44 @@ export function TableDetailModal({
                     }}
                   >
                     ★ İkram
+                  </button>
+                  <button
+                    onClick={async () => {
+                      // Seçili kalemleri iptal et
+                      const ok = await confirmDialog({
+                        title: 'Seçili kalemleri iptal?',
+                        body: `${selectedFlatItems.length} kalem iptal edilecek. Bu işlem geri alınamaz.`,
+                        confirmLabel: 'İptal Et',
+                        cancelLabel: 'Vazgeç',
+                        tone: 'danger',
+                      });
+                      if (!ok) return;
+                      const ids = selectedFlatItems.map((fi) => fi.item.id);
+                      const r = await cancelOrderItems({
+                        itemIds: ids,
+                        reason: 'Kasiyer iptal',
+                      });
+                      if (r.success) {
+                        toast.success(
+                          `${r.cancelledCount || ids.length} kalem iptal edildi`
+                        );
+                      } else {
+                        toast.error(r.error || 'İptal hatası');
+                      }
+                      clearSelection();
+                      load();
+                    }}
+                    className="h-11 px-4 rounded-[10px] text-sm font-semibold transition-all hover:bg-paper-2"
+                    style={{
+                      background: 'transparent',
+                      color: '#C4553A',
+                      border: '1.5px solid #C4553A',
+                      fontFamily: 'var(--f-mono)',
+                      letterSpacing: '0.06em',
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    × İptal
                   </button>
                   <button
                     onClick={() => {

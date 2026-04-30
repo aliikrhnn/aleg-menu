@@ -1,182 +1,203 @@
-ALEG TUR 12 — Bölme + İndirim/Bahşiş Hesap Hatası + Hesap Al Butonu Kaldırma
-===============================================================================
+ALEG TUR 13 — İptal/Sıfırlama + Kalem İptal Butonu + Parçalı Ödeme Düzeltme
+==============================================================================
 
-İki sorunu çözer:
+Üç sorunu çözer:
 
-  1. Bölmeden önce uygulanan indirim/bahşiş yanlış hesaplanıyordu
-  2. Siparişler ekranındaki "Hesap Al" butonu kaldırıldı
+  1. İptal edilen ürün masada hesap olarak kalıyor + tek ürün iptal
+     edilince masa sıfırlanmıyor
+  2. Kalem seçilince sadece İKRAM çıkıyor — İPTAL eklendi
+  3. Parçalı ödemede yuvarlama kaynaklı "Maksimum X ekleyebilirsin"
+     hatası + özel sayıya bölme + küsuratlı çalışma
 
 
-[1] BÖLME + İNDİRİM/BAHŞİŞ HESAP HATASI
-==========================================
+[1] İPTAL → MASA SIFIRLAMA
+============================
 
 ÖNCESİ:
-  • Toplam ₺625 olan siparişe önce indirim+bahşiş uygulanıyor
-  • PaymentModal'da görünen ödenecek: ₺643.75
-  • "Bölerek Öde" basınca SplitPaymentModal açılıyor
-  • UI hesabı: netTotal = order.total (625) - discount + tip = 643.75
-  • Server hesabı: remainingBefore = order.total (625) - paid
-  • UI 1. kişi için 321.88 gönderiyor
-  • Server 625 - 0 = 625 limit görüyor → 321.88 OK ✓
-  • UI 2. kişi için yine 321.88 gönderiyor
-  • Server 625 - 321.88 = 303.12 limit görüyor → 321.88 RED ✗
-  • Hata: "Kalan tutar ₺303.12, daha fazlası alınamaz"
-  
-  Yani UI ile server iki farklı total üzerinden hesap yapıyordu.
+  cancelOrderItems sadece kalem statusunu 'cancelled' yapıyor ve
+  order.total'ı düşürüyordu. Ama:
+    • orders.status değişmiyordu (hâlâ 'pending' veya başka)
+    • orders.payment_status hâlâ 'unpaid'
+    • tables.status hâlâ 'occupied'
+  Sonuç: Tek kalemli masada o kalem iptal edilse bile masa açık
+  görünüyor, hesap modalında "1 kalem · ikram" yazıp ₺0 hesap
+  istiyor.
 
 ÇÖZÜM:
-  Yeni server action: applyAdjustmentsBeforeSplit
-  • Bölmeye geçmeden ÖNCE order.total'a indirim/bahşiş yansıtılır
-  • orders tablosuna yazılır: discount_amount, tip_amount, discount_reason
-  • payment_logs'a 'adjustment' kaydı düşülür
-  • Bundan sonra hem UI hem server aynı net total üzerinden çalışır
+  cancelOrderItems şimdi:
+    1. Her sipariş için "kalan aktif kalem var mı?" kontrol eder
+    2. Hiç aktif kalem yoksa siparişi tamamen kapatır:
+        - status = 'cancelled'
+        - cancelled_at = now
+        - cancel_reason = "Tüm kalemler iptal" (veya gelen reason)
+    3. O masadaki başka aktif sipariş yoksa masayı boşaltır:
+        - tables.status = 'available'
 
-KULLANICI DENEYİMİ:
-  PaymentModal'da indirim/bahşiş varken "Bölerek Öde" butonuna basınca:
-  
-  ┌──────────────────────────────────────┐
-  │ Bölmeye geçmeden önce uyguladığın    │
-  │ indirim/bahşiş siparişe yazılacak:   │
-  │                                       │
-  │ İndirim: ₺18.75                       │
-  │ Bahşiş: ₺37.50                        │
-  │ Net toplam: ₺643.75                   │
-  │                                       │
-  │ Devam edilsin mi?                     │
-  │           [İptal]  [Tamam]            │
-  └──────────────────────────────────────┘
-  
-  Onaylanırsa:
-    • order.total = 643.75 olur
-    • discount_amount = 18.75 olarak kaydedilir
-    • tip_amount = 37.50 olarak kaydedilir
-    • SplitPayment açılır, artık 643.75 üzerinden bölünür
+  Birden fazla siparişi olan masalarda diğer siparişleri etkilemez.
 
 
-[2] SİPARİŞLER EKRANI HESAP AL BUTONU KALDIRILDI
-=================================================
+[2] KALEM SEÇİLİNCE × İPTAL BUTONU
+====================================
 
-ÖNCESİ: /panel/pos siparişler ekranındaki her ödenmemiş sipariş kartında
-       "₺ Hesap Al" butonu vardı. Bu kafa karıştırıyordu çünkü ödeme
-       almak için iki ayrı yer (Siparişler ve Kasa) vardı.
+ÖNCESİ:
+  Kasa → Masa modali → kalem seçili durumdayken sadece:
+    [★ İkram]  [Seçili Öde · ₺X →]
 
-SONRASI: Siparişler ekranı sadece sipariş yönetimi için. Ödeme almak
-        için Kasa ekranı kullanılıyor. Tek doğru akış.
+SONRASI:
+    [★ İkram]  [× İptal]  [Seçili Öde · ₺X →]
+
+  × İptal butonu:
+    • Kırmızı border (var(--accent))
+    • cancelOrderItems action'ını çağırır
+    • Onay diyaloğu çıkar:
+      "X kalem iptal edilecek. Bu işlem geri alınamaz."
+    • Başarılı olunca seçim temizlenir, masa yeniden yüklenir
+
+
+[3] PARÇALI ÖDEME — KÜSURATLI BÖLME + ÖZEL SAYI
+================================================
+
+ÖNCESİ:
+  • ½ ve ⅓ butonları sadece input'a tutar yazıyordu (Math.round ile)
+    Örnek: ₺428 / 3 = 142.67 → 143
+  • Kullanıcı 3 kez ₺143 ekleyince 143×3 = 429 > 428
+    → "Maksimum ₺143 ekleyebilirsin" hatası (kalan 142 olmalıydı)
+  • Yuvarlama sebebiyle hep 1₺ aşıyordu
+  • Sadece ½ ve ⅓ vardı, ⅕'e bölmek için manuel hesap
+
+SONRASI:
+  • Bölme butonları artık DOĞRUDAN parçaları üretir, input doldurmuyor
+  • Küsurat korunur:
+    - Cent'e çevir (×100), tam sayı bölme yap
+    - Her parça base = floor(total/n)
+    - Son parça = total - (n-1)*base (kalanı kapatır)
+    - Sonuç tam toplamla eşleşir, asla aşmaz
+    
+  Örnek: ₺428 / 3
+    base = floor(42800/3) = 14266 cents = ₺142.66
+    son = 42800 - 2*14266 = 14268 cents = ₺142.68
+    → 142.66 + 142.66 + 142.68 = 428.00 ✓
+
+  YENİ BUTONLAR:
+    [YARI YARI (NAKİT/KART)]  [½]  [⅓]  [÷ N]
+    
+    • YARI YARI: 2 parça, 1. nakit 2. kart
+    • ½: 2'ye eşit böl, ikisi de nakit (kullanıcı düzenler)
+    • ⅓: 3'e eşit böl
+    • ÷ N: kullanıcının girdiği sayıya böl (2-50 arası)
+
+  ÷ N AKIŞI:
+    Butona basınca açılır panel:
+    
+    ┌──────────────────────────────────┐
+    │ KAÇ KİŞİYE BÖLÜNECEK?            │
+    │ ┌─────┐ ┌────┐ ┌──────┐          │
+    │ │  4  │ │BÖL │ │İPTAL │          │
+    │ └─────┘ └────┘ └──────┘          │
+    │ 4 kişi · kişi başı ₺107.00 ·     │
+    │ son kişi farkı kapatır           │
+    └──────────────────────────────────┘
+    
+    Onay: 4 parça (cash) eklenir, kullanıcı yöntemleri düzenler.
+
+  KÜSURATLI INPUT:
+    Manuel "+ EKLE" alanında step="0.01" eklendi.
+    Kullanıcı ₺142.67 yazabilir, kuruşta hassas çalışır.
+    Doğrulama da cent toleransıyla yapılır
+    (Math.round(amt * 100) > Math.round(remaining * 100)).
 
 
 KOD DEĞİŞİKLİKLERİ
 ==================
 
-[1] supabase/migrations/0035_orders_adjustments.sql (YENİ)
-  • orders tablosuna eklendi:
-    - discount_amount NUMERIC(10,2) DEFAULT 0
-    - tip_amount NUMERIC(10,2) DEFAULT 0
-    - discount_reason TEXT
-  
-  ÖNEMLİ: Mevcut siparişlerde subtotal kolonu zaten kullanılıyorsa
-  hiç dokunmaz. subtotal yoksa ham total = subtotal kabul edilir
-  (action içinde `Number(order.subtotal || order.total)` fallback).
+[1] lib/actions/tables-status.ts — cancelOrderItems
+  • closedOrderIds tracking
+  • Kalan aktif kalem kontrolü
+  • Sipariş kapatma (status, cancelled_at, cancel_reason)
+  • Masa boşaltma (tables.status = 'available')
 
-[2] lib/actions/payments.ts
-  • Yeni: applyAdjustmentsBeforeSplit() server action
-    - İzin: business üyesi
-    - Ödenmiş veya kısmi ödenmiş siparişlerde RED döner
-    - subtotal'dan indirim düş, bahşişi ekle → newTotal
-    - orders.total güncelle
-    - payment_logs'a 'adjustment' kaydı
+[2] app/kasa/table-detail-modal.tsx
+  • cancelOrderItems import
+  • × İptal butonu eklendi (★ İkram yanına)
+  • confirmDialog ile onay
+  • toast.success ile bildirim
+  • clearSelection + load() refresh
 
-[3] app/panel/(shell)/pos/payment-modal.tsx
-  • "Bölerek Öde" butonu yeniden yazıldı:
-    - Discount/tip varsa onay diyaloğu çıkar
-    - Onaylanırsa applyAdjustmentsBeforeSplit çağrılır
-    - State'ler sıfırlanır (artık order.total'da)
-    - Order objesinin total'ı in-place güncellenir
-    - SplitPaymentModal açılır
-
-[4] app/panel/(shell)/pos/split-payment-modal.tsx
-  • netTotal artık doğrudan order.total
-  • discountAmount/tipAmount prop'ları kullanılmıyor (geriye uyum için bırakıldı)
-  • Server ile aynı total üzerinden bölme yapılır
-
-[5] app/panel/(shell)/pos/orders-board.tsx
-  • OrderCard'taki "Hesap Al" butonu kaldırıldı
-  • onPayment prop'u korundu ama _onPayment olarak rename (geriye uyum için)
+[3] components/order/hesap-panel.tsx — PartialPaymentModal
+  • splitInto(n, methods?) helper — küsuratlı eşit bölme
+  • splitHalfHalf, splitEqualHalf, splitEqualThird
+  • customSplitOpen, customSplitN, applyCustomSplit
+  • UI: ÷ N butonu + inline panel
+  • Input step="0.01" + Enter tuşu desteği
+  • addEntry'de cent-bazlı validation
 
 
 KURULUM
 =======
 
-[1] DB MIGRATION (ÖNEMLİ):
-    Supabase SQL Editor → 0035_orders_adjustments.sql → run
+Migration veya yeni paket gerekmez.
 
-[2] DOSYALAR (üzerine yaz):
-    YENİ:
-      supabase/migrations/0035_orders_adjustments.sql
-    
-    GÜNCELLEMELER:
-      lib/actions/payments.ts
-      app/panel/(shell)/pos/payment-modal.tsx
-      app/panel/(shell)/pos/split-payment-modal.tsx
-      app/panel/(shell)/pos/orders-board.tsx
+3 dosyayı üzerine yaz:
+  lib/actions/tables-status.ts
+  app/kasa/table-detail-modal.tsx
+  components/order/hesap-panel.tsx
 
 
 PUSH
 ====
 
   git add .
-  git commit -m "fix: tur 12 - split payment with adjustments + remove pay btn from orders"
+  git commit -m "fix: tur 13 - cancel item resets table + cancel btn + custom split"
   git push origin main
 
 
 TEST
 ====
 
-[A] Bölme + indirim+bahşiş senaryosu (ekran görüntüsündeki):
-    1. Kasa ekranı → Masa 1 → Hesap Al
-    2. PaymentModal açılır, toplam ₺625
-    3. İndirim ekle (örn. ₺18.75)
-    4. Bahşiş ekle (örn. ₺37.50)
-    5. Görünen yeni toplam: ₺643.75
-    6. "BÖLEREK ÖDE" butonuna bas
-    7. ✅ Onay diyaloğu çıkar: "Bölmeye geçmeden önce..."
-    8. Onayla
-    9. SplitPaymentModal açılır
-    10. ✅ TOPLAM artık ₺643.75 (eskiden 643.75 ama hesap 625'e takılıyordu)
-    11. 2 kişi seç → her biri ₺321.88
-    12. 1. kişi öde
-    13. ✅ Kalan ₺321.87 (önce kişi öderken hata yoktu)
-    14. 2. kişi öde
-    15. ✅ HATA YOK, ödeme tamamlanır
-    16. Order delivered olur, masa boşalır
+[A] Tek ürün iptal → masa sıfırlanma:
+    1. Boş masaya 1 ürün ekle (örn. am suyu)
+    2. Kasa → masa kartına tıkla
+    3. Kalem'i seç (checkbox)
+    4. ✅ Alt panelde "× İptal" butonu görünmeli
+    5. "× İptal" → onay diyaloğu → onayla
+    6. ✅ Toast: "1 kalem iptal edildi"
+    7. Masa modalı kapanır
+    8. ✅ Masa kartı yeşil/boş olmalı (artık aktif sipariş yok)
+    9. Masa kartına tekrar tıkla → "Boş masa" görünmeli
 
-[B] İndirim/bahşiş yokken bölme:
-    1. Toplam ₺625, indirim/bahşiş yok
-    2. "BÖLEREK ÖDE" basınca onay çıkmamalı (zaten gerek yok)
-    3. Direkt SplitPayment açılır
-    4. Eski davranışla aynı
+[B] Çok kalemli masada bir kalem iptal:
+    1. Masada 3 ürün olsun
+    2. 1 kalemi seç → × İptal
+    3. ✅ Diğer 2 kalem hâlâ duruyor
+    4. ✅ Total düşmüş (iptal edilen ürün fiyatı kadar)
+    5. ✅ Masa hâlâ açık (diğer aktif kalemler var)
 
-[C] Önce kısmi ödeme yapılmış sipariş:
-    1. Bir siparişte 1 kişi ödeme yapmış (kısmi)
-    2. PaymentModal'a dön, indirim eklemeye çalış → bölmeye geç
-    3. ✅ Hata: "Önceden kısmi ödeme yapılmış. İndirim/bahşiş artık uygulanamaz."
+[C] Parçalı ödeme - eşit bölme:
+    1. ₺428 toplam siparişi olan masada Hesap Al
+    2. PARÇALI ÖDEME modal aç
+    3. ⅓ butonuna bas
+    4. ✅ ANINDA 3 parça eklenir: 142.66 + 142.66 + 142.68
+    5. ✅ KALAN: ₺0 (toplam aşmaz)
+    6. ÖDE → başarılı
 
-[D] Siparişler ekranı:
-    1. /panel/pos açık (ana ekran)
-    2. Aktif sipariş kartlarında "₺ Hesap Al" butonu YOK
-    3. Sadece İptal, Hazır, Teslim Edildi gibi durum butonları var
-    4. Ödeme almak için Kasa ekranını kullan
+[D] ÷ N özel bölme:
+    1. PARÇALI ÖDEME aç → ÷ N butonuna bas
+    2. ✅ Inline panel açılır: "KAÇ KİŞİYE BÖLÜNECEK?"
+    3. 5 yaz → "BÖL" bas
+    4. ✅ 5 parça eklenir, küsuratlı, toplamı tam ₺428
+    5. ✅ Toast veya görsel hata YOK
 
+[E] Manuel küsuratlı giriş:
+    1. PARÇALI ÖDEME aç
+    2. Input'a 142.66 yaz → +EKLE
+    3. ✅ 142.66 olarak eklenir (yuvarlanmaz)
+    4. Input'a 142.66 yaz → +EKLE (toplamda 285.32)
+    5. Input'a 142.68 yaz → +EKLE (toplamda 428.00)
+    6. ✅ KALAN: ₺0
+    7. ✅ Hata YOK
 
-SCHEMA NOTU
-===========
-
-orders tablosunda subtotal kolonu varsa applyAdjustmentsBeforeSplit
-onu okur. Yoksa current order.total'ı subtotal kabul edip ondan düşer
-(fallback).
-
-İlk kez bu siparişe indirim/bahşiş uygulandığında:
-  - order.total = subtotal - discount + tip
-  - subtotal değişmez
-
-Bu şekilde subtotal ham kalemler toplamı olarak kalır,
-total ise net (ödenecek) tutar olur.
+[F] Aşma kontrolü (negatif test):
+    1. ₺428 toplam, manuel olarak 200 ekle
+    2. 250 daha eklemeye çalış (toplam 450 > 428)
+    3. ✅ "Maksimum ₺228.00 ekleyebilirsin" hatası
+    4. 228 yaz, ekle → ✅ başarılı
