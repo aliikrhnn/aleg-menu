@@ -1,203 +1,151 @@
-ALEG TUR 13 — İptal/Sıfırlama + Kalem İptal Butonu + Parçalı Ödeme Düzeltme
-==============================================================================
+ALEG TUR 14 — İptal Edilen Kalem Total Sıfırlama (Hotfix)
+============================================================
 
-Üç sorunu çözer:
+Tur 13'te iptal mantığı eklenmişti ama mevcut bozuk veri için
+otomatik düzeltme yoktu. Bu turda:
 
-  1. İptal edilen ürün masada hesap olarak kalıyor + tek ürün iptal
-     edilince masa sıfırlanmıyor
-  2. Kalem seçilince sadece İKRAM çıkıyor — İPTAL eklendi
-  3. Parçalı ödemede yuvarlama kaynaklı "Maksimum X ekleyebilirsin"
-     hatası + özel sayıya bölme + küsuratlı çalışma
-
-
-[1] İPTAL → MASA SIFIRLAMA
-============================
-
-ÖNCESİ:
-  cancelOrderItems sadece kalem statusunu 'cancelled' yapıyor ve
-  order.total'ı düşürüyordu. Ama:
-    • orders.status değişmiyordu (hâlâ 'pending' veya başka)
-    • orders.payment_status hâlâ 'unpaid'
-    • tables.status hâlâ 'occupied'
-  Sonuç: Tek kalemli masada o kalem iptal edilse bile masa açık
-  görünüyor, hesap modalında "1 kalem · ikram" yazıp ₺0 hesap
-  istiyor.
-
-ÇÖZÜM:
-  cancelOrderItems şimdi:
-    1. Her sipariş için "kalan aktif kalem var mı?" kontrol eder
-    2. Hiç aktif kalem yoksa siparişi tamamen kapatır:
-        - status = 'cancelled'
-        - cancelled_at = now
-        - cancel_reason = "Tüm kalemler iptal" (veya gelen reason)
-    3. O masadaki başka aktif sipariş yoksa masayı boşaltır:
-        - tables.status = 'available'
-
-  Birden fazla siparişi olan masalarda diğer siparişleri etkilemez.
+  1. getTableOrders artık total'ı aktif kalemlerden hesaplar
+     → DB total bozuksa otomatik doğru göstertir
+  2. Tamamen iptal edilmiş ama DB'de hâlâ açık duran siparişleri
+     getTableOrders sırasında lazy reconcile eder
+  3. UI'da iptal edilmiş kalemler "1 KALEM" sayısına dahil değil
+  4. orders.cancelled_at + cancel_reason alanları schema'ya eklendi
+     (Tur 13'teki UPDATE call'larının sessiz fail etmesini önler)
 
 
-[2] KALEM SEÇİLİNCE × İPTAL BUTONU
-====================================
+SORUN ANALİZİ
+==============
 
-ÖNCESİ:
-  Kasa → Masa modali → kalem seçili durumdayken sadece:
-    [★ İkram]  [Seçili Öde · ₺X →]
+Ekran görüntüsünde:
+  - 1× daşşak limonata İPTAL (üstü çizili görünüyor — DB'de cancelled)
+  - Ama "MASA TOPLAM: ₺150" hâlâ duruyor
+  - "ÖDENECEK TUTAR: ₺150"
+  - "Tüm Masayı Öde · ₺150" butonu açık
 
-SONRASI:
-    [★ İkram]  [× İptal]  [Seçili Öde · ₺X →]
+Sebebi: Bu masa Tur 13 öncesi iptal edilmiş. O zamanki
+cancelOrderItems action'ı total'ı düşürmüyordu. Yani
+order_items.status='cancelled' ama order.total=150.
 
-  × İptal butonu:
-    • Kırmızı border (var(--accent))
-    • cancelOrderItems action'ını çağırır
-    • Onay diyaloğu çıkar:
-      "X kalem iptal edilecek. Bu işlem geri alınamaz."
-    • Başarılı olunca seçim temizlenir, masa yeniden yüklenir
+Tur 13 sadece YENİ iptaller için doğru çalışıyor, mevcut bozuk
+verileri toparlamıyordu.
 
 
-[3] PARÇALI ÖDEME — KÜSURATLI BÖLME + ÖZEL SAYI
-================================================
+ÇÖZÜM: COMPUTED TOTAL
+=======================
 
-ÖNCESİ:
-  • ½ ve ⅓ butonları sadece input'a tutar yazıyordu (Math.round ile)
-    Örnek: ₺428 / 3 = 142.67 → 143
-  • Kullanıcı 3 kez ₺143 ekleyince 143×3 = 429 > 428
-    → "Maksimum ₺143 ekleyebilirsin" hatası (kalan 142 olmalıydı)
-  • Yuvarlama sebebiyle hep 1₺ aşıyordu
-  • Sadece ½ ve ⅓ vardı, ⅕'e bölmek için manuel hesap
+getTableOrders her seferinde toplam'ı kalemlerden hesaplar:
 
-SONRASI:
-  • Bölme butonları artık DOĞRUDAN parçaları üretir, input doldurmuyor
-  • Küsurat korunur:
-    - Cent'e çevir (×100), tam sayı bölme yap
-    - Her parça base = floor(total/n)
-    - Son parça = total - (n-1)*base (kalanı kapatır)
-    - Sonuç tam toplamla eşleşir, asla aşmaz
-    
-  Örnek: ₺428 / 3
-    base = floor(42800/3) = 14266 cents = ₺142.66
-    son = 42800 - 2*14266 = 14268 cents = ₺142.68
-    → 142.66 + 142.66 + 142.68 = 428.00 ✓
+  // Aktif (cancelled olmayan) kalemlerden
+  const computedSubtotal = activeItems.reduce(
+    (s, it) => it.is_complimentary ? s : s + unit_price * quantity,
+    0
+  );
 
-  YENİ BUTONLAR:
-    [YARI YARI (NAKİT/KART)]  [½]  [⅓]  [÷ N]
-    
-    • YARI YARI: 2 parça, 1. nakit 2. kart
-    • ½: 2'ye eşit böl, ikisi de nakit (kullanıcı düzenler)
-    • ⅓: 3'e eşit böl
-    • ÷ N: kullanıcının girdiği sayıya böl (2-50 arası)
+  // DB'deki ile farklıysa hesaplananı kullan
+  const useComputed = Math.abs(dbTotal - computedSubtotal) > 0.01;
 
-  ÷ N AKIŞI:
-    Butona basınca açılır panel:
-    
-    ┌──────────────────────────────────┐
-    │ KAÇ KİŞİYE BÖLÜNECEK?            │
-    │ ┌─────┐ ┌────┐ ┌──────┐          │
-    │ │  4  │ │BÖL │ │İPTAL │          │
-    │ └─────┘ └────┘ └──────┘          │
-    │ 4 kişi · kişi başı ₺107.00 ·     │
-    │ son kişi farkı kapatır           │
-    └──────────────────────────────────┘
-    
-    Onay: 4 parça (cash) eklenir, kullanıcı yöntemleri düzenler.
+Bu sayede:
+  • Tur 13 öncesi bozuk siparişler doğru görüntülenir
+  • Yeni iptaller anında yansır
+  • Race condition'larda da güvende
 
-  KÜSURATLI INPUT:
-    Manuel "+ EKLE" alanında step="0.01" eklendi.
-    Kullanıcı ₺142.67 yazabilir, kuruşta hassas çalışır.
-    Doğrulama da cent toleransıyla yapılır
-    (Math.round(amt * 100) > Math.round(remaining * 100)).
+
+LAZY RECONCILE
+================
+
+Sipariş listesinde "tüm kalemleri iptal ama hâlâ açık" durumda
+olanları arka planda otomatik kapatır:
+
+  void admin
+    .from('orders')
+    .update({
+      status: 'cancelled',
+      cancelled_at: now,
+      cancel_reason: 'Tüm kalemler iptal (reconcile)',
+      subtotal: 0,
+      total: 0,
+    })
+    .in('id', stuckIds);
+
+  // Masada başka aktif sipariş yoksa boşalt
+  await admin.from('tables')
+    .update({ status: 'available' })
+    .eq('id', tableId);
+
+UI bekletilmez (fire-and-forget). Bir sonraki refresh'te masa
+zaten temizlenmiş gözükür. UI hemen "boş" gösterir (stuck siparişler
+filtrelenir).
 
 
 KOD DEĞİŞİKLİKLERİ
 ==================
 
-[1] lib/actions/tables-status.ts — cancelOrderItems
-  • closedOrderIds tracking
-  • Kalan aktif kalem kontrolü
-  • Sipariş kapatma (status, cancelled_at, cancel_reason)
-  • Masa boşaltma (tables.status = 'available')
+[1] supabase/migrations/0036_orders_cancellation.sql (YENİ)
+  • orders.cancelled_at TIMESTAMPTZ
+  • orders.cancel_reason TEXT
+  • Index: idx_orders_cancelled_at (partial)
 
-[2] app/kasa/table-detail-modal.tsx
-  • cancelOrderItems import
-  • × İptal butonu eklendi (★ İkram yanına)
-  • confirmDialog ile onay
-  • toast.success ile bildirim
-  • clearSelection + load() refresh
+[2] lib/actions/tables-status.ts — getTableOrders
+  • Aktif kalemlerden subtotal/total hesaplama
+  • DB ile fark varsa computed kullan
+  • Stuck order tespiti + lazy reconcile
+  • Stuck olanları UI listesinden çıkar
+  
+  cancelOrderItems değişmedi (Tur 13'teki hali doğru çalışıyor).
 
-[3] components/order/hesap-panel.tsx — PartialPaymentModal
-  • splitInto(n, methods?) helper — küsuratlı eşit bölme
-  • splitHalfHalf, splitEqualHalf, splitEqualThird
-  • customSplitOpen, customSplitN, applyCustomSplit
-  • UI: ÷ N butonu + inline panel
-  • Input step="0.01" + Enter tuşu desteği
-  • addEntry'de cent-bazlı validation
+[3] app/kasa/table-detail-modal.tsx — selectableItems
+  • Cancelled kalemler artık "1 KALEM" sayısında ve seçim
+    listesinde görünmüyor
+  • Sadece status !== 'cancelled' olanlar seçilebilir
 
 
 KURULUM
 =======
 
-Migration veya yeni paket gerekmez.
+[1] DB MIGRATION:
+    Supabase SQL Editor → 0036_orders_cancellation.sql → run
 
-3 dosyayı üzerine yaz:
-  lib/actions/tables-status.ts
-  app/kasa/table-detail-modal.tsx
-  components/order/hesap-panel.tsx
+[2] DOSYALAR (üzerine yaz):
+    YENİ:
+      supabase/migrations/0036_orders_cancellation.sql
+    GÜNCELLEMELER:
+      lib/actions/tables-status.ts
+      app/kasa/table-detail-modal.tsx
 
 
 PUSH
 ====
 
   git add .
-  git commit -m "fix: tur 13 - cancel item resets table + cancel btn + custom split"
+  git commit -m "fix: tur 14 - reconcile cancelled items + cleaner total"
   git push origin main
 
 
 TEST
 ====
 
-[A] Tek ürün iptal → masa sıfırlanma:
-    1. Boş masaya 1 ürün ekle (örn. am suyu)
-    2. Kasa → masa kartına tıkla
-    3. Kalem'i seç (checkbox)
-    4. ✅ Alt panelde "× İptal" butonu görünmeli
-    5. "× İptal" → onay diyaloğu → onayla
-    6. ✅ Toast: "1 kalem iptal edildi"
-    7. Masa modalı kapanır
-    8. ✅ Masa kartı yeşil/boş olmalı (artık aktif sipariş yok)
-    9. Masa kartına tekrar tıkla → "Boş masa" görünmeli
+[A] Mevcut bozuk masa (görüntüdeki gibi):
+    1. Bozuk masaya tıkla
+    2. ✅ MASA TOPLAM: ₺0 (eski 150 değil)
+    3. ✅ ÖDENECEK TUTAR: ₺0
+    4. ✅ Modal kapatıp tekrar aç → masa boş gözükür
+    5. ✅ Arka planda DB temizlenmiş
 
-[B] Çok kalemli masada bir kalem iptal:
-    1. Masada 3 ürün olsun
-    2. 1 kalemi seç → × İptal
-    3. ✅ Diğer 2 kalem hâlâ duruyor
-    4. ✅ Total düşmüş (iptal edilen ürün fiyatı kadar)
-    5. ✅ Masa hâlâ açık (diğer aktif kalemler var)
+[B] Yeni iptal (Tur 13 davranışı):
+    1. Boş masaya 1 ürün ekle
+    2. Kasa modal → kalem seç → × İptal
+    3. ✅ Total anında 0 olur
+    4. ✅ Modal kapanır, masa boş
 
-[C] Parçalı ödeme - eşit bölme:
-    1. ₺428 toplam siparişi olan masada Hesap Al
-    2. PARÇALI ÖDEME modal aç
-    3. ⅓ butonuna bas
-    4. ✅ ANINDA 3 parça eklenir: 142.66 + 142.66 + 142.68
-    5. ✅ KALAN: ₺0 (toplam aşmaz)
-    6. ÖDE → başarılı
+[C] Çok kalemli masada bir kalem iptal:
+    1. Masada 2 ürün: ₺100 + ₺200 = ₺300
+    2. ₺100 olan kalemi iptal
+    3. ✅ Total ₺200 olur (300 değil)
+    4. ✅ İptal edilen "1 KALEM" sayısına dahil değil
+    5. Sadece ₺200'lük kalem seçilebilir görünür
 
-[D] ÷ N özel bölme:
-    1. PARÇALI ÖDEME aç → ÷ N butonuna bas
-    2. ✅ Inline panel açılır: "KAÇ KİŞİYE BÖLÜNECEK?"
-    3. 5 yaz → "BÖL" bas
-    4. ✅ 5 parça eklenir, küsuratlı, toplamı tam ₺428
-    5. ✅ Toast veya görsel hata YOK
-
-[E] Manuel küsuratlı giriş:
-    1. PARÇALI ÖDEME aç
-    2. Input'a 142.66 yaz → +EKLE
-    3. ✅ 142.66 olarak eklenir (yuvarlanmaz)
-    4. Input'a 142.66 yaz → +EKLE (toplamda 285.32)
-    5. Input'a 142.68 yaz → +EKLE (toplamda 428.00)
-    6. ✅ KALAN: ₺0
-    7. ✅ Hata YOK
-
-[F] Aşma kontrolü (negatif test):
-    1. ₺428 toplam, manuel olarak 200 ekle
-    2. 250 daha eklemeye çalış (toplam 450 > 428)
-    3. ✅ "Maksimum ₺228.00 ekleyebilirsin" hatası
-    4. 228 yaz, ekle → ✅ başarılı
+[D] Tüm kalemler ikram + iptal karışımı:
+    1. Masada 3 ürün
+    2. 1'ini ikram et, 2'sini iptal et
+    3. ✅ Tüm kalemler ödenmez/iptal — masa boşalmalı
+    4. (Reconcile arka planda çalışır)

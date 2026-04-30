@@ -751,20 +751,105 @@ export async function getTableOrders(tableId: string): Promise<{
       itemsByOrder.set(it.order_id, arr);
     });
 
-    const formatted: TableOrderDetail[] = orders.map((o) => ({
-      id: o.id,
-      order_no: o.id.slice(0, 8).toUpperCase(),
-      status: o.status,
-      payment_status: o.payment_status,
-      payment_method: o.payment_method,
-      created_at: o.created_at,
-      note: o.note,
-      source: o.source,
-      subtotal: Number(o.subtotal),
-      total: Number(o.total),
-      complimentary_total: Number(o.complimentary_total || 0),
-      items: itemsByOrder.get(o.id) || [],
-    }));
+    const formatted: TableOrderDetail[] = orders.map((o) => {
+      const orderItems = itemsByOrder.get(o.id) || [];
+
+      // Aktif (cancelled olmayan) ve ödememiş kalemlerden subtotal/total hesapla
+      // Bu sayede iptal edilen kalemler total'a girmez (eski veri tutarsızlıklarını da temizler)
+      const activeItems = orderItems.filter(
+        (it) => it.status !== 'cancelled'
+      );
+      const computedSubtotal = activeItems.reduce((s, it) => {
+        if (it.is_complimentary) return s; // ikram total'a etki etmez
+        return s + it.unit_price * it.quantity;
+      }, 0);
+      const computedComp = activeItems.reduce((s, it) => {
+        if (!it.is_complimentary) return s;
+        return s + it.unit_price * it.quantity;
+      }, 0);
+
+      // DB'deki total ile hesaplanan farklıysa hesaplananı güvenir kullan
+      // (eski iptal kayıtlarında DB total güncellenmemiş olabilir)
+      const dbTotal = Number(o.total);
+      const dbSubtotal = Number(o.subtotal);
+      const useComputed =
+        Math.abs(dbSubtotal - computedSubtotal) > 0.01 ||
+        Math.abs(dbTotal - computedSubtotal) > 0.01;
+
+      return {
+        id: o.id,
+        order_no: o.id.slice(0, 8).toUpperCase(),
+        status: o.status,
+        payment_status: o.payment_status,
+        payment_method: o.payment_method,
+        created_at: o.created_at,
+        note: o.note,
+        source: o.source,
+        subtotal: useComputed ? computedSubtotal : dbSubtotal,
+        total: useComputed ? computedSubtotal : dbTotal,
+        complimentary_total: useComputed
+          ? computedComp
+          : Number(o.complimentary_total || 0),
+        items: orderItems,
+      };
+    });
+
+    // Lazy reconcile: hepsi cancelled olmuş ama hâlâ aktif görünen siparişleri
+    // arka planda kapat ve masayı boşalt (await değil — UI bekletilmesin)
+    const stuckOrders = formatted.filter(
+      (o) =>
+        o.payment_status !== 'paid' &&
+        o.items.length > 0 &&
+        o.items.every((it) => it.status === 'cancelled')
+    );
+    if (stuckOrders.length > 0) {
+      // Fire-and-forget: bu siparişleri kapat
+      const stuckIds = stuckOrders.map((o) => o.id);
+      void admin
+        .from('orders')
+        .update({
+          status: 'cancelled',
+          cancelled_at: new Date().toISOString(),
+          cancel_reason: 'Tüm kalemler iptal (reconcile)',
+          subtotal: 0,
+          total: 0,
+        })
+        .in('id', stuckIds)
+        .then(async () => {
+          // Masada başka aktif sipariş yoksa boşalt
+          const { data: stillActive } = await admin
+            .from('orders')
+            .select('id')
+            .eq('table_id', tableId)
+            .eq('business_id', businessId)
+            .not('status', 'in', '(cancelled,delivered)')
+            .neq('payment_status', 'paid')
+            .limit(1);
+
+          if (!stillActive || stillActive.length === 0) {
+            await admin
+              .from('tables')
+              .update({ status: 'available' })
+              .eq('id', tableId);
+          }
+        });
+
+      // UI'da bunları boş göster (görsel olarak da temizle)
+      const cleanedFormatted = formatted.map((o) =>
+        stuckIds.includes(o.id)
+          ? { ...o, total: 0, subtotal: 0, items: [] }
+          : o
+      );
+      // Stuck olanları tamamen filtreleyip boş listede dön
+      const visibleOrders = cleanedFormatted.filter(
+        (o) => !stuckIds.includes(o.id)
+      );
+      return {
+        success: true,
+        tableName: table.name,
+        orders: visibleOrders,
+      };
+    }
 
     return { success: true, tableName: table.name, orders: formatted };
   } catch (err) {

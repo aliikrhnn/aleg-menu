@@ -141,9 +141,14 @@ export function TableDetailModal({
     return result;
   }, [orders]);
 
-  // Sadece ödenmemiş kalemler (selection için)
+  // Sadece ödenmemiş ve iptal edilmemiş kalemler (selection için)
   const selectableItems = useMemo(
-    () => flatItems.filter((fi) => fi.orderPaymentStatus === 'unpaid'),
+    () =>
+      flatItems.filter(
+        (fi) =>
+          fi.orderPaymentStatus === 'unpaid' &&
+          fi.item.status !== 'cancelled'
+      ),
     [flatItems]
   );
 
