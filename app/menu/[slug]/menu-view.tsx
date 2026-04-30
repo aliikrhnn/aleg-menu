@@ -354,6 +354,8 @@ export function MenuView({
     setCart((c) => {
       const existing = c.find((x) => x.key === key);
       if (existing) {
+        // Maksimum 10 adet
+        if (existing.qty >= 10) return c;
         return c.map((x) => (x === existing ? { ...x, qty: x.qty + 1 } : x));
       }
       return [
@@ -469,6 +471,7 @@ export function MenuView({
     setCart((c) => {
       const existing = c.find((x) => x.key === key);
       if (existing) {
+        if (existing.qty >= 10) return c;
         return c.map((x) => (x === existing ? { ...x, qty: x.qty + 1 } : x));
       }
       return [
@@ -490,8 +493,10 @@ export function MenuView({
     if (newQty <= 0) {
       setCart((c) => c.filter((x) => x.key !== cartItemKey));
     } else {
+      // Müşteri başına bir kalem için max 10 adet
+      const cappedQty = Math.min(newQty, 10);
       setCart((c) =>
-        c.map((x) => (x.key === cartItemKey ? { ...x, qty: newQty } : x))
+        c.map((x) => (x.key === cartItemKey ? { ...x, qty: cappedQty } : x))
       );
     }
   };
@@ -808,7 +813,6 @@ export function MenuView({
         {(() => {
           const allModes = [
             { id: 'dinein' as const, tr: 'Masada', en: 'Dine-in' },
-            { id: 'pickup' as const, tr: 'Al götür', en: 'Pickup' },
             { id: 'delivery' as const, tr: 'Paket', en: 'Delivery' },
           ];
           const visibleModes = allModes.filter((m) => activeModes[m.id]);
@@ -1574,7 +1578,7 @@ export function MenuView({
                 {cartCount}
               </span>
               <span className="text-sm font-semibold">
-                {lang === 'tr' ? 'Sepeti görüntüle' : 'View cart'}
+                {lang === 'tr' ? 'Masayı görüntüle' : 'View table'}
               </span>
             </span>
             <span
@@ -1707,7 +1711,7 @@ export function MenuView({
             ✓
           </span>
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            <strong>{toast.name}</strong> {lang === 'en' ? 'added to cart' : 'sepete eklendi'}
+            <strong>{toast.name}</strong> {lang === 'en' ? 'added to table' : 'masaya eklendi'}
           </span>
         </div>
       )}
@@ -1998,8 +2002,8 @@ function ProductRow({
               ? 'none'
               : '0 2px 8px -2px color-mix(in srgb, var(--accent) 40%, transparent)',
           }}
-          title={lang === 'tr' ? 'Sepete ekle' : 'Add to cart'}
-          aria-label={lang === 'tr' ? 'Sepete ekle' : 'Add to cart'}
+          title={lang === 'tr' ? 'Masaya ekle' : 'Add to table'}
+          aria-label={lang === 'tr' ? 'Masaya ekle' : 'Add to table'}
         >
           +
         </button>
@@ -2783,7 +2787,7 @@ function FeaturedHeroCard({
             boxShadow:
               '0 4px 14px -4px color-mix(in srgb, var(--accent) 55%, transparent)',
           }}
-          aria-label={lang === 'tr' ? 'Sepete ekle' : 'Add to cart'}
+          aria-label={lang === 'tr' ? 'Masaya ekle' : 'Add to table'}
         >
           +
         </button>

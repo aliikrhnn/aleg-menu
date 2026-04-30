@@ -1,121 +1,146 @@
-ALEG TUR 17b — Panel Subdomain'inden /kasa ve /garson 404 Hatası
-==================================================================
+ALEG TUR 17c — Müşteri Ekranı: Al Götür Sil + Sınır 10 + Yazı Değişiklikleri
+==============================================================================
 
-SORUN
-=====
+3 değişiklik:
 
-  panel.alegstudio.com/kasa    → 404
-  panel.alegstudio.com/garson  → 404
+  1. "Al götür" sipariş türü kaldırıldı (UI'dan)
+  2. Sepete ürün eklerken her kalem için max 10 adet sınırı
+  3. "Sepete ekle" → "Masaya ekle"
+     "Sepeti görüntüle" → "Masayı görüntüle"
+     Toast: "sepete eklendi" → "masaya eklendi"
+     Boş durum: "Sepetin boş" → "Masanız boş"
+     Temizle: "Sepeti boşalt" → "Masayı temizle"
 
-Ana sayfa diyip tekrar tıklayınca açılıyor, çünkü o zaman
-alegstudio.com/kasa'ya gidiyor.
 
-SEBEP ANALİZİ
-=============
+[1] AL GÖTÜR KALDIRMA
+======================
 
-Middleware mantığı:
-  panel.alegstudio.com/<her şey>  →  rewrite to /panel/<her şey>
+ÖNCESİ:
+  Müşteri menüsünde 3 sipariş türü tabı:
+    [Masada]  [Al götür]  [Paket]
 
-Yani:
-  panel.alegstudio.com/kasa     →  /panel/kasa  ❌ (yok)
-  panel.alegstudio.com/garson   →  /panel/garson ❌ (yok)
+SONRASI:
+  Sadece masada veya paket:
+    [Masada]  [Paket]
 
-Çünkü /kasa ve /garson route'ları ana app altında
-(app/kasa/ ve app/garson/), panel altında değil.
+Mantık: Aleg masa-bazlı bir kafe sistemi. "Al götür" ile masa
+tutmadan sipariş alınması karışıklık yaratıyordu (kasa hangi
+masaya yazacak, kim alacak vs).
 
-Aslında bu kasıtlı bir mimari: kasa ve garson tüm subdomain
-mantığından bağımsız, "tablet" uygulamaları olarak duruyor.
-Ama kullanıcı panel'deyken bu URL'leri yazınca 404 oluyor.
+Backend type sistemi 'pickup' destekliyor (legacy), sadece UI
+seçenekten kaldırıldı. Zaten orderConfig.modes.pickup = false
+yapılırsa veriden de gelmiyor.
 
-ÇÖZÜM
-======
 
-Middleware'de panel subdomain için /kasa ve /garson'u istisna yap:
-  • Bu path'ler /panel/ prefix almasın
-  • app/kasa/page.tsx ve app/garson/page.tsx doğrudan render edilsin
+[2] SEPET QTY SINIRI - 10
+==========================
 
-Avantaj:
-  • Kullanıcı panel'de URL yazarsa veya tarihçeden gelirse çalışır
-  • Aynı subdomain'de aynı oturum cookie'leri geçerli (auth sorunu yok)
-  • Panel auth check zaten bu path'lere uygulanıyor — yetkisiz erişim
-    olmuyor
+ÖNCESİ:
+  Müşteri ürün adetini sınırsız arttırabiliyordu.
+  Yanlış tıklamalar veya kötü niyet → 50+ ürünlü siparişler.
 
-Dezavantaj: Yok, sadece middleware bir kontrol daha yapıyor.
+SONRASI:
+  Her kalem için max 10 adet:
+  • addToCart: Mevcut qty 10'sa daha fazla eklenmez
+  • addConfiguredProduct (preset'li): Aynı limit
+  • handleQtyChange: Math.min(newQty, 10) ile cap'lenir
+  • UI'da + butonuna basılınca 10'da takılır (sessizce)
+
+Not: Müşteri farklı varyasyonlarla aynı üründen 2 farklı kalem
+oluşturabilir. Her kalem ayrı ayrı 10 sınırı.
+
+
+[3] YAZI DEĞİŞİKLİKLERİ
+========================
+
+Aleg masa-bazlı. "Sepet" e-ticaret terminolojisi ve yanıltıcı.
+Müşteri sepete koyduğu ürünleri masaya bağlıyor — masaya ekliyor.
+
+  TR                                   EN
+  ───────────────────────              ─────────────────────
+  Sepete ekle      → Masaya ekle       Add to cart  → Add to table
+  Sepeti görüntüle → Masayı görüntüle  View cart    → View table
+  sepete eklendi   → masaya eklendi    added to cart → added to table
+  Sepetin boş      → Masanız boş       Cart is empty → Your table is empty
+  Sepeti boşalt    → Masayı temizle    Clear cart    → Clear table
+  Sepeti boşalt-mı? → Masayı temizle-mi? Clear cart? → Clear table?
 
 
 KOD DEĞİŞİKLİKLERİ
 ==================
 
-[1] middleware.ts
+[1] app/menu/[slug]/menu-view.tsx
+  • allModes array'inden { id: 'pickup', tr: 'Al götür' } satırı silindi
+  • addToCart: existing.qty >= 10 kontrolü
+  • addConfiguredProduct: aynı kontrol
+  • handleQtyChange: Math.min(newQty, 10)
+  • 4 farklı yerde "Sepete ekle" / "Sepeti görüntüle" yazısı güncellendi
+  • Toast mesajı güncellendi
 
-  ÖNCESİ:
-    } else if (currentHost === 'panel') {
-      isPanelSubdomain = true;
-      if (!url.pathname.startsWith('/panel')) {
-        rewrittenPath = `/panel${url.pathname}`;
-      }
-    }
-
-  SONRASI:
-    } else if (currentHost === 'panel') {
-      isPanelSubdomain = true;
-      const isStandaloneRoute =
-        url.pathname.startsWith('/kasa') ||
-        url.pathname.startsWith('/garson');
-      if (!url.pathname.startsWith('/panel') && !isStandaloneRoute) {
-        rewrittenPath = `/panel${url.pathname}`;
-      }
-    }
-
-[2] app/panel/(shell)/kasiyerler/cashier-manager.tsx
-  • "KASA'YI AÇ" butonundaki gereksiz JS handler kaldırıldı
-  • Artık panel.alegstudio.com/kasa direkt çalışıyor — root domain'e
-    yönlendirmeye gerek yok
-  • target="_blank" korundu (yeni sekmede açılsın)
+[2] app/menu/[slug]/cart-drawer.tsx
+  • T sözlüğü güncellendi: empty, clear
+  • confirm dialog metni güncellendi
 
 
 KURULUM
 =======
 
-Migration veya yeni paket gerekmez.
+Migration veya yeni paket gerekmez. 2 dosyayı üzerine yaz:
 
-2 dosyayı üzerine yaz:
-  middleware.ts
-  app/panel/(shell)/kasiyerler/cashier-manager.tsx
+  app/menu/[slug]/menu-view.tsx
+  app/menu/[slug]/cart-drawer.tsx
 
 
 PUSH
 ====
 
-  git add middleware.ts \
-    "app/panel/(shell)/kasiyerler/cashier-manager.tsx"
-  git commit -m "fix: tur 17b - panel subdomain /kasa /garson 404"
+  git add app/menu/
+  git commit -m "feat: tur 17c - remove pickup, cap qty at 10, sepet→masa rename"
   git push origin main
 
 
 TEST
 ====
 
-[A] panel'den /kasa açma:
-    1. panel.alegstudio.com'da login ol
-    2. URL'ye /kasa yaz → Enter
-    3. ✅ Kasa ekranı açılır (404 değil)
-    4. ✅ URL: panel.alegstudio.com/kasa olarak kalır
+[A] Al götür kaldırma:
+    1. Müşteri menü aç (örn. cafename.alegstudio.com)
+    2. Üst tabları kontrol et
+    3. ✅ "Al götür" görünmemeli
+    4. Sadece [Masada] [Paket] (paket de orderConfig'de açıksa)
 
-[B] panel'den /garson açma:
-    1. panel.alegstudio.com'da login
-    2. URL'ye /garson yaz → Enter
-    3. ✅ Garson ekranı açılır
+[B] Sepet sınırı 10:
+    1. Bir ürünü 10 kez ekle (+ butonuna 10 kez bas)
+    2. ✅ Her ekleme qty'i 1 arttırır
+    3. 11. tıklama
+    4. ✅ Qty hâlâ 10 (artmaz, sessiz)
+    5. Sepet drawer'ı aç → + butonuna bas
+    6. ✅ Yine 10'da takılır
+    7. Manuel input (yoksa atla) → 50 yaz
+    8. ✅ 10 olarak set olur
 
-[C] root'tan /kasa hâlâ çalışmalı:
-    1. alegstudio.com/kasa
-    2. ✅ Kasa ekranı (eskisi gibi)
+[C] Yazı değişiklikleri:
+    1. Bir ürün ekle
+    2. ✅ Toast: "{Ürün} masaya eklendi"
+    3. ✅ Alt çubukta "Masayı görüntüle"
+    4. Tıkla → drawer açılır
+    5. Sepet boşken
+    6. ✅ "Masanız boş"
+    7. "Masayı temizle" butonu
+    8. Tıkla → ✅ "Masayı temizlemek istiyor musun?"
 
-[D] panel'de yetkisiz kullanıcı:
-    1. Login olmamışken panel.alegstudio.com/kasa
-    2. ✅ /giris'e redirect (panel auth check çalışıyor)
+[D] EN dil:
+    1. Dil değiştir → EN
+    2. ✅ "Add to table", "View table", "added to table"
+    3. ✅ "Your table is empty", "Clear table"
 
-[E] kasiyerler sayfası:
-    1. panel'de "KASA'YI AÇ" butonuna tıkla
-    2. ✅ Yeni sekmede panel.alegstudio.com/kasa açılır
-    3. ✅ Aynı oturumda — tekrar login gerekmez
+
+NOT
+====
+
+Backend'de zaten qty sınırı yoktu — saldırgan API'ye doğrudan
+istek atarsa 100 ekleyebilir. UI sınırı kasıtlı kullanım hatasını
+engeller. Backend'e de eklemek için sonraki turda input.items
+döngüsünde her item.quantity > 10 kontrolü yapılabilir.
+
+Şu an UI sınırı yeterli: müşteri kötü niyetle bunu bypass etse
+bile mutfak siparişi görür ve şüpheliyse iptal eder.

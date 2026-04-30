@@ -49,7 +49,7 @@ function money(n: number, lang: Lang) {
 
 const T = {
   title: { tr: 'Siparişin', en: 'Your order' },
-  empty: { tr: 'Sepetin boş', en: 'Cart is empty' },
+  empty: { tr: 'Masanız boş', en: 'Your table is empty' },
   note: { tr: 'Not (opsiyonel)', en: 'Note (optional)' },
   notePlaceholder: {
     tr: 'Özel istek? (ör: az şekerli)',
@@ -71,7 +71,7 @@ const T = {
   orderCode: { tr: 'Sipariş Kodu', en: 'Order code' },
   newOrder: { tr: 'Yeni sipariş ver', en: 'New order' },
   trackOrder: { tr: 'Siparişi takip et', en: 'Track order' },
-  clear: { tr: 'Sepeti boşalt', en: 'Clear cart' },
+  clear: { tr: 'Masayı temizle', en: 'Clear table' },
 };
 
 export function CartDrawer({
@@ -477,7 +477,7 @@ export function CartDrawer({
                   {items.length > 0 && (
                     <button
                       onClick={() => {
-                        if (confirm(lang === 'tr' ? 'Sepeti boşaltmak istiyor musun?' : 'Clear cart?')) {
+                        if (confirm(lang === 'tr' ? 'Masayı temizlemek istiyor musun?' : 'Clear table?')) {
                           onClearCart();
                           handleClose();
                         }
