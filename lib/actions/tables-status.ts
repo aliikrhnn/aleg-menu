@@ -732,7 +732,9 @@ export async function getTableOrders(tableId: string): Promise<{
     const orderIds = orders.map((o) => o.id);
     const { data: items } = await admin
       .from('order_items')
-      .select('id, order_id, product_name, quantity, unit_price, status, note, is_complimentary, complimentary_reason')
+      .select(
+        'id, order_id, product_name, quantity, unit_price, status, note, is_complimentary, complimentary_reason'
+      )
       .in('order_id', orderIds);
 
     const itemsByOrder = new Map<string, TableOrderDetail['items']>();
@@ -751,7 +753,25 @@ export async function getTableOrders(tableId: string): Promise<{
       itemsByOrder.set(it.order_id, arr);
     });
 
-    const formatted: TableOrderDetail[] = orders.map((o) => {
+    // Tamamen ikram edilmiş ve ödenmiş siparişleri modal'dan hariç tut.
+    // Bunlar zaten geçmiş — masaya yeni ürün eklendiğinde kafa karıştırıyor.
+    // Yarısı ikram + yarısı ödenmiş normal siparişler kalsın (ödendi rozeti
+    // ve fiş tekrar baskı için gerekli).
+    const filteredOrders = orders.filter((o) => {
+      if (o.payment_status !== 'paid') return true;
+      const orderItems = itemsByOrder.get(o.id) || [];
+      if (orderItems.length === 0) return false; // boş sipariş zaten gösterilmesin
+      // Tüm aktif (cancelled olmayan) kalemler ikram mı?
+      const activeItems = orderItems.filter(
+        (it) => it.status !== 'cancelled'
+      );
+      if (activeItems.length === 0) return false;
+      const allComplimentary = activeItems.every((it) => it.is_complimentary);
+      // Tamamen ikram edilmiş ödenmiş sipariş → gösterme
+      return !allComplimentary;
+    });
+
+    const formatted: TableOrderDetail[] = filteredOrders.map((o) => {
       const orderItems = itemsByOrder.get(o.id) || [];
 
       // Aktif (cancelled olmayan) ve ödememiş kalemlerden subtotal/total hesapla

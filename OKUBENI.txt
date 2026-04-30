@@ -1,151 +1,116 @@
-ALEG TUR 14 — İptal Edilen Kalem Total Sıfırlama (Hotfix)
-============================================================
+ALEG TUR 15 — İkram Edilmiş Geçmiş Siparişler Modal'a Sızıyor
+=================================================================
 
-Tur 13'te iptal mantığı eklenmişti ama mevcut bozuk veri için
-otomatik düzeltme yoktu. Bu turda:
+SORUN
+=====
 
-  1. getTableOrders artık total'ı aktif kalemlerden hesaplar
-     → DB total bozuksa otomatik doğru göstertir
-  2. Tamamen iptal edilmiş ama DB'de hâlâ açık duran siparişleri
-     getTableOrders sırasında lazy reconcile eder
-  3. UI'da iptal edilmiş kalemler "1 KALEM" sayısına dahil değil
-  4. orders.cancelled_at + cancel_reason alanları schema'ya eklendi
-     (Tur 13'teki UPDATE call'larının sessiz fail etmesini önler)
+Akış:
+  1. Boş masaya 1 ürün ekle → ikram et
+  2. Masa boşa döner ✓
+  3. Aynı boş masaya tekrar bir ürün ekle
+  4. ❌ Masa modal'ında daha önce ikram edilmiş ürün de görünüyor
+     ("2 aktif sipariş · 2 kalem", oysa gerçekte 1 yeni sipariş var)
 
+SEBEP
+=====
 
-SORUN ANALİZİ
-==============
+getTableOrders fonksiyonu son 4 saat içindeki ödenmiş siparişleri
+de getiriyor (recentlyPaidResp). Bu mantık "az önce ödenmiş, fiş
+tekrar baskı için görünsün" diye eklenmişti.
 
-Ekran görüntüsünde:
-  - 1× daşşak limonata İPTAL (üstü çizili görünüyor — DB'de cancelled)
-  - Ama "MASA TOPLAM: ₺150" hâlâ duruyor
-  - "ÖDENECEK TUTAR: ₺150"
-  - "Tüm Masayı Öde · ₺150" butonu açık
+Ama "tümü ikram" modunda ödenen siparişler de bu sorguya takılıyor:
+  - payment_status = 'paid'
+  - tüm kalemler is_complimentary = true
+  - amount_paid = 0
 
-Sebebi: Bu masa Tur 13 öncesi iptal edilmiş. O zamanki
-cancelOrderItems action'ı total'ı düşürmüyordu. Yani
-order_items.status='cancelled' ama order.total=150.
+Sonuç: Yeni sipariş + eski tamamen ikram edilmiş sipariş aynı
+modal'da gözüküyor, kullanıcı şaşırıyor.
 
-Tur 13 sadece YENİ iptaller için doğru çalışıyor, mevcut bozuk
-verileri toparlamıyordu.
+ÇÖZÜM
+======
 
+[1] getTableOrders — filtreleme:
 
-ÇÖZÜM: COMPUTED TOTAL
-=======================
+  Tamamen ikram edilmiş + ödenmiş siparişleri modal listesinden çıkar.
+  Bunlar zaten "geçmiş" — yeni masa açılışında görünmemeli.
+  
+  Yarısı ikram + yarısı normal ödenen siparişler kalır (fiş tekrar
+  baskı için gerekli).
 
-getTableOrders her seferinde toplam'ı kalemlerden hesaplar:
+[2] UI sayım iyileştirmesi:
 
-  // Aktif (cancelled olmayan) kalemlerden
-  const computedSubtotal = activeItems.reduce(
-    (s, it) => it.is_complimentary ? s : s + unit_price * quantity,
-    0
-  );
-
-  // DB'deki ile farklıysa hesaplananı kullan
-  const useComputed = Math.abs(dbTotal - computedSubtotal) > 0.01;
-
-Bu sayede:
-  • Tur 13 öncesi bozuk siparişler doğru görüntülenir
-  • Yeni iptaller anında yansır
-  • Race condition'larda da güvende
-
-
-LAZY RECONCILE
-================
-
-Sipariş listesinde "tüm kalemleri iptal ama hâlâ açık" durumda
-olanları arka planda otomatik kapatır:
-
-  void admin
-    .from('orders')
-    .update({
-      status: 'cancelled',
-      cancelled_at: now,
-      cancel_reason: 'Tüm kalemler iptal (reconcile)',
-      subtotal: 0,
-      total: 0,
-    })
-    .in('id', stuckIds);
-
-  // Masada başka aktif sipariş yoksa boşalt
-  await admin.from('tables')
-    .update({ status: 'available' })
-    .eq('id', tableId);
-
-UI bekletilmez (fire-and-forget). Bir sonraki refresh'te masa
-zaten temizlenmiş gözükür. UI hemen "boş" gösterir (stuck siparişler
-filtrelenir).
+  • totalItems: artık sadece ödenmemiş + iptal edilmemiş kalemleri sayar
+  • activeOrderCount: aktif kalemleri olan ödenmemiş sipariş sayısı
+  • Header: "{activeOrderCount} aktif sipariş · {totalItems} kalem"
+    (eski: orders.length kullanıyordu — paid+ikram dahil)
+  
+  Hiç aktif yok ama geçmiş varsa:
+    "Aktif sipariş yok · geçmiş kayıtlar görünüyor"
 
 
 KOD DEĞİŞİKLİKLERİ
 ==================
 
-[1] supabase/migrations/0036_orders_cancellation.sql (YENİ)
-  • orders.cancelled_at TIMESTAMPTZ
-  • orders.cancel_reason TEXT
-  • Index: idx_orders_cancelled_at (partial)
-
-[2] lib/actions/tables-status.ts — getTableOrders
-  • Aktif kalemlerden subtotal/total hesaplama
-  • DB ile fark varsa computed kullan
-  • Stuck order tespiti + lazy reconcile
-  • Stuck olanları UI listesinden çıkar
+[1] lib/actions/tables-status.ts — getTableOrders
+  • filteredOrders: tamamen ikram + paid olanları çıkar
+  • formatted = filteredOrders.map(...)
   
-  cancelOrderItems değişmedi (Tur 13'teki hali doğru çalışıyor).
+  Filtre mantığı:
+    if (payment_status !== 'paid') return true; // ödenmemişler kalır
+    const activeItems = items.filter(it => status !== 'cancelled');
+    if (activeItems.length === 0) return false;
+    const allComplimentary = activeItems.every(it => is_complimentary);
+    return !allComplimentary; // tamamen ikramsa çıkar
 
-[3] app/kasa/table-detail-modal.tsx — selectableItems
-  • Cancelled kalemler artık "1 KALEM" sayısında ve seçim
-    listesinde görünmüyor
-  • Sadece status !== 'cancelled' olanlar seçilebilir
+[2] app/kasa/table-detail-modal.tsx
+  • totalItems: aktif (unpaid + non-cancelled) kalemler
+  • activeOrderCount: yeni hesaplama
+  • Header sayımı düzeltildi
+  • "Aktif sipariş yok" durumu için yedek mesaj
 
 
 KURULUM
 =======
 
-[1] DB MIGRATION:
-    Supabase SQL Editor → 0036_orders_cancellation.sql → run
+Migration veya yeni paket gerekmez. 2 dosyayı üzerine yaz:
 
-[2] DOSYALAR (üzerine yaz):
-    YENİ:
-      supabase/migrations/0036_orders_cancellation.sql
-    GÜNCELLEMELER:
-      lib/actions/tables-status.ts
-      app/kasa/table-detail-modal.tsx
+  lib/actions/tables-status.ts
+  app/kasa/table-detail-modal.tsx
 
 
 PUSH
 ====
 
   git add .
-  git commit -m "fix: tur 14 - reconcile cancelled items + cleaner total"
+  git commit -m "fix: tur 15 - hide fully complimentary paid orders from table modal"
   git push origin main
 
 
 TEST
 ====
 
-[A] Mevcut bozuk masa (görüntüdeki gibi):
-    1. Bozuk masaya tıkla
-    2. ✅ MASA TOPLAM: ₺0 (eski 150 değil)
-    3. ✅ ÖDENECEK TUTAR: ₺0
-    4. ✅ Modal kapatıp tekrar aç → masa boş gözükür
-    5. ✅ Arka planda DB temizlenmiş
+[A] Senaryosu (görüntüdeki):
+    1. Boş masaya 1 ürün ekle (örn. am suyu ₺300)
+    2. Kasa modali → kalemi seç → ★ İkram → onayla
+    3. ✅ Masa boşa döner
+    4. Aynı masaya tekrar bir ürün ekle (am suyu ₺300)
+    5. Kasa modal'ı tekrar aç
+    6. ✅ Sadece YENİ am suyu görünür
+    7. ✅ "1 aktif sipariş · 1 kalem"
+    8. ✅ Eski ikram edilmiş ürün YOK
+    9. ✅ MASA TOPLAM: ₺300 (eski ödenmiş ikram dahil değil)
 
-[B] Yeni iptal (Tur 13 davranışı):
-    1. Boş masaya 1 ürün ekle
-    2. Kasa modal → kalem seç → × İptal
-    3. ✅ Total anında 0 olur
-    4. ✅ Modal kapanır, masa boş
+[B] Yarısı ikram, yarısı ödenmiş:
+    1. Masa: 2 ürün (₺100 + ₺200)
+    2. ₺100'ı ikram et, ₺200'ı normal öde
+    3. ✅ Sipariş paid olur ama "tamamen ikram" değil
+    4. Aynı masaya yeni ürün ekle
+    5. ✅ Modal'da: yeni ürün + ödenmiş eski sipariş (görünür kalır)
+    6. ✅ Eski sipariş "ÖDENDİ" rozetiyle, fiş tekrar baskı yapılabilir
 
-[C] Çok kalemli masada bir kalem iptal:
-    1. Masada 2 ürün: ₺100 + ₺200 = ₺300
-    2. ₺100 olan kalemi iptal
-    3. ✅ Total ₺200 olur (300 değil)
-    4. ✅ İptal edilen "1 KALEM" sayısına dahil değil
-    5. Sadece ₺200'lük kalem seçilebilir görünür
-
-[D] Tüm kalemler ikram + iptal karışımı:
-    1. Masada 3 ürün
-    2. 1'ini ikram et, 2'sini iptal et
-    3. ✅ Tüm kalemler ödenmez/iptal — masa boşalmalı
-    4. (Reconcile arka planda çalışır)
+[C] Tamamen iptal + tamamen ikram karışım:
+    1. Masada eski iptal edilmiş sipariş
+    2. + Eski tamamen ikram edilmiş sipariş
+    3. + Yeni aktif sipariş
+    4. ✅ Modal'da sadece yeni aktif görünür
+    5. ✅ Sayım: "1 aktif sipariş · 1 kalem"

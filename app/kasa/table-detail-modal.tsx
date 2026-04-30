@@ -98,10 +98,26 @@ export function TableDetailModal({
       (o) => o.payment_status !== 'paid' && o.payment_status !== 'refunded'
     )
     .reduce((s, o) => s + o.total, 0);
-  const totalItems = orders.reduce(
-    (s, o) => s + o.items.reduce((si, it) => si + it.quantity, 0),
-    0
-  );
+  // Aktif (ödenmemiş + iptal edilmemiş) kalem sayısı
+  const totalItems = orders
+    .filter(
+      (o) => o.payment_status !== 'paid' && o.payment_status !== 'refunded'
+    )
+    .reduce(
+      (s, o) =>
+        s +
+        o.items
+          .filter((it) => it.status !== 'cancelled')
+          .reduce((si, it) => si + it.quantity, 0),
+      0
+    );
+  // Aktif sipariş sayısı (ödenmemiş ve hâlâ kalemleri olan)
+  const activeOrderCount = orders.filter(
+    (o) =>
+      o.payment_status !== 'paid' &&
+      o.payment_status !== 'refunded' &&
+      o.items.some((it) => it.status !== 'cancelled')
+  ).length;
   const hasUnpaid = orders.some(
     (o) => o.payment_status !== 'paid' && o.payment_status !== 'refunded'
   );
@@ -238,11 +254,18 @@ export function TableDetailModal({
                 {tableName}
               </span>
             </h2>
-            {!loading && orders.length > 0 && (
+            {!loading && activeOrderCount > 0 && (
               <p className="text-sm mt-2" style={{ color: 'var(--ink-2)' }}>
-                {orders.length} aktif sipariş · {totalItems} kalem
+                {activeOrderCount} aktif sipariş · {totalItems} kalem
               </p>
             )}
+            {!loading &&
+              orders.length > 0 &&
+              activeOrderCount === 0 && (
+                <p className="text-sm mt-2" style={{ color: 'var(--ink-3)' }}>
+                  Aktif sipariş yok · geçmiş kayıtlar görünüyor
+                </p>
+              )}
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             {/* Hızlı Ürün Ekle - menüden direkt ekleme */}
