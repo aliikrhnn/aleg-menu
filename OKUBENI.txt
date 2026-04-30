@@ -1,85 +1,113 @@
-ALEG TUR 17d — Müşteri Menü: Kalan "Sepete Ekle" + Çağrı Butonu Çakışma
-=========================================================================
+ALEG TUR 17e — Z-Report Sipariş Tarihi → Hesap Alma Tarihi (KRİTİK)
+=====================================================================
 
-İki düzeltme:
+SORUN
+=====
 
-  1. Ürün seçim modal'ında (varyasyonlu ürün) "Sepete Ekle" hâlâ
-     görünüyordu → "Masaya Ekle" olarak güncellendi
-  2. "SİPARİŞLERİM" floating badge'i ile çağrı butonu üst üste
-     biniyordu → çağrı butonu siparişlerim üstüne kaydırıldı
+Kasa "Gün Sonu Raporu" / "Z-Report" oluştururken tarih aralığını
+sipariş AÇILIŞ zamanına (created_at) göre filtreliyordu.
+
+Senaryosu (kullanıcı görüntüsü):
+  • 22:00'de 2 masa açık, içlerinde sipariş var
+  • Saat 22:55 — 2 masa kapatıldı (₺300 nakit + ₺300 kart)
+  • 23:00-23:02 aralığı için Z-Report istendi
+  • ❌ "Bu dönemde sipariş yok" diyor
+  
+Çünkü:
+  • Sipariş created_at = 22:00 (öğleden saatler önce açılmış)
+  • Filtre: created_at BETWEEN 23:00-23:02
+  • 22:00 bu aralıkta değil → sayım dışı
+
+Bu bir kafede kabul edilemez bir hata:
+  • Akşam vardiyacısı kapama yaparken, öğleyin açılan masalar
+    sayılmaz → kasa eksik gözükür
+  • Z-Report ciro = 0 ama gerçekte para alındı
 
 
-[1] OPTIONPICKER MODAL - SEPETE EKLE
-======================================
-
-ÖNCESİ (kalmış):
-  Ürüne tıkla → varyasyon seç modalı açılır
-  Footer butonu: [Sepete Ekle  ₺250]
-
-SONRASI:
-  [Masaya Ekle  ₺250]    (TR)
-  [Add to Table  ₺250]   (EN)
-
-Ayrıca eksik olan dil desteği eklendi (eskiden hardcoded TR'di).
-
-
-[2] ÇAĞRI BUTONU ÇAKIŞMA
+ÇÖZÜM — HESAP ALMA BAZLI
 ==========================
 
-SORUN (kullanıcı görüntüsü):
-  ┌──────────────────────────────┐
-  │                              │
-  │                              │
-  │                              │
-  │              [✋ ÇAĞRI]      │ ← bu görünmüyor
-  │       [📋 SİPARİŞLERİM (1)]  │ ← bu üstüne biniyor
-  └──────────────────────────────┘
+Z-Report artık iki ayrı sorgu yapar:
 
-Çağrı butonu: right:16, bottom:24
-Siparişlerim:  right:16, bottom:16 (yüksek 48px)
-→ Üst üste binmiş
-
-ÇÖZÜM:
-  Çağrı butonu konum mantığı yenilendi:
-  
-  • cart YOK + siparişlerim YOK     → bottom: 24
-  • cart YOK + siparişlerim VAR     → bottom: 84  ← yeni
-  • cart VAR + scroll yok           → bottom: 84
-  • cart VAR + scroll çok           → bottom: 144
-  • cart YOK + siparişlerim VAR + scroll çok → bottom: 144
+  [1] ÖDENMİŞ siparişler — paid_at aralıkta
+      Hangi zaman aralığında HESAP ALINDIYSA o vardiyaya sayılır.
+      
+  [2] AÇIK + İPTAL siparişler — created_at aralıkta (bilgi amaçlı)
+      Bunlar ödenmediği için hesaba zaten girmiyor; ne zaman
+      açıldığına göre raporda görünmeleri yeterli.
 
 Sonuç:
-  ┌──────────────────────────────┐
-  │                              │
-  │                              │
-  │              [✋ ÇAĞRI]      │ ← üstte
-  │       [📋 SİPARİŞLERİM (1)]  │ ← altta
-  └──────────────────────────────┘
-  
-  Her iki buton da tıklanabilir.
+  ✅ Akşam kapatılan masalar akşam vardiyasına yazılır
+  ✅ "Şimdiki Z-Report" anlık doğru ciroyu verir
+  ✅ Tarih aralıkları her zaman para hareketini takip eder
+
+NEDEN paid_at?
+  orders.paid_at, son ödeme alındığında set edilen alan.
+  Bölmeli ödemede son taksit ödendiği anda yazılır.
+  payment_logs.performed_at de doğru ama orders.paid_at zaten
+  hazır ve tek satırda filtreleme imkanı veriyor.
 
 
 KOD DEĞİŞİKLİĞİ
 ================
 
-[1] app/menu/[slug]/menu-view.tsx
+[1] lib/actions/payments.ts — getZReport
 
-  - OptionPickerModal footer butonu:
-    "Sepete Ekle" → "Masaya Ekle" (TR/EN ayrımıyla)
+  ÖNCESİ:
+    const { data: orders } = await admin
+      .from('orders')
+      .select(...)
+      .eq('business_id', businessId)
+      .gte('created_at', start.toISOString())  // ← yanlış
+      .lte('created_at', end.toISOString());
+    
+    const allOrders = orders || [];
+    const paid = allOrders.filter((o) => o.payment_status === 'paid');
+    const cancelled = allOrders.filter((o) => o.status === 'cancelled');
+    const openOrders = allOrders.filter(...)
 
-  - Çağrı butonu bottom hesabı:
-    Önceki:
-      bottom: cartCount > 0
-        ? (scrollY > 600 ? 144 : 84)
-        : (scrollY > 600 ? 84 : 24)
+  SONRASI:
+    // [1] Ödenmiş siparişler — paid_at aralıkta
+    const { data: paidOrdersRaw } = await admin
+      .from('orders')
+      .select(...)
+      .eq('business_id', businessId)
+      .eq('payment_status', 'paid')
+      .gte('paid_at', start.toISOString())   // ← doğru
+      .lte('paid_at', end.toISOString());
 
-    Sonraki:
-      bottom: (() => {
-        const hasFloatingMyOrders = cartCount === 0 && myOrdersCount > 0;
-        if (cartCount > 0) return scrollY > 600 ? 144 : 84;
-        if (hasFloatingMyOrders) return scrollY > 600 ? 144 : 84;
-        return scrollY > 600 ? 84 : 24;
-      })()
+    // [2] Açık + iptal — created_at aralıkta
+    const { data: openCancelledRaw } = await admin
+      .from('orders')
+      .select(...)
+      .eq('business_id', businessId)
+      .neq('payment_status', 'paid')
+      .gte('created_at', start.toISOString())
+      .lte('created_at', end.toISOString());
+
+    const allOrders = [...paidOrdersRaw, ...openCancelledRaw];
+    const paid = paidOrdersRaw || [];
+    const cancelled = (openCancelledRaw || []).filter(o => o.status === 'cancelled');
+    const openOrders = (openCancelledRaw || []).filter(...)
+
+Diğer bütün hesaplamalar (saat bazlı, kasiyer bazlı, kalem
+analitiği, nakit/kart toplamları) bu yeni `paid` array'i
+üzerinden çalışıyor — kod değişikliği gerekmedi.
+
+Cari kasa hareketleri (cariPaymentLogs) zaten performed_at
+kullanıyordu, doğruydu.
+
+
+KAPSAM DIŞI
+============
+
+`/panel/raporlar` (yönetici trend rapor sayfası) ayrı bir
+fonksiyon (lib/actions/reports.ts). O da created_at kullanıyor
+ama "satış trendi/peak hour analizi" için sipariş zamanı daha
+anlamlı olabilir. Şimdilik dokunmadık.
+
+Eğer ileride yöneticiye "günlük ciro grafik akşam vardiyası
+gösteriyor" gibi şikayet gelirse o rapor da paid_at'e çevrilir.
 
 
 KURULUM
@@ -87,33 +115,50 @@ KURULUM
 
 Migration veya yeni paket gerekmez. 1 dosyayı üzerine yaz:
 
-  app/menu/[slug]/menu-view.tsx
+  lib/actions/payments.ts
 
 
 PUSH
 ====
 
-  git add app/menu/[slug]/menu-view.tsx
-  git commit -m "fix: tur 17d - option picker label + service btn position"
+  git add lib/actions/payments.ts
+  git commit -m "fix: tur 17e - z-report uses paid_at instead of created_at"
   git push origin main
 
 
 TEST
 ====
 
-[A] OptionPicker masaya ekle:
-    1. Müşteri menüde varyasyonlu bir ürüne tıkla (örn. süt seçimli kahve)
-    2. Modal açılır
-    3. ✅ Alt buton: "Masaya Ekle  ₺X" (Sepete Ekle değil)
-    4. EN dilinde: "Add to Table"
+[A] Senaryosu (kullanıcı görüntüsü):
+    1. Saat 12:00 → masa aç, sipariş ekle (₺300 nakit)
+    2. Saat 23:00 → o masayı kapa (hesap al)
+    3. Z-Report → Özel Aralık → 22:00 - 23:30
+    4. ✅ "1 sipariş · ₺300" görünmeli
+    5. ✅ Nakit ₺300 görünmeli
 
-[B] Çağrı butonu çakışma testi:
-    1. QR ile gir (qrTable olsun)
-    2. Bir sipariş ver → tracking sayfası → menüye dön
-    3. Şimdi: cart boş + siparişlerim 1 var
-    4. ✅ Sağ alt köşede iki buton üst üste binmemiş:
-       - Üstte: ✋ Çağrı butonu (turuncu, yuvarlak)
-       - Altta: 📋 SİPARİŞLERİM (1) badge
-    5. ✅ Her ikisine de tıklanabilir
-    6. Sayfayı kaydır (600px+)
-    7. ✅ İkisi de yukarı kayar, hâlâ üst üste binmemiş
+[B] Birden fazla masa, farklı saatler:
+    1. 18:00 — Masa A açıldı, ₺200 nakit kapatıldı 22:30
+    2. 19:00 — Masa B açıldı, ₺300 kart kapatıldı 22:55
+    3. 20:00 — Masa C açıldı (henüz açık)
+    4. Z-Report → 22:00 - 23:00
+    5. ✅ 2 ödenmiş sipariş (Masa A + B)
+    6. ✅ Nakit ₺200 + Kart ₺300 = Toplam ₺500
+    7. ✅ Açık siparişler (Masa C) bu aralıkta görünmemeli
+       (created_at: 20:00, aralık 22-23)
+
+[C] Eski siparişlerin doğruluğu:
+    1. Önceden kapatılmış bir gün
+    2. Z-Report → o günü seç
+    3. ✅ Cironun toplamı önceki rapor ile aynı olmalı
+       (ya da daha doğru — akşam kapatılanlar artık akşama yazılıyor)
+
+[D] Boş aralık:
+    1. Hiçbir ödeme yapılmadığı bir 5 dakika seç
+    2. ✅ "Bu dönemde sipariş yok" görünmeli (doğru)
+
+[E] paid_at NULL siparişler:
+    Eski/legacy siparişlerde paid_at NULL olabilir.
+    .gte('paid_at', start) → NULL'lar filtrelenir, raporda görünmez.
+    Bu doğru davranış (paid_at olmayan sipariş güvenilir değil).
+    Eğer kullanıcı şikayet ederse migration eklenip eski paid
+    kayıtlara paid_at = created_at fallback yazılabilir.

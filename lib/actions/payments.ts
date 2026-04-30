@@ -1321,8 +1321,16 @@ export async function getZReport(
       .maybeSingle();
     log('business fetched');
 
-    // Ödenen siparişler - created_by_cashier UUID, ismini join ile çekiyoruz
-    const { data: orders, error: ordersError } = await admin
+    // ============================================================
+    // ÖNEMLİ: Z-Report HESAP ALMA bazlı çalışır, sipariş açılışına göre değil.
+    //   - Ödenmiş siparişler:  paid_at aralıkta olanlar (gerçek ciro zamanı)
+    //   - Açık/iptal siparişler: created_at aralıkta olanlar (bilgi amaçlı)
+    // Akşam vardiyasında öğle açılan ama akşam kapatılan masalar
+    // o akşamın cirosuna doğru yansır.
+    // ============================================================
+
+    // [1] ÖDENMİŞ siparişler — paid_at aralıkta
+    const { data: paidOrdersRaw, error: paidOrdersError } = await admin
       .from('orders')
       .select(`
         id, total, payment_method, payment_status, status, paid_at, created_at,
@@ -1330,20 +1338,43 @@ export async function getZReport(
         cashier:created_by_cashier(display_name)
       `)
       .eq('business_id', businessId)
+      .eq('payment_status', 'paid')
+      .gte('paid_at', start.toISOString())
+      .lte('paid_at', end.toISOString());
+
+    if (paidOrdersError) {
+      return { success: false, error: paidOrdersError.message };
+    }
+
+    // [2] AÇIK + İPTAL siparişler — created_at aralıkta (bilgi)
+    const { data: openCancelledRaw, error: openCancelledError } = await admin
+      .from('orders')
+      .select(`
+        id, total, payment_method, payment_status, status, paid_at, created_at,
+        tip, discount, complimentary_total, created_by_cashier, note, source,
+        cashier:created_by_cashier(display_name)
+      `)
+      .eq('business_id', businessId)
+      .neq('payment_status', 'paid')
       .gte('created_at', start.toISOString())
       .lte('created_at', end.toISOString());
 
-    if (ordersError) {
-      return { success: false, error: ordersError.message };
+    if (openCancelledError) {
+      return { success: false, error: openCancelledError.message };
     }
 
-    const allOrders = orders || [];
-    log('orders fetched', { count: allOrders.length });
-    const paid = allOrders.filter((o) => o.payment_status === 'paid');
-    const cancelled = allOrders.filter((o) => o.status === 'cancelled');
+    const allOrders = [...(paidOrdersRaw || []), ...(openCancelledRaw || [])];
+    log('orders fetched', {
+      paid: paidOrdersRaw?.length || 0,
+      openCancelled: openCancelledRaw?.length || 0,
+    });
+    const paid = paidOrdersRaw || [];
+    const cancelled = (openCancelledRaw || []).filter(
+      (o) => o.status === 'cancelled'
+    );
     const refunded = allOrders.filter((o) => o.payment_status === 'refunded');
     // Açık siparişler: hazırlanan/hazır ama henüz ödenmemiş
-    const openOrders = allOrders.filter(
+    const openOrders = (openCancelledRaw || []).filter(
       (o) =>
         o.status !== 'cancelled' &&
         o.payment_status !== 'paid' &&
