@@ -33,6 +33,13 @@ export type PrintableMenuCategory = {
   products: PrintableMenuProduct[];
 };
 
+export type PrintableMenuTable = {
+  id: string;
+  name: string; // "Masa 1", "Salon 3" vb.
+  zone_name: string | null;
+  qr_url: string; // Tam URL: https://slug.alegstudio.com/?t=xxx
+};
+
 export type PrintableMenuData = {
   business: {
     id: string;
@@ -49,6 +56,7 @@ export type PrintableMenuData = {
   };
   categories: PrintableMenuCategory[];
   qr_url: string;
+  tables: PrintableMenuTable[];
 };
 
 /**
@@ -83,29 +91,41 @@ export async function getPrintableMenuData(): Promise<{
     const admin = createAdminClient();
     const businessId = membership.business_id as string;
 
-    const [businessRes, categoriesRes, productsRes] = await Promise.all([
-      admin
-        .from('businesses')
-        .select(
-          'id, name, slug, logo_url, city, tagline_tr, address, phone, instagram, website, created_at'
-        )
-        .eq('id', businessId)
-        .maybeSingle(),
-      admin
-        .from('categories')
-        .select('id, name, description, hero_icon, sort_order')
-        .eq('business_id', businessId)
-        .eq('active', true)
-        .order('sort_order', { ascending: true }),
-      admin
-        .from('products')
-        .select(
-          'id, category_id, name, description, price, hero_icon, is_featured, is_chef_recommend, dietary_tags, spicy_level, status, sort_order'
-        )
-        .eq('business_id', businessId)
-        .eq('status', 'active')
-        .order('sort_order', { ascending: true }),
-    ]);
+    const [businessRes, categoriesRes, productsRes, tablesRes, qrCodesRes] =
+      await Promise.all([
+        admin
+          .from('businesses')
+          .select(
+            'id, name, slug, logo_url, city, tagline_tr, address, phone, instagram, website, created_at'
+          )
+          .eq('id', businessId)
+          .maybeSingle(),
+        admin
+          .from('categories')
+          .select('id, name, description, hero_icon, sort_order')
+          .eq('business_id', businessId)
+          .eq('active', true)
+          .order('sort_order', { ascending: true }),
+        admin
+          .from('products')
+          .select(
+            'id, category_id, name, description, price, hero_icon, is_featured, is_chef_recommend, dietary_tags, spicy_level, status, sort_order'
+          )
+          .eq('business_id', businessId)
+          .eq('status', 'active')
+          .order('sort_order', { ascending: true }),
+        admin
+          .from('tables')
+          .select('id, name, zone_id, table_zones(name)')
+          .eq('business_id', businessId)
+          .neq('status', 'inactive')
+          .order('name', { ascending: true }),
+        admin
+          .from('qr_codes')
+          .select('table_id, slug')
+          .eq('business_id', businessId)
+          .eq('active', true),
+      ]);
 
     const business = businessRes.data;
     if (!business) {
@@ -183,6 +203,28 @@ export async function getPrintableMenuData(): Promise<{
     const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'alegstudio.com';
     const qrUrl = `https://${business.slug}.${rootDomain}`;
 
+    // Masa listesini hazırla (mevcut QR slug'larıyla)
+    const qrByTable = new Map<string, string>();
+    (qrCodesRes.data || []).forEach((q) => {
+      if (q.table_id) qrByTable.set(q.table_id as string, q.slug as string);
+    });
+    const tables: PrintableMenuTable[] = (tablesRes.data || [])
+      .map((t) => {
+        const zoneData = Array.isArray(t.table_zones)
+          ? t.table_zones[0]
+          : t.table_zones;
+        const slug = qrByTable.get(t.id as string);
+        if (!slug) return null; // QR henüz oluşturulmamışsa boyay
+        return {
+          id: t.id as string,
+          name: t.name as string,
+          zone_name:
+            (zoneData as { name?: string } | null | undefined)?.name || null,
+          qr_url: `https://${business.slug}.${rootDomain}/?t=${slug}`,
+        };
+      })
+      .filter((x): x is PrintableMenuTable => x !== null);
+
     const createdYear = business.created_at
       ? new Date(business.created_at as string).getFullYear()
       : new Date().getFullYear();
@@ -205,6 +247,7 @@ export async function getPrintableMenuData(): Promise<{
         },
         categories: nonEmpty,
         qr_url: qrUrl,
+        tables,
       },
     };
   } catch (err) {

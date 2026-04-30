@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import QRCode from 'qrcode';
 import jsPDF from 'jspdf';
 import * as htmlToImage from 'html-to-image';
+import JSZip from 'jszip';
 import type {
   PrintableMenuData,
   PrintableMenuCategory,
@@ -39,9 +40,27 @@ export function PrintableMenuClient({ data }: Props) {
   const [showSinceBadge, setShowSinceBadge] = useState(true);
   const [customSignature, setCustomSignature] = useState('');
 
+  // QR hedef
+  type QrTarget = 'general' | 'table';
+  const [qrTarget, setQrTarget] = useState<QrTarget>('general');
+  const [selectedTableId, setSelectedTableId] = useState<string | null>(
+    data.tables[0]?.id || null
+  );
+
+  // Logo mode
+  type LogoMode = 'original' | 'white-frame' | 'monogram';
+  const [logoMode, setLogoMode] = useState<LogoMode>('original');
+
   // Panel UI durum
   const [activeSection, setActiveSection] = useState<
-    'template' | 'size' | 'header' | 'footer' | 'extras' | 'download'
+    | 'template'
+    | 'size'
+    | 'header'
+    | 'footer'
+    | 'extras'
+    | 'qr'
+    | 'logo'
+    | 'download'
   >('template');
 
   // Kaynak veriler
@@ -49,16 +68,25 @@ export function PrintableMenuClient({ data }: Props) {
   const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null);
   const [previewScale, setPreviewScale] = useState(0.5);
   const [downloading, setDownloading] = useState<
-    'pdf' | 'png' | 'bulk' | null
+    'pdf' | 'png' | 'bulk' | 'tables' | null
   >(null);
   const [currentPage, setCurrentPage] = useState(1);
 
   const docRef = useRef<HTMLDivElement | null>(null);
   const previewWrapRef = useRef<HTMLDivElement | null>(null);
 
-  // QR oluştur
+  // Aktif QR URL'i (target'a göre)
+  const activeQrUrl = useMemo(() => {
+    if (qrTarget === 'table' && selectedTableId) {
+      const t = data.tables.find((x) => x.id === selectedTableId);
+      if (t) return t.qr_url;
+    }
+    return data.qr_url; // genel
+  }, [qrTarget, selectedTableId, data.qr_url, data.tables]);
+
+  // QR oluştur (aktif URL'e göre)
   useEffect(() => {
-    QRCode.toDataURL(data.qr_url, {
+    QRCode.toDataURL(activeQrUrl, {
       width: 600,
       margin: 0,
       errorCorrectionLevel: 'M',
@@ -66,7 +94,7 @@ export function PrintableMenuClient({ data }: Props) {
     })
       .then((url) => setQrDataUrl(url))
       .catch(() => setQrDataUrl(null));
-  }, [data.qr_url]);
+  }, [activeQrUrl]);
 
   // Logo'yu base64 dataURL olarak al
   useEffect(() => {
@@ -256,6 +284,95 @@ export function PrintableMenuClient({ data }: Props) {
       toast.error('Toplu indirme başarısız');
     } finally {
       setSize(originalSize);
+      setCurrentPage(originalPage);
+      setDownloading(null);
+    }
+  }
+
+  // Tüm masalar için ayrı PDF üret, ZIP olarak indir
+  async function handleBulkTablesDownload() {
+    if (!docRef.current || downloading) return;
+    if (data.tables.length === 0) {
+      toast.error('Masa bulunamadı');
+      return;
+    }
+    setDownloading('tables');
+    const originalTarget = qrTarget;
+    const originalSelected = selectedTableId;
+    const originalPage = currentPage;
+    try {
+      // QR target'ı table'a çevir, sonra her masaya geçeceğiz
+      setQrTarget('table');
+
+      const sizeSpec = SIZES[size];
+      const targetPages = splitIntoPages(data.categories, size);
+      const totalPages = targetPages.length;
+
+      const zip = new JSZip();
+      const folder = zip.folder(`${data.business.slug}-masa-menuleri`);
+
+      let processed = 0;
+      for (const table of data.tables) {
+        setSelectedTableId(table.id);
+        setCurrentPage(1);
+        // QR'ın yeniden render olması için bekle
+        await new Promise((r) => setTimeout(r, 250));
+        await new Promise((r) => requestAnimationFrame(() => r(null)));
+        await new Promise((r) => setTimeout(r, 80));
+
+        const pdf = new jsPDF({
+          orientation: sizeSpec.isLandscape ? 'landscape' : 'portrait',
+          unit: 'mm',
+          format: sizeSpec.isLandscape
+            ? [sizeSpec.height_mm, sizeSpec.width_mm]
+            : [sizeSpec.width_mm, sizeSpec.height_mm],
+          compress: true,
+        });
+        const pageW = pdf.internal.pageSize.getWidth();
+        const pageH = pdf.internal.pageSize.getHeight();
+
+        for (let i = 1; i <= totalPages; i++) {
+          setCurrentPage(i);
+          await new Promise((r) => setTimeout(r, 120));
+          await new Promise((r) => requestAnimationFrame(() => r(null)));
+          await new Promise((r) => setTimeout(r, 80));
+
+          const dataUrl = await captureDocAsDataUrl();
+          if (!dataUrl) continue;
+          if (i > 1) pdf.addPage();
+          pdf.addImage(dataUrl, 'PNG', 0, 0, pageW, pageH, undefined, 'FAST');
+        }
+
+        // Masa adını güvenli filename'e çevir
+        const safeName = table.name
+          .toLowerCase()
+          .replace(/[çğıöşü]/g, (c) =>
+            ({ ç: 'c', ğ: 'g', ı: 'i', ö: 'o', ş: 's', ü: 'u' })[c] || c
+          )
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '') || `masa-${processed + 1}`;
+
+        const pdfBlob = pdf.output('blob');
+        folder?.file(`${safeName}.pdf`, pdfBlob);
+        processed++;
+      }
+
+      // ZIP üret ve indir
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const link = document.createElement('a');
+      link.download = `${data.business.slug}-masa-menuleri-${templateId}-${size}.zip`;
+      link.href = URL.createObjectURL(zipBlob);
+      link.click();
+      // URL temizle
+      setTimeout(() => URL.revokeObjectURL(link.href), 5000);
+
+      toast.success(`${processed} masa için PDF zip'lendi`);
+    } catch (err) {
+      console.error(err);
+      toast.error('Toplu masa indirme başarısız');
+    } finally {
+      setQrTarget(originalTarget);
+      setSelectedTableId(originalSelected);
       setCurrentPage(originalPage);
       setDownloading(null);
     }
@@ -463,7 +580,7 @@ export function PrintableMenuClient({ data }: Props) {
             eyebrow="2"
             open={activeSection === 'size'}
             onToggle={() =>
-              setActiveSection(activeSection === 'size' ? 'header' : 'size')
+              setActiveSection(activeSection === 'size' ? 'logo' : 'size')
             }
             summary={SIZES[size].name}
           >
@@ -523,10 +640,69 @@ export function PrintableMenuClient({ data }: Props) {
             </div>
           </Section>
 
-          {/* 3. Header */}
+          {/* 3. Logo Modu */}
+          <Section
+            title="Logo modu"
+            eyebrow="3"
+            open={activeSection === 'logo'}
+            onToggle={() =>
+              setActiveSection(activeSection === 'logo' ? 'header' : 'logo')
+            }
+            summary={
+              logoMode === 'original'
+                ? 'Orijinal'
+                : logoMode === 'white-frame'
+                  ? 'Beyaz çerçeve'
+                  : 'Sadece monogram'
+            }
+          >
+            {!data.business.logo_url && (
+              <div
+                className="rounded-[8px] p-3 mb-3 text-[12px]"
+                style={{
+                  background:
+                    'color-mix(in srgb, var(--gold, #B8903E) 8%, var(--card))',
+                  border:
+                    '1px solid color-mix(in srgb, var(--gold, #B8903E) 26%, var(--line))',
+                  color: 'var(--ink-2)',
+                  lineHeight: 1.5,
+                }}
+              >
+                Logo yüklü değil. Logo yüklersen modlar farklı görünür.{' '}
+                <a
+                  href="/panel/ayarlar"
+                  style={{ color: 'var(--accent)', fontWeight: 600 }}
+                >
+                  Ayarlar →
+                </a>
+              </div>
+            )}
+            <div className="space-y-2">
+              <SelectButton
+                selected={logoMode === 'original'}
+                onClick={() => setLogoMode('original')}
+                title="Orijinal"
+                description="Logo olduğu gibi basılır. Açık zeminli/şeffaf logolar açık temalarda iyi durur."
+              />
+              <SelectButton
+                selected={logoMode === 'white-frame'}
+                onClick={() => setLogoMode('white-frame')}
+                title="Beyaz çerçeve"
+                description="Logo beyaz daire içinde. Koyu temalarda (Elite, Foto Hero, Editorial) garantili görünür."
+              />
+              <SelectButton
+                selected={logoMode === 'monogram'}
+                onClick={() => setLogoMode('monogram')}
+                title="Sadece monogram"
+                description={`Logo yerine işletme baş harfi (${data.business.name.charAt(0).toUpperCase()}). Her zeminde temiz durur.`}
+              />
+            </div>
+          </Section>
+
+          {/* 4. Header */}
           <Section
             title="Üst bölge"
-            eyebrow="3"
+            eyebrow="4"
             open={activeSection === 'header'}
             onToggle={() =>
               setActiveSection(
@@ -572,10 +748,10 @@ export function PrintableMenuClient({ data }: Props) {
             )}
           </Section>
 
-          {/* 4. Footer */}
+          {/* 5. Footer */}
           <Section
             title="Alt bölge"
-            eyebrow="4"
+            eyebrow="5"
             open={activeSection === 'footer'}
             onToggle={() =>
               setActiveSection(
@@ -625,14 +801,14 @@ export function PrintableMenuClient({ data }: Props) {
             )}
           </Section>
 
-          {/* 5. Extras (rozetler) */}
+          {/* 6. Extras (rozetler) */}
           <Section
             title="Rozetler"
-            eyebrow="5"
+            eyebrow="6"
             open={activeSection === 'extras'}
             onToggle={() =>
               setActiveSection(
-                activeSection === 'extras' ? 'download' : 'extras'
+                activeSection === 'extras' ? 'qr' : 'extras'
               )
             }
             summary={
@@ -675,10 +851,111 @@ export function PrintableMenuClient({ data }: Props) {
             </div>
           </Section>
 
-          {/* 6. İndir */}
+          {/* 7. QR Hedefi */}
+          <Section
+            title="QR hedefi"
+            eyebrow="7"
+            open={activeSection === 'qr'}
+            onToggle={() =>
+              setActiveSection(activeSection === 'qr' ? 'download' : 'qr')
+            }
+            summary={
+              qrTarget === 'general'
+                ? 'Genel menü QR'
+                : selectedTableId
+                  ? `Masa: ${data.tables.find((t) => t.id === selectedTableId)?.name || '-'}`
+                  : 'Masa seçilmedi'
+            }
+          >
+            <div className="space-y-2 mb-3">
+              <SelectButton
+                selected={qrTarget === 'general'}
+                onClick={() => setQrTarget('general')}
+                title="Genel menü QR"
+                description="Standart QR. Tarayan müşteri masaya değil, sadece menüye gider. Pano/duvar/dış mekan için."
+              />
+              <SelectButton
+                selected={qrTarget === 'table'}
+                onClick={() => setQrTarget('table')}
+                title="Belirli masa için"
+                description="Tarayanın masa numarası otomatik gelir. Sipariş karışmaz."
+              />
+            </div>
+
+            {qrTarget === 'table' && (
+              <>
+                {data.tables.length === 0 ? (
+                  <div
+                    className="rounded-[8px] p-3 text-[12px]"
+                    style={{
+                      background:
+                        'color-mix(in srgb, var(--gold, #B8903E) 8%, var(--card))',
+                      border:
+                        '1px solid color-mix(in srgb, var(--gold, #B8903E) 26%, var(--line))',
+                      color: 'var(--ink-2)',
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    Henüz masa eklenmemiş.{' '}
+                    <a
+                      href="/panel/qr"
+                      style={{ color: 'var(--accent)', fontWeight: 600 }}
+                    >
+                      Masalar →
+                    </a>
+                  </div>
+                ) : (
+                  <div>
+                    <label
+                      className="block text-[10px] uppercase font-bold mb-1.5"
+                      style={{
+                        fontFamily: 'var(--f-mono)',
+                        letterSpacing: '0.16em',
+                        color: 'var(--ink-3)',
+                      }}
+                    >
+                      Masa seç ({data.tables.length})
+                    </label>
+                    <select
+                      value={selectedTableId || ''}
+                      onChange={(e) => setSelectedTableId(e.target.value)}
+                      className="w-full rounded-[8px] px-3 h-10 text-[13px]"
+                      style={{
+                        background: 'var(--card)',
+                        border: '1px solid var(--line)',
+                        color: 'var(--ink)',
+                      }}
+                    >
+                      {data.tables.map((tbl) => (
+                        <option key={tbl.id} value={tbl.id}>
+                          {tbl.name}
+                          {tbl.zone_name ? ` · ${tbl.zone_name}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <div
+                      className="mt-3 p-3 rounded-[8px] text-[11px]"
+                      style={{
+                        background: 'var(--paper-2)',
+                        color: 'var(--ink-3)',
+                        border: '1px solid var(--line)',
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      💡 İndir bölümünde &quot;Tüm masalar için ZIP&quot;
+                      seçeneğiyle her masa için ayrı PDF&apos;leri tek seferde
+                      indirebilirsin.
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </Section>
+
+          {/* 8. İndir */}
           <Section
             title="İndir"
-            eyebrow="6"
+            eyebrow="8"
             open={activeSection === 'download'}
             onToggle={() =>
               setActiveSection(
@@ -749,6 +1026,33 @@ export function PrintableMenuClient({ data }: Props) {
                   ? 'Toplu indiriliyor…'
                   : '⊟ A4 + A5 + Pláka birden'}
               </button>
+
+              {/* Tüm masalar için ZIP */}
+              {data.tables.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleBulkTablesDownload}
+                  disabled={!!downloading || productCount === 0}
+                  className="w-full h-11 rounded-[10px] flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{
+                    background:
+                      'color-mix(in srgb, var(--gold, #B8903E) 14%, var(--card))',
+                    color: 'var(--gold, #B8903E)',
+                    border:
+                      '1px solid color-mix(in srgb, var(--gold, #B8903E) 32%, var(--line))',
+                    fontFamily: 'var(--f-mono)',
+                    fontSize: 11,
+                    fontWeight: 700,
+                    letterSpacing: '0.12em',
+                    textTransform: 'uppercase',
+                  }}
+                  title={`${data.tables.length} masa için ayrı PDF üretilip ZIP'lenecek`}
+                >
+                  {downloading === 'tables'
+                    ? `Masalar üretiliyor… (${data.tables.length})`
+                    : `▦ ${data.tables.length} masa için ZIP`}
+                </button>
+              )}
             </div>
             <div
               className="mt-3 text-[11px]"
@@ -852,7 +1156,14 @@ export function PrintableMenuClient({ data }: Props) {
                   templateId={templateId}
                   size={size}
                   qrDataUrl={qrDataUrl}
+                  qrUrlOverride={activeQrUrl}
+                  tableLabel={
+                    qrTarget === 'table' && selectedTableId
+                      ? data.tables.find((t) => t.id === selectedTableId)?.name
+                      : undefined
+                  }
                   logoDataUrl={logoDataUrl}
+                  logoMode={logoMode}
                   headerVariant={headerVariant}
                   footerVariant={footerVariant}
                   showDietaryTags={showDietaryTags}

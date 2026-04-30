@@ -22,7 +22,10 @@ type Props = {
   templateId: TemplateId;
   size: PaperSize;
   qrDataUrl: string | null;
+  qrUrlOverride?: string; // Footer'da gösterilecek URL (genel ya da masa)
+  tableLabel?: string; // "Masa 1" gibi - basılırsa footer'a yazılır
   logoDataUrl: string | null; // Server-side fetch edildi
+  logoMode?: 'original' | 'white-frame' | 'monogram';
   headerVariant: HeaderVariant;
   footerVariant: FooterVariant;
   showDietaryTags: boolean;
@@ -44,7 +47,10 @@ export const PrintMenuDocument = forwardRef<HTMLDivElement, Props>(
       templateId,
       size,
       qrDataUrl,
+      qrUrlOverride,
+      tableLabel,
       logoDataUrl,
+      logoMode = 'original',
       headerVariant,
       footerVariant,
       showDietaryTags,
@@ -82,7 +88,10 @@ export const PrintMenuDocument = forwardRef<HTMLDivElement, Props>(
           pageNumber={pageNumber}
           totalPages={totalPages}
           qrDataUrl={qrDataUrl}
+          qrUrlOverride={qrUrlOverride}
+          tableLabel={tableLabel}
           logoDataUrl={logoDataUrl}
+          logoMode={logoMode}
           showDietaryTags={showDietaryTags}
           showSinceBadge={showSinceBadge}
           footerVariant={footerVariant}
@@ -107,7 +116,10 @@ export const PrintMenuDocument = forwardRef<HTMLDivElement, Props>(
           pageNumber={pageNumber}
           totalPages={totalPages}
           qrDataUrl={qrDataUrl}
+          qrUrlOverride={qrUrlOverride}
+          tableLabel={tableLabel}
           logoDataUrl={logoDataUrl}
+          logoMode={logoMode}
           showDietaryTags={showDietaryTags}
           showSinceBadge={showSinceBadge}
           footerVariant={footerVariant}
@@ -132,7 +144,10 @@ export const PrintMenuDocument = forwardRef<HTMLDivElement, Props>(
           pageNumber={pageNumber}
           totalPages={totalPages}
           qrDataUrl={qrDataUrl}
+          qrUrlOverride={qrUrlOverride}
+          tableLabel={tableLabel}
           logoDataUrl={logoDataUrl}
+          logoMode={logoMode}
           showDietaryTags={showDietaryTags}
           showSinceBadge={showSinceBadge}
           footerVariant={footerVariant}
@@ -214,6 +229,7 @@ export const PrintMenuDocument = forwardRef<HTMLDivElement, Props>(
               business={data.business}
               variant={headerVariant}
               logoDataUrl={logoDataUrl}
+              logoMode={logoMode}
               showSinceBadge={showSinceBadge}
             />
           )}
@@ -264,10 +280,11 @@ export const PrintMenuDocument = forwardRef<HTMLDivElement, Props>(
             <Footer
               t={t}
               business={data.business}
-              qrUrl={data.qr_url}
+              qrUrl={qrUrlOverride || data.qr_url}
               qrDataUrl={qrDataUrl}
               variant={footerVariant}
               customSignature={customSignature}
+              tableLabel={tableLabel}
             />
           )}
 
@@ -304,15 +321,19 @@ function Header({
   business,
   variant,
   logoDataUrl,
+  logoMode = 'original',
   showSinceBadge,
 }: {
   t: TemplateSpec;
   business: PrintableMenuData['business'];
   variant: HeaderVariant;
   logoDataUrl: string | null;
+  logoMode?: 'original' | 'white-frame' | 'monogram';
   showSinceBadge: boolean;
 }) {
-  const hasLogo = !!logoDataUrl;
+  // Logo monogram modu seçildiyse logo varsayılmaz - hep monogram göster
+  const hasLogo = logoMode !== 'monogram' && !!logoDataUrl;
+  const useWhiteFrame = logoMode === 'white-frame' && !!logoDataUrl;
 
   if (variant === 'monogram') {
     // Büyük baş harf monogram + ad altta
@@ -407,17 +428,41 @@ function Header({
         }}
       >
         {hasLogo ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={logoDataUrl!}
-            alt={business.name}
-            style={{
-              width: '24mm',
-              height: '24mm',
-              objectFit: 'contain',
-              flexShrink: 0,
-            }}
-          />
+          useWhiteFrame ? (
+            <div
+              style={{
+                background: '#FFFFFF',
+                borderRadius: '50%',
+                padding: '2mm',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                flexShrink: 0,
+              }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={logoDataUrl!}
+                alt={business.name}
+                style={{
+                  width: '20mm',
+                  height: '20mm',
+                  objectFit: 'contain',
+                  display: 'block',
+                }}
+              />
+            </div>
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={logoDataUrl!}
+              alt={business.name}
+              style={{
+                width: '24mm',
+                height: '24mm',
+                objectFit: 'contain',
+                flexShrink: 0,
+              }}
+            />
+          )
         ) : (
           <div
             style={{
@@ -495,18 +540,65 @@ function Header({
     >
       {hasLogo && (
         <div style={{ marginBottom: '4mm' }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={logoDataUrl!}
-            alt={business.name}
+          {useWhiteFrame ? (
+            <div
+              style={{
+                display: 'inline-block',
+                background: '#FFFFFF',
+                borderRadius: '50%',
+                padding: '3mm',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+              }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={logoDataUrl!}
+                alt={business.name}
+                style={{
+                  width: '24mm',
+                  height: '24mm',
+                  objectFit: 'contain',
+                  display: 'block',
+                }}
+              />
+            </div>
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={logoDataUrl!}
+              alt={business.name}
+              style={{
+                maxWidth: '32mm',
+                maxHeight: '20mm',
+                objectFit: 'contain',
+                margin: '0 auto',
+                display: 'block',
+              }}
+            />
+          )}
+        </div>
+      )}
+      {/* Logo yoksa veya monogram modu seçiliyse: monogram göster (centered için) */}
+      {!hasLogo && logoMode === 'monogram' && (
+        <div style={{ marginBottom: '4mm' }}>
+          <div
             style={{
-              maxWidth: '32mm',
-              maxHeight: '20mm',
-              objectFit: 'contain',
-              margin: '0 auto',
-              display: 'block',
+              display: 'inline-grid',
+              placeItems: 'center',
+              width: '22mm',
+              height: '22mm',
+              border: `2px solid ${t.colors.accent}`,
+              borderRadius: '50%',
+              fontFamily: t.fonts.serif,
+              fontStyle: t.fonts.italicHeadings ? 'italic' : 'normal',
+              fontSize: '28pt',
+              fontWeight: 400,
+              color: t.colors.ink,
+              lineHeight: 1,
             }}
-          />
+          >
+            {business.name.charAt(0).toUpperCase()}
+          </div>
         </div>
       )}
       <div
@@ -1028,6 +1120,7 @@ function Footer({
   qrDataUrl,
   variant,
   customSignature,
+  tableLabel,
 }: {
   t: TemplateSpec;
   business: PrintableMenuData['business'];
@@ -1035,6 +1128,7 @@ function Footer({
   qrDataUrl: string | null;
   variant: FooterVariant;
   customSignature: string;
+  tableLabel?: string;
 }) {
   return (
     <div
@@ -1061,7 +1155,9 @@ function Footer({
             marginBottom: '1mm',
           }}
         >
-          DİJİTAL MENÜ
+          {tableLabel
+            ? `DİJİTAL MENÜ · ${tableLabel.toUpperCase()}`
+            : 'DİJİTAL MENÜ'}
         </div>
         <h3
           style={{
@@ -1075,7 +1171,9 @@ function Footer({
             marginBottom: '1.5mm',
           }}
         >
-          QR&apos;ı tara, masandan sipariş ver
+          {tableLabel
+            ? `${tableLabel}'a özel QR — tara ve sipariş ver`
+            : 'QR\u2019ı tara, masandan sipariş ver'}
         </h3>
         <div
           style={{
@@ -1337,7 +1435,10 @@ type LayoutVariantProps = {
   pageNumber?: number;
   totalPages?: number;
   qrDataUrl: string | null;
+  qrUrlOverride?: string;
+  tableLabel?: string;
   logoDataUrl: string | null;
+  logoMode?: 'original' | 'white-frame' | 'monogram';
   showDietaryTags: boolean;
   showSinceBadge: boolean;
   footerVariant: FooterVariant;
@@ -1363,7 +1464,10 @@ const PhotoHeroLayout = forwardRef<HTMLDivElement, LayoutVariantProps>(
       pageNumber,
       totalPages,
       qrDataUrl,
+      qrUrlOverride,
+      tableLabel,
       logoDataUrl,
+      logoMode = 'original',
       showDietaryTags: _showDietaryTags,
       showSinceBadge,
       footerVariant,
@@ -1375,6 +1479,7 @@ const PhotoHeroLayout = forwardRef<HTMLDivElement, LayoutVariantProps>(
     ref
   ) {
     const HERO_HEIGHT_PCT = isFirstPage ? 26 : 0; // ilk sayfada hero %26
+    const showLogoImage = logoMode !== 'monogram' && !!logoDataUrl;
     return (
       <div
         ref={ref}
@@ -1439,23 +1544,27 @@ const PhotoHeroLayout = forwardRef<HTMLDivElement, LayoutVariantProps>(
                 height: '32mm',
                 borderRadius: '50%',
                 border: `2px solid ${t.colors.accent}`,
-                background: 'rgba(245,236,220,0.07)',
+                background:
+                  logoMode === 'white-frame' && showLogoImage
+                    ? '#FFFFFF'
+                    : 'rgba(245,236,220,0.07)',
                 display: 'grid',
                 placeItems: 'center',
                 position: 'relative',
                 zIndex: 2,
               }}
             >
-              {logoDataUrl ? (
+              {showLogoImage ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={logoDataUrl}
+                  src={logoDataUrl!}
                   alt={data.business.name}
                   style={{
                     width: '24mm',
                     height: '24mm',
                     objectFit: 'contain',
-                    filter: 'brightness(1.1)',
+                    filter:
+                      logoMode === 'white-frame' ? 'none' : 'brightness(1.1)',
                   }}
                 />
               ) : (
@@ -1600,10 +1709,11 @@ const PhotoHeroLayout = forwardRef<HTMLDivElement, LayoutVariantProps>(
             <Footer
               t={t}
               business={data.business}
-              qrUrl={data.qr_url}
+              qrUrl={qrUrlOverride || data.qr_url}
               qrDataUrl={qrDataUrl}
               variant={footerVariant}
               customSignature={customSignature}
+              tableLabel={tableLabel}
             />
           )}
 
@@ -1736,7 +1846,10 @@ const BoldBadgeLayout = forwardRef<HTMLDivElement, LayoutVariantProps>(
       pageNumber,
       totalPages,
       qrDataUrl,
+      qrUrlOverride,
+      tableLabel,
       logoDataUrl,
+      logoMode = 'original',
       showDietaryTags: _showDietaryTags,
       showSinceBadge: _showSinceBadge,
       footerVariant,
@@ -1747,6 +1860,7 @@ const BoldBadgeLayout = forwardRef<HTMLDivElement, LayoutVariantProps>(
     },
     ref
   ) {
+    const showLogoImage = logoMode !== 'monogram' && !!logoDataUrl;
     return (
       <div
         ref={ref}
@@ -1793,17 +1907,24 @@ const BoldBadgeLayout = forwardRef<HTMLDivElement, LayoutVariantProps>(
                   width: '22mm',
                   height: '22mm',
                   borderRadius: '50%',
-                  background: t.colors.line,
+                  background:
+                    logoMode === 'white-frame' && showLogoImage
+                      ? '#FFFFFF'
+                      : t.colors.line,
                   display: 'grid',
                   placeItems: 'center',
                   position: 'relative',
                   flexShrink: 0,
+                  border:
+                    logoMode === 'white-frame' && showLogoImage
+                      ? `1px solid ${t.colors.line}`
+                      : 'none',
                 }}
               >
-                {logoDataUrl ? (
+                {showLogoImage ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={logoDataUrl}
+                    src={logoDataUrl!}
                     alt={data.business.name}
                     style={{
                       width: '17mm',
@@ -1812,6 +1933,18 @@ const BoldBadgeLayout = forwardRef<HTMLDivElement, LayoutVariantProps>(
                       borderRadius: '50%',
                     }}
                   />
+                ) : logoMode === 'monogram' ? (
+                  <span
+                    style={{
+                      fontFamily: t.fonts.serif,
+                      fontStyle: t.fonts.italicHeadings ? 'italic' : 'normal',
+                      fontSize: '24pt',
+                      fontWeight: 400,
+                      color: t.colors.paper,
+                    }}
+                  >
+                    {data.business.name.charAt(0).toUpperCase()}
+                  </span>
                 ) : (
                   <span
                     style={{
@@ -1945,7 +2078,9 @@ const BoldBadgeLayout = forwardRef<HTMLDivElement, LayoutVariantProps>(
                     opacity: 0.85,
                   }}
                 >
-                  DİJİTAL MENÜ · SİPARİŞ
+                  {tableLabel
+                    ? `DİJİTAL MENÜ · ${tableLabel.toUpperCase()}`
+                    : 'DİJİTAL MENÜ · SİPARİŞ'}
                 </div>
                 <div
                   style={{
@@ -1956,7 +2091,7 @@ const BoldBadgeLayout = forwardRef<HTMLDivElement, LayoutVariantProps>(
                     lineHeight: 1.1,
                   }}
                 >
-                  {data.qr_url
+                  {(qrUrlOverride || data.qr_url)
                     .replace(/^https?:\/\//, '')
                     .toLowerCase()}
                 </div>
@@ -2105,7 +2240,10 @@ const EditorialLayout = forwardRef<HTMLDivElement, LayoutVariantProps>(
       pageNumber,
       totalPages,
       qrDataUrl,
+      qrUrlOverride,
+      tableLabel,
       logoDataUrl,
+      logoMode = 'original',
       showDietaryTags,
       showSinceBadge,
       footerVariant,
@@ -2116,6 +2254,7 @@ const EditorialLayout = forwardRef<HTMLDivElement, LayoutVariantProps>(
     },
     ref
   ) {
+    const showLogoImage = logoMode !== 'monogram' && !!logoDataUrl;
     return (
       <div
         ref={ref}
@@ -2184,7 +2323,7 @@ const EditorialLayout = forwardRef<HTMLDivElement, LayoutVariantProps>(
                 flex: 1,
               }}
             >
-              {logoDataUrl ? (
+              {showLogoImage ? (
                 <div
                   style={{
                     width: '40mm',
@@ -2198,7 +2337,7 @@ const EditorialLayout = forwardRef<HTMLDivElement, LayoutVariantProps>(
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={logoDataUrl}
+                    src={logoDataUrl!}
                     alt={data.business.name}
                     style={{
                       width: '32mm',
@@ -2368,10 +2507,11 @@ const EditorialLayout = forwardRef<HTMLDivElement, LayoutVariantProps>(
             <Footer
               t={t}
               business={data.business}
-              qrUrl={data.qr_url}
+              qrUrl={qrUrlOverride || data.qr_url}
               qrDataUrl={qrDataUrl}
               variant={footerVariant}
               customSignature={customSignature}
+              tableLabel={tableLabel}
             />
           )}
 
