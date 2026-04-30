@@ -303,6 +303,64 @@ export function PrintableMenuClient({ data }: Props) {
           allergen/şefin önerisi rozetlerini aç-kapat. Çoklu sayfa
           otomatik. Tek tıkla 3 boyut hepsi indir.
         </p>
+
+        {/* Özel tasarım CTA */}
+        <a
+          href="/panel/menu-tasarim/ozel"
+          className="mt-5 inline-flex items-center gap-3 px-4 py-3 rounded-[10px] transition-all hover:opacity-90 group"
+          style={{
+            background:
+              'color-mix(in srgb, var(--accent) 8%, var(--card))',
+            border:
+              '1px solid color-mix(in srgb, var(--accent) 28%, var(--line))',
+            textDecoration: 'none',
+          }}
+        >
+          <span
+            className="grid place-items-center flex-shrink-0"
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 8,
+              background: 'var(--accent)',
+              color: 'var(--paper)',
+              fontSize: 16,
+              fontWeight: 700,
+            }}
+          >
+            ⤴
+          </span>
+          <div className="flex-1">
+            <div
+              className="text-[10px] uppercase font-bold mb-0.5"
+              style={{
+                fontFamily: 'var(--f-mono)',
+                letterSpacing: '0.16em',
+                color: 'var(--accent)',
+              }}
+            >
+              ALTERNATİF
+            </div>
+            <div
+              className="text-[14px] font-semibold"
+              style={{ color: 'var(--ink)' }}
+            >
+              Kendi tasarımım var
+            </div>
+            <div
+              className="text-[11px] mt-0.5"
+              style={{ color: 'var(--ink-3)' }}
+            >
+              Tasarımcına yaptırdıysan PNG/JPG/PDF yükle, altına QR ekleyelim.
+            </div>
+          </div>
+          <span
+            className="flex-shrink-0 transition-transform group-hover:translate-x-1"
+            style={{ color: 'var(--accent)', fontSize: 18 }}
+          >
+            →
+          </span>
+        </a>
       </div>
 
       {/* Boş veri uyarısı */}

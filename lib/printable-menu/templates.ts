@@ -7,7 +7,15 @@
  * Boyutlar: a4 dikey, a4 yatay, a5, plate
  */
 
-export type TemplateId = 'classic' | 'elite' | 'modern' | 'vintage' | 'minimal';
+export type TemplateId =
+  | 'classic'
+  | 'elite'
+  | 'modern'
+  | 'vintage'
+  | 'minimal'
+  | 'photohero'
+  | 'boldbadge'
+  | 'editorial';
 export type PaperSize = 'a4' | 'a4_landscape' | 'a5' | 'plate';
 export type HeaderVariant = 'centered' | 'split' | 'monogram';
 export type FooterVariant = 'minimal' | 'social' | 'full';
@@ -86,6 +94,8 @@ export type TemplateSpec = {
     showWatermark: boolean;
     qrFrame: 'plain' | 'bordered' | 'badge' | 'corner';
   };
+  // Layout karakter — bazı şablonlar farklı düzeni tercih ediyor
+  layout?: 'standard' | 'photo-hero' | 'bold-badge' | 'editorial';
   preview: {
     paper: string;
     ink: string;
@@ -272,12 +282,137 @@ const minimal: TemplateSpec = {
   ornamentChar: '◆',
 };
 
+// ============================================================
+// 6. PHOTO HERO — üstte mekan fotoğrafı, altında menü
+// (Beyaz Kahve tarzı)
+// ============================================================
+const photohero: TemplateSpec = {
+  id: 'photohero',
+  name: 'Foto Hero',
+  description:
+    'Üstte mekan fotoğrafı, altta menü. Ambiyans + içerik bir arada.',
+  colors: {
+    paper: '#1F1B17',
+    ink: '#F4ECDC',
+    ink_soft: '#C9C0AB',
+    ink_muted: '#8E8674',
+    accent: '#D4A453', // sıcak amber
+    line: '#3A332B',
+    surface: '#26221C',
+    chef: '#D4A453',
+  },
+  fonts: {
+    serif: '"Playfair Display", "Cormorant Garamond", Georgia, serif',
+    sans: '"Inter", system-ui, sans-serif',
+    mono: 'ui-monospace, "SF Mono", Menlo, monospace',
+    italicHeadings: false,
+  },
+  style: {
+    radius: 0,
+    productGap: 3,
+    categoryGap: 10,
+    pagePadding: 14,
+    showDotLeaders: true,
+    showProductBorders: false,
+    showWatermark: false,
+    qrFrame: 'bordered',
+  },
+  layout: 'photo-hero',
+  preview: { paper: '#1F1B17', ink: '#F4ECDC', accent: '#D4A453' },
+  chefMark: '✦',
+  ornamentChar: '✦',
+};
+
+// ============================================================
+// 7. BOLD BADGE — büyük "MENÜ", logo rozet, iki sütun
+// (Moda Kafe tarzı)
+// ============================================================
+const boldbadge: TemplateSpec = {
+  id: 'boldbadge',
+  name: 'Bold Badge',
+  description:
+    'Büyük tipografi "MENÜ", logo rozet. Modern, iddialı, fast-casual.',
+  colors: {
+    paper: '#F5F2EB',
+    ink: '#0F0F0F',
+    ink_soft: '#3D3D3D',
+    ink_muted: '#7A7A7A',
+    accent: '#E8753A', // turuncu
+    line: '#1F1F1F',
+    surface: '#FFFFFF',
+    chef: '#E8753A',
+  },
+  fonts: {
+    serif: '"Inter", system-ui, sans-serif',
+    sans: '"Inter", system-ui, sans-serif',
+    mono: '"JetBrains Mono", ui-monospace, monospace',
+    italicHeadings: false,
+  },
+  style: {
+    radius: 0,
+    productGap: 0, // ürünler arasında çizgi var
+    categoryGap: 8,
+    pagePadding: 12,
+    showDotLeaders: false,
+    showProductBorders: false,
+    showWatermark: false,
+    qrFrame: 'plain',
+  },
+  layout: 'bold-badge',
+  preview: { paper: '#F5F2EB', ink: '#0F0F0F', accent: '#E8753A' },
+  chefMark: '◆',
+  ornamentChar: '◆',
+};
+
+// ============================================================
+// 8. EDITORIAL — sol foto + sağ içerik dergi tarzı
+// ============================================================
+const editorial: TemplateSpec = {
+  id: 'editorial',
+  name: 'Editorial',
+  description:
+    'Dergi tarzı, sol foto + sağ menü. Sayı/tarih damgalı, butik.',
+  colors: {
+    paper: '#FBF8F3',
+    ink: '#1C1C1C',
+    ink_soft: '#3A3A3A',
+    ink_muted: '#8A8A8A',
+    accent: '#9B2D2D', // bordo
+    line: '#D6D0C2',
+    surface: '#FFFFFF',
+    chef: '#9B2D2D',
+  },
+  fonts: {
+    serif: '"DM Serif Display", "Playfair Display", Georgia, serif',
+    sans: '"Inter", system-ui, sans-serif',
+    mono: '"JetBrains Mono", ui-monospace, monospace',
+    italicHeadings: true,
+  },
+  style: {
+    radius: 0,
+    productGap: 4,
+    categoryGap: 12,
+    pagePadding: 14,
+    showDotLeaders: true,
+    showProductBorders: false,
+    showWatermark: false,
+    qrFrame: 'corner',
+  },
+  layout: 'editorial',
+  preview: { paper: '#FBF8F3', ink: '#1C1C1C', accent: '#9B2D2D' },
+  chefMark: '※',
+  ornamentChar: '✦',
+};
+
 export const TEMPLATES: Record<TemplateId, TemplateSpec> = {
   classic,
   elite,
   modern,
   vintage,
   minimal,
+  photohero,
+  boldbadge,
+  editorial,
 };
 
 export const TEMPLATE_LIST: TemplateSpec[] = [
@@ -286,6 +421,9 @@ export const TEMPLATE_LIST: TemplateSpec[] = [
   modern,
   vintage,
   minimal,
+  photohero,
+  boldbadge,
+  editorial,
 ];
 
 export const SIZE_LIST: SizeSpec[] = [

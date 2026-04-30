@@ -67,6 +67,83 @@ export const PrintMenuDocument = forwardRef<HTMLDivElement, Props>(
     const isFirstPage = !pageNumber || pageNumber === 1;
     const isLastPage = !pageNumber || pageNumber === (totalPages || 1);
 
+    // Yeni layout'lar — kendi gövdelerini render eder
+    if (t.layout === 'photo-hero') {
+      return (
+        <PhotoHeroLayout
+          ref={ref}
+          data={data}
+          template={t}
+          size={s}
+          cats={cats}
+          isMultiPage={isMultiPage}
+          isFirstPage={isFirstPage}
+          isLastPage={isLastPage}
+          pageNumber={pageNumber}
+          totalPages={totalPages}
+          qrDataUrl={qrDataUrl}
+          logoDataUrl={logoDataUrl}
+          showDietaryTags={showDietaryTags}
+          showSinceBadge={showSinceBadge}
+          footerVariant={footerVariant}
+          customSignature={customSignature}
+          scale={scale}
+          widthPx={widthPx}
+          heightPx={heightPx}
+        />
+      );
+    }
+    if (t.layout === 'bold-badge') {
+      return (
+        <BoldBadgeLayout
+          ref={ref}
+          data={data}
+          template={t}
+          size={s}
+          cats={cats}
+          isMultiPage={isMultiPage}
+          isFirstPage={isFirstPage}
+          isLastPage={isLastPage}
+          pageNumber={pageNumber}
+          totalPages={totalPages}
+          qrDataUrl={qrDataUrl}
+          logoDataUrl={logoDataUrl}
+          showDietaryTags={showDietaryTags}
+          showSinceBadge={showSinceBadge}
+          footerVariant={footerVariant}
+          customSignature={customSignature}
+          scale={scale}
+          widthPx={widthPx}
+          heightPx={heightPx}
+        />
+      );
+    }
+    if (t.layout === 'editorial') {
+      return (
+        <EditorialLayout
+          ref={ref}
+          data={data}
+          template={t}
+          size={s}
+          cats={cats}
+          isMultiPage={isMultiPage}
+          isFirstPage={isFirstPage}
+          isLastPage={isLastPage}
+          pageNumber={pageNumber}
+          totalPages={totalPages}
+          qrDataUrl={qrDataUrl}
+          logoDataUrl={logoDataUrl}
+          showDietaryTags={showDietaryTags}
+          showSinceBadge={showSinceBadge}
+          footerVariant={footerVariant}
+          customSignature={customSignature}
+          scale={scale}
+          widthPx={widthPx}
+          heightPx={heightPx}
+        />
+      );
+    }
+
     return (
       <div
         ref={ref}
@@ -1245,3 +1322,1083 @@ function CornerOrnament({
     </div>
   );
 }
+
+// ============================================================
+// LAYOUT VARIANT TYPES
+// ============================================================
+type LayoutVariantProps = {
+  data: PrintableMenuData;
+  template: TemplateSpec;
+  size: { width_mm: number; height_mm: number; isLandscape: boolean };
+  cats: PrintableMenuCategory[];
+  isMultiPage: boolean;
+  isFirstPage: boolean;
+  isLastPage: boolean;
+  pageNumber?: number;
+  totalPages?: number;
+  qrDataUrl: string | null;
+  logoDataUrl: string | null;
+  showDietaryTags: boolean;
+  showSinceBadge: boolean;
+  footerVariant: FooterVariant;
+  customSignature: string;
+  scale?: number;
+  widthPx: number;
+  heightPx: number;
+};
+
+// ============================================================
+// PHOTO HERO LAYOUT
+// Üstte mekan fotoğrafı (logo + isim overlay), altında menü
+// ============================================================
+const PhotoHeroLayout = forwardRef<HTMLDivElement, LayoutVariantProps>(
+  function PhotoHeroLayout(
+    {
+      data,
+      template: t,
+      cats,
+      isFirstPage,
+      isLastPage,
+      isMultiPage,
+      pageNumber,
+      totalPages,
+      qrDataUrl,
+      logoDataUrl,
+      showDietaryTags,
+      showSinceBadge,
+      footerVariant,
+      customSignature,
+      scale = 1,
+      widthPx,
+      heightPx,
+    },
+    ref
+  ) {
+    const HERO_HEIGHT_PCT = isFirstPage ? 26 : 0; // ilk sayfada hero %26
+    return (
+      <div
+        ref={ref}
+        data-print-doc
+        style={{
+          width: widthPx,
+          height: heightPx,
+          background: t.colors.paper,
+          color: t.colors.ink,
+          fontFamily: t.fonts.sans,
+          position: 'relative',
+          overflow: 'hidden',
+          transform: scale !== 1 ? `scale(${scale})` : undefined,
+          transformOrigin: 'top left',
+          boxShadow:
+            scale !== 1
+              ? '0 30px 60px -20px rgba(0,0,0,0.3), 0 4px 12px rgba(0,0,0,0.08)'
+              : 'none',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
+        {/* HERO - sadece 1. sayfada */}
+        {isFirstPage && (
+          <div
+            style={{
+              height: `${HERO_HEIGHT_PCT}%`,
+              background: `linear-gradient(135deg, #2A2218 0%, #1F1B17 50%, #2A2218 100%)`,
+              position: 'relative',
+              overflow: 'hidden',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            {/* Pattern - mekan fotoğrafı yokken simülasyon */}
+            <div
+              aria-hidden
+              style={{
+                position: 'absolute',
+                inset: 0,
+                opacity: 0.18,
+                backgroundImage: `radial-gradient(${t.colors.accent} 0.5px, transparent 0.5px), radial-gradient(${t.colors.accent} 0.5px, transparent 0.5px)`,
+                backgroundSize: '14px 14px',
+                backgroundPosition: '0 0, 7px 7px',
+              }}
+            />
+            {/* Vinyet kenar */}
+            <div
+              aria-hidden
+              style={{
+                position: 'absolute',
+                inset: 0,
+                background:
+                  'radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.5) 100%)',
+              }}
+            />
+            {/* Logo veya monogram dairesi */}
+            <div
+              style={{
+                width: '32mm',
+                height: '32mm',
+                borderRadius: '50%',
+                border: `2px solid ${t.colors.accent}`,
+                background: 'rgba(245,236,220,0.07)',
+                display: 'grid',
+                placeItems: 'center',
+                position: 'relative',
+                zIndex: 2,
+              }}
+            >
+              {logoDataUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={logoDataUrl}
+                  alt={data.business.name}
+                  style={{
+                    width: '24mm',
+                    height: '24mm',
+                    objectFit: 'contain',
+                    filter: 'brightness(1.1)',
+                  }}
+                />
+              ) : (
+                <span
+                  style={{
+                    fontFamily: t.fonts.serif,
+                    fontSize: '36pt',
+                    fontWeight: 400,
+                    color: t.colors.accent,
+                  }}
+                >
+                  {data.business.name.charAt(0).toUpperCase()}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* PAPER PANEL — menü ana gövdesi */}
+        <div
+          style={{
+            flex: 1,
+            background: t.colors.paper,
+            padding: `${t.style.pagePadding}mm`,
+            paddingTop: isFirstPage ? '8mm' : `${t.style.pagePadding}mm`,
+            display: 'flex',
+            flexDirection: 'column',
+            position: 'relative',
+            zIndex: 1,
+          }}
+        >
+          {/* İsim + slogan blok */}
+          {isFirstPage && (
+            <div
+              style={{
+                textAlign: 'center',
+                marginBottom: '8mm',
+                paddingBottom: '4mm',
+                borderBottom: `1px solid ${t.colors.line}`,
+              }}
+            >
+              <h1
+                style={{
+                  fontFamily: t.fonts.serif,
+                  fontSize: '36pt',
+                  fontWeight: 400,
+                  color: t.colors.ink,
+                  letterSpacing: '-0.01em',
+                  marginBottom: '2mm',
+                  lineHeight: 1.0,
+                }}
+              >
+                {data.business.name}
+              </h1>
+              {showSinceBadge && (
+                <div
+                  style={{
+                    fontFamily: t.fonts.mono,
+                    fontSize: '7.5pt',
+                    fontWeight: 700,
+                    letterSpacing: '0.4em',
+                    color: t.colors.accent,
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  KURULUŞ {data.business.created_year}
+                </div>
+              )}
+              {data.business.tagline_tr && (
+                <p
+                  style={{
+                    fontFamily: t.fonts.sans,
+                    fontStyle: 'italic',
+                    fontSize: '9.5pt',
+                    color: t.colors.ink_soft,
+                    marginTop: '2mm',
+                  }}
+                >
+                  {data.business.tagline_tr}
+                </p>
+              )}
+            </div>
+          )}
+
+          {isMultiPage && !isFirstPage && (
+            <div
+              style={{
+                fontFamily: t.fonts.mono,
+                fontSize: '8pt',
+                fontWeight: 700,
+                letterSpacing: '0.16em',
+                color: t.colors.accent,
+                textTransform: 'uppercase',
+                textAlign: 'center',
+                paddingBottom: '4mm',
+                borderBottom: `1px solid ${t.colors.line}`,
+                marginBottom: '4mm',
+              }}
+            >
+              {data.business.name} — Sayfa {pageNumber} / {totalPages}
+            </div>
+          )}
+
+          {/* CONTENT - 2 SÜTUN ürünler */}
+          <div
+            style={{
+              flex: 1,
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: '8mm',
+              overflow: 'hidden',
+            }}
+          >
+            <div>
+              {cats
+                .filter((_, i) => i % 2 === 0)
+                .map((cat, idx) => (
+                  <PhotoHeroCategoryBlock
+                    key={cat.id}
+                    category={cat}
+                    template={t}
+                    isFirst={idx === 0}
+                    showDietaryTags={showDietaryTags}
+                  />
+                ))}
+            </div>
+            <div>
+              {cats
+                .filter((_, i) => i % 2 === 1)
+                .map((cat, idx) => (
+                  <PhotoHeroCategoryBlock
+                    key={cat.id}
+                    category={cat}
+                    template={t}
+                    isFirst={idx === 0}
+                    showDietaryTags={showDietaryTags}
+                  />
+                ))}
+            </div>
+          </div>
+
+          {/* FOOTER - sadece son sayfada */}
+          {isLastPage && (
+            <Footer
+              t={t}
+              business={data.business}
+              qrUrl={data.qr_url}
+              qrDataUrl={qrDataUrl}
+              variant={footerVariant}
+              customSignature={customSignature}
+            />
+          )}
+
+          {isMultiPage && !isLastPage && (
+            <div
+              style={{
+                fontFamily: t.fonts.mono,
+                fontSize: '7pt',
+                fontWeight: 700,
+                letterSpacing: '0.2em',
+                color: t.colors.ink_muted,
+                textTransform: 'uppercase',
+                textAlign: 'center',
+                paddingTop: '3mm',
+                borderTop: `1px solid ${t.colors.line}`,
+                marginTop: '3mm',
+              }}
+            >
+              Devamı sonraki sayfada →
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+);
+
+function PhotoHeroCategoryBlock({
+  category,
+  template: t,
+  isFirst,
+  showDietaryTags,
+}: {
+  category: PrintableMenuCategory;
+  template: TemplateSpec;
+  isFirst: boolean;
+  showDietaryTags: boolean;
+}) {
+  return (
+    <div style={{ marginTop: isFirst ? 0 : '8mm' }}>
+      <h2
+        style={{
+          fontFamily: t.fonts.serif,
+          fontSize: '14pt',
+          fontWeight: 400,
+          color: t.colors.accent,
+          letterSpacing: '0.02em',
+          marginBottom: '3mm',
+          lineHeight: 1.1,
+        }}
+      >
+        {category.name}
+      </h2>
+      <div>
+        {category.products.map((p, idx) => (
+          <div
+            key={p.id}
+            style={{
+              marginTop: idx === 0 ? 0 : '2mm',
+              display: 'flex',
+              alignItems: 'baseline',
+              gap: '2mm',
+            }}
+          >
+            <span
+              style={{
+                fontFamily: t.fonts.sans,
+                fontSize: '9pt',
+                fontWeight: 600,
+                color: t.colors.ink,
+                lineHeight: 1.2,
+              }}
+            >
+              {p.is_chef_recommend && (
+                <span style={{ color: t.colors.accent, marginRight: '1mm' }}>
+                  {t.chefMark}
+                </span>
+              )}
+              {p.name}
+              {p.spicy_level > 0 && (
+                <span
+                  style={{
+                    fontSize: '6.5pt',
+                    marginLeft: '1.5mm',
+                  }}
+                >
+                  {'🌶'.repeat(p.spicy_level)}
+                </span>
+              )}
+            </span>
+            <span
+              aria-hidden
+              style={{
+                flex: 1,
+                borderBottom: `1px dotted ${t.colors.ink_muted}`,
+                marginBottom: '3px',
+                opacity: 0.4,
+                minWidth: '4mm',
+              }}
+            />
+            <span
+              style={{
+                fontFamily: t.fonts.mono,
+                fontSize: '9pt',
+                fontWeight: 700,
+                color: t.colors.accent,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              ₺{p.price.toLocaleString('tr-TR')}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// BOLD BADGE LAYOUT
+// Logo rozet + büyük "MENÜ" yazısı + 2 sütun + alt CTA bandı
+// ============================================================
+const BoldBadgeLayout = forwardRef<HTMLDivElement, LayoutVariantProps>(
+  function BoldBadgeLayout(
+    {
+      data,
+      template: t,
+      cats,
+      isFirstPage,
+      isLastPage,
+      isMultiPage,
+      pageNumber,
+      totalPages,
+      qrDataUrl,
+      logoDataUrl,
+      showDietaryTags,
+      showSinceBadge,
+      footerVariant,
+      customSignature,
+      scale = 1,
+      widthPx,
+      heightPx,
+    },
+    ref
+  ) {
+    return (
+      <div
+        ref={ref}
+        data-print-doc
+        style={{
+          width: widthPx,
+          height: heightPx,
+          background: t.colors.paper,
+          color: t.colors.ink,
+          fontFamily: t.fonts.sans,
+          position: 'relative',
+          overflow: 'hidden',
+          transform: scale !== 1 ? `scale(${scale})` : undefined,
+          transformOrigin: 'top left',
+          boxShadow:
+            scale !== 1
+              ? '0 30px 60px -20px rgba(0,0,0,0.3), 0 4px 12px rgba(0,0,0,0.08)'
+              : 'none',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
+        <div
+          style={{
+            padding: `${t.style.pagePadding}mm`,
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          {/* HEADER - Badge rozet + MENÜ */}
+          {isFirstPage && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5mm',
+                marginBottom: '6mm',
+              }}
+            >
+              {/* Logo rozet */}
+              <div
+                style={{
+                  width: '22mm',
+                  height: '22mm',
+                  borderRadius: '50%',
+                  background: t.colors.line,
+                  display: 'grid',
+                  placeItems: 'center',
+                  position: 'relative',
+                  flexShrink: 0,
+                }}
+              >
+                {logoDataUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={logoDataUrl}
+                    alt={data.business.name}
+                    style={{
+                      width: '17mm',
+                      height: '17mm',
+                      objectFit: 'contain',
+                      borderRadius: '50%',
+                    }}
+                  />
+                ) : (
+                  <span
+                    style={{
+                      fontFamily: t.fonts.sans,
+                      fontSize: '14pt',
+                      fontWeight: 800,
+                      color: t.colors.paper,
+                      letterSpacing: '0.04em',
+                    }}
+                  >
+                    {data.business.name.toUpperCase().slice(0, 7)}
+                  </span>
+                )}
+              </div>
+              {/* MENÜ büyük yazı */}
+              <h1
+                style={{
+                  fontFamily: t.fonts.sans,
+                  fontSize: '64pt',
+                  fontWeight: 900,
+                  letterSpacing: '-0.04em',
+                  color: t.colors.line,
+                  lineHeight: 0.85,
+                  flex: 1,
+                }}
+              >
+                MENÜ
+              </h1>
+            </div>
+          )}
+
+          {isMultiPage && !isFirstPage && (
+            <div
+              style={{
+                fontFamily: t.fonts.mono,
+                fontSize: '8pt',
+                fontWeight: 700,
+                letterSpacing: '0.16em',
+                color: t.colors.accent,
+                textTransform: 'uppercase',
+                textAlign: 'center',
+                paddingBottom: '4mm',
+                borderBottom: `2px solid ${t.colors.line}`,
+                marginBottom: '4mm',
+              }}
+            >
+              {data.business.name} — Sayfa {pageNumber} / {totalPages}
+            </div>
+          )}
+
+          {/* 2 SÜTUN ürünler */}
+          <div
+            style={{
+              flex: 1,
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: '6mm',
+              borderTop: `2px solid ${t.colors.line}`,
+              paddingTop: '4mm',
+              overflow: 'hidden',
+            }}
+          >
+            <div>
+              {cats
+                .filter((_, i) => i % 2 === 0)
+                .map((cat, idx) => (
+                  <BoldBadgeCategoryBlock
+                    key={cat.id}
+                    category={cat}
+                    template={t}
+                    isFirst={idx === 0}
+                  />
+                ))}
+            </div>
+            <div>
+              {cats
+                .filter((_, i) => i % 2 === 1)
+                .map((cat, idx) => (
+                  <BoldBadgeCategoryBlock
+                    key={cat.id}
+                    category={cat}
+                    template={t}
+                    isFirst={idx === 0}
+                  />
+                ))}
+            </div>
+          </div>
+
+          {/* CTA bandı altta — accent renk turuncu blok */}
+          {isLastPage && (
+            <div
+              style={{
+                marginTop: '6mm',
+                background: t.colors.accent,
+                padding: '4mm 5mm',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5mm',
+              }}
+            >
+              {/* QR */}
+              {qrDataUrl && (
+                <div
+                  style={{
+                    background: '#fff',
+                    padding: '2mm',
+                    flexShrink: 0,
+                  }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={qrDataUrl}
+                    alt="QR"
+                    style={{
+                      width: '20mm',
+                      height: '20mm',
+                      display: 'block',
+                    }}
+                  />
+                </div>
+              )}
+              <div style={{ flex: 1, color: '#fff' }}>
+                <div
+                  style={{
+                    fontFamily: t.fonts.mono,
+                    fontSize: '7.5pt',
+                    fontWeight: 700,
+                    letterSpacing: '0.24em',
+                    textTransform: 'uppercase',
+                    marginBottom: '1.5mm',
+                    opacity: 0.85,
+                  }}
+                >
+                  DİJİTAL MENÜ · SİPARİŞ
+                </div>
+                <div
+                  style={{
+                    fontFamily: t.fonts.sans,
+                    fontSize: '14pt',
+                    fontWeight: 800,
+                    letterSpacing: '-0.01em',
+                    lineHeight: 1.1,
+                  }}
+                >
+                  {data.qr_url
+                    .replace(/^https?:\/\//, '')
+                    .toLowerCase()}
+                </div>
+                {(footerVariant === 'social' || footerVariant === 'full') && (
+                  <div
+                    style={{
+                      fontFamily: t.fonts.sans,
+                      fontSize: '8pt',
+                      marginTop: '1.5mm',
+                      opacity: 0.85,
+                    }}
+                  >
+                    {data.business.phone && `☎ ${data.business.phone}  `}
+                    {data.business.instagram && `@${data.business.instagram}`}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {isMultiPage && !isLastPage && (
+            <div
+              style={{
+                fontFamily: t.fonts.mono,
+                fontSize: '7pt',
+                fontWeight: 700,
+                letterSpacing: '0.2em',
+                color: t.colors.ink_muted,
+                textTransform: 'uppercase',
+                textAlign: 'center',
+                paddingTop: '3mm',
+                borderTop: `1px solid ${t.colors.line}`,
+                marginTop: '3mm',
+              }}
+            >
+              Devamı sonraki sayfada →
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+);
+
+function BoldBadgeCategoryBlock({
+  category,
+  template: t,
+  isFirst,
+}: {
+  category: PrintableMenuCategory;
+  template: TemplateSpec;
+  isFirst: boolean;
+}) {
+  return (
+    <div style={{ marginTop: isFirst ? 0 : '6mm' }}>
+      <h2
+        style={{
+          fontFamily: t.fonts.sans,
+          fontSize: '10pt',
+          fontWeight: 800,
+          letterSpacing: '0.18em',
+          textTransform: 'uppercase',
+          color: t.colors.ink,
+          textAlign: 'center',
+          marginBottom: '3mm',
+          paddingBottom: '2mm',
+          borderBottom: `1px solid ${t.colors.line}`,
+        }}
+      >
+        {category.name}
+      </h2>
+      <div>
+        {category.products.map((p, idx) => (
+          <div
+            key={p.id}
+            style={{
+              padding: '2mm 0',
+              borderBottom:
+                idx === category.products.length - 1
+                  ? 'none'
+                  : `1px dashed ${t.colors.line}`,
+              display: 'flex',
+              alignItems: 'baseline',
+              justifyContent: 'space-between',
+              gap: '2mm',
+            }}
+          >
+            <span
+              style={{
+                fontFamily: t.fonts.sans,
+                fontSize: '9pt',
+                fontWeight: 600,
+                color: t.colors.ink,
+                letterSpacing: '0.04em',
+                textTransform: 'uppercase',
+              }}
+            >
+              {p.is_chef_recommend && (
+                <span style={{ color: t.colors.accent, marginRight: '1mm' }}>
+                  {t.chefMark}
+                </span>
+              )}
+              {p.name}
+              {p.spicy_level > 0 && (
+                <span
+                  style={{
+                    fontSize: '7pt',
+                    marginLeft: '1mm',
+                  }}
+                >
+                  {'🌶'.repeat(p.spicy_level)}
+                </span>
+              )}
+            </span>
+            <span
+              style={{
+                fontFamily: t.fonts.mono,
+                fontSize: '9pt',
+                fontWeight: 800,
+                color: t.colors.accent,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {p.price.toLocaleString('tr-TR')}TL
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// EDITORIAL LAYOUT
+// Sol foto (logo bg) + sağ menü, dergi tarzı
+// ============================================================
+const EditorialLayout = forwardRef<HTMLDivElement, LayoutVariantProps>(
+  function EditorialLayout(
+    {
+      data,
+      template: t,
+      cats,
+      isFirstPage,
+      isLastPage,
+      isMultiPage,
+      pageNumber,
+      totalPages,
+      qrDataUrl,
+      logoDataUrl,
+      showDietaryTags,
+      showSinceBadge,
+      footerVariant,
+      customSignature,
+      scale = 1,
+      widthPx,
+      heightPx,
+    },
+    ref
+  ) {
+    return (
+      <div
+        ref={ref}
+        data-print-doc
+        style={{
+          width: widthPx,
+          height: heightPx,
+          background: t.colors.paper,
+          color: t.colors.ink,
+          fontFamily: t.fonts.sans,
+          position: 'relative',
+          overflow: 'hidden',
+          transform: scale !== 1 ? `scale(${scale})` : undefined,
+          transformOrigin: 'top left',
+          boxShadow:
+            scale !== 1
+              ? '0 30px 60px -20px rgba(0,0,0,0.3), 0 4px 12px rgba(0,0,0,0.08)'
+              : 'none',
+          display: 'flex',
+        }}
+      >
+        {/* SOL — foto/monogram */}
+        {isFirstPage && (
+          <div
+            style={{
+              width: '32%',
+              background: `linear-gradient(160deg, ${t.colors.ink} 0%, #2A1614 100%)`,
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+              padding: '12mm 8mm',
+              position: 'relative',
+            }}
+          >
+            {/* Üst: tarih damgası */}
+            <div>
+              <div
+                style={{
+                  fontFamily: t.fonts.mono,
+                  fontSize: '7pt',
+                  fontWeight: 700,
+                  letterSpacing: '0.32em',
+                  color: t.colors.accent,
+                  textTransform: 'uppercase',
+                  marginBottom: '2mm',
+                }}
+              >
+                NO. {String(data.business.created_year).slice(-2)} ·{' '}
+                {data.business.city || 'TR'}
+              </div>
+              <div
+                style={{
+                  width: '12mm',
+                  height: '1px',
+                  background: t.colors.accent,
+                }}
+              />
+            </div>
+
+            {/* Orta: logo veya monogram */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flex: 1,
+              }}
+            >
+              {logoDataUrl ? (
+                <div
+                  style={{
+                    width: '40mm',
+                    height: '40mm',
+                    background: t.colors.paper,
+                    borderRadius: '50%',
+                    display: 'grid',
+                    placeItems: 'center',
+                    padding: '4mm',
+                  }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={logoDataUrl}
+                    alt={data.business.name}
+                    style={{
+                      width: '32mm',
+                      height: '32mm',
+                      objectFit: 'contain',
+                    }}
+                  />
+                </div>
+              ) : (
+                <div
+                  style={{
+                    fontFamily: t.fonts.serif,
+                    fontStyle: 'italic',
+                    fontSize: '90pt',
+                    fontWeight: 400,
+                    color: t.colors.paper,
+                    lineHeight: 1,
+                    letterSpacing: '-0.04em',
+                  }}
+                >
+                  {data.business.name.charAt(0).toUpperCase()}
+                </div>
+              )}
+            </div>
+
+            {/* Alt: işletme adı dikey */}
+            <div>
+              <div
+                style={{
+                  width: '12mm',
+                  height: '1px',
+                  background: t.colors.accent,
+                  marginBottom: '2mm',
+                }}
+              />
+              <div
+                style={{
+                  fontFamily: t.fonts.serif,
+                  fontStyle: 'italic',
+                  fontSize: '20pt',
+                  fontWeight: 400,
+                  color: t.colors.paper,
+                  letterSpacing: '-0.01em',
+                  lineHeight: 1.05,
+                }}
+              >
+                {data.business.name}
+              </div>
+              {showSinceBadge && (
+                <div
+                  style={{
+                    fontFamily: t.fonts.mono,
+                    fontSize: '7pt',
+                    letterSpacing: '0.3em',
+                    color: t.colors.ink_muted,
+                    textTransform: 'uppercase',
+                    marginTop: '1mm',
+                  }}
+                >
+                  EST. {data.business.created_year}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* SAĞ — menü içerik */}
+        <div
+          style={{
+            flex: 1,
+            padding: `${t.style.pagePadding}mm`,
+            display: 'flex',
+            flexDirection: 'column',
+            position: 'relative',
+          }}
+        >
+          {/* Üst editorial başlık */}
+          {isFirstPage && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'baseline',
+                justifyContent: 'space-between',
+                paddingBottom: '3mm',
+                borderBottom: `2px solid ${t.colors.ink}`,
+                marginBottom: '5mm',
+              }}
+            >
+              <div>
+                <div
+                  style={{
+                    fontFamily: t.fonts.mono,
+                    fontSize: '7pt',
+                    letterSpacing: '0.3em',
+                    color: t.colors.accent,
+                    textTransform: 'uppercase',
+                    marginBottom: '1mm',
+                  }}
+                >
+                  THE MENU · ÇIKAR · OKU · SİPARİŞ VER
+                </div>
+                <h1
+                  style={{
+                    fontFamily: t.fonts.serif,
+                    fontStyle: 'italic',
+                    fontSize: '32pt',
+                    fontWeight: 400,
+                    color: t.colors.ink,
+                    letterSpacing: '-0.02em',
+                    lineHeight: 0.95,
+                  }}
+                >
+                  Le Menu
+                </h1>
+              </div>
+              <div
+                style={{
+                  fontFamily: t.fonts.mono,
+                  fontSize: '7pt',
+                  fontWeight: 700,
+                  letterSpacing: '0.16em',
+                  color: t.colors.ink_muted,
+                  textTransform: 'uppercase',
+                }}
+              >
+                VOL.
+                <br />
+                {data.business.created_year}
+              </div>
+            </div>
+          )}
+
+          {isMultiPage && !isFirstPage && (
+            <div
+              style={{
+                fontFamily: t.fonts.mono,
+                fontSize: '8pt',
+                fontWeight: 700,
+                letterSpacing: '0.16em',
+                color: t.colors.accent,
+                textTransform: 'uppercase',
+                paddingBottom: '4mm',
+                borderBottom: `1px solid ${t.colors.line}`,
+                marginBottom: '4mm',
+              }}
+            >
+              {data.business.name} — Sayfa {pageNumber} / {totalPages}
+            </div>
+          )}
+
+          {/* CONTENT - tek sütun ama editorial style */}
+          <div style={{ flex: 1, overflow: 'hidden' }}>
+            {cats.map((cat, idx) => (
+              <CategoryBlock
+                key={cat.id}
+                category={cat}
+                template={t}
+                isFirst={idx === 0}
+                templateId="editorial"
+                size={{ width_mm: 0, height_mm: 0, isLandscape: false }}
+                showDietaryTags={showDietaryTags}
+              />
+            ))}
+          </div>
+
+          {isLastPage && (
+            <Footer
+              t={t}
+              business={data.business}
+              qrUrl={data.qr_url}
+              qrDataUrl={qrDataUrl}
+              variant={footerVariant}
+              customSignature={customSignature}
+            />
+          )}
+
+          {isMultiPage && !isLastPage && (
+            <div
+              style={{
+                fontFamily: t.fonts.mono,
+                fontSize: '7pt',
+                fontWeight: 700,
+                letterSpacing: '0.2em',
+                color: t.colors.ink_muted,
+                textTransform: 'uppercase',
+                textAlign: 'center',
+                paddingTop: '3mm',
+                borderTop: `1px solid ${t.colors.line}`,
+                marginTop: '3mm',
+              }}
+            >
+              Devamı sonraki sayfada →
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+);

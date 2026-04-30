@@ -1,47 +1,172 @@
-ALEG TUR 8 — Migration düzeltmesi (text[] uyumlu)
-====================================================
+ALEG TUR 9 — 3 Yeni Şablon + Özel Tasarım Yükleme
+===================================================
 
-SORUN
------
+İki büyük yenilik:
 
-Migration çalıştırırken hata:
-  ERROR: column "dietary_tags" is of type text[] but expression is of type jsonb
+  1. 3 yeni şablon (Foto Hero, Bold Badge, Editorial)
+  2. Özel tasarım yükleme + otomatik QR ekleme (yeni sayfa: /panel/menu-tasarim/ozel)
 
-Sebep: dietary_tags kolonu daha önceden text[] (PostgreSQL native array)
-olarak oluşturulmuş. Migration ise jsonb değer atamaya çalışıyordu.
 
-ÇÖZÜM
------
+YENİ ŞABLONLAR
+==============
 
-Migration text[] tipiyle uyumlu hale getirildi:
-  • dietary_tags text[] DEFAULT '{}'::text[]   (jsonb yerine)
-  • UPDATE'lerde '{}'::text[] kullanıldı
+[1] FOTO HERO (photohero)
+   • Görsel 1 (Beyaz Kahve) tarzı
+   • Üstte koyu mekan ambiyans alanı + ortada logo dairesi
+   • Altta krem/koyu menü panel — ürünler 2 sütun
+   • Ürün listesi dot leader stili (klasik à la carte)
+   • Amber-gold accent rengi
 
-KOD TARAFI
-==========
+[2] BOLD BADGE (boldbadge)
+   • Görsel 2 (Moda Kafe) tarzı
+   • Logo rozet + dev "MENÜ" tipografi
+   • Ürünler 2 sütun, kategoriler ortalı uppercase
+   • Alt CTA bandı turuncu accent renk
+   • Modern, fast-casual
 
-Action ve client kodu zaten text[] uyumluydu (Array kullanılıyor),
-hiçbir şey değişmedi. Sadece migration düzeltildi.
+[3] EDITORIAL
+   • Dergi/butik tarzı
+   • Sol %32 koyu panel: tarih damgası + büyük monogram + işletme adı
+   • Sağ %68: "Le Menu" başlığı + ürünler tek sütun
+   • Bordo accent rengi
+   • Yıllık sayı (vol.) hissi
 
-Yani önceki Tur 8 paketindeki diğer dosyalar AYNEN GEÇERLİ.
-Sadece bu dosyayı eskiyle değiştir:
 
-  supabase/migrations/0033_product_dietary_tags.sql
+ÖZEL TASARIM YÜKLEME — ANA YENİLİK
+====================================
 
-Sonra Supabase SQL Editor'da çalıştır.
+Yeni rota: /panel/menu-tasarim/ozel
+(Ana sayfada büyük CTA banner ile yönlendirilir)
+
+İŞLEYİŞ:
+  1. İşletmeci kendi tasarladığı menüyü yükler
+     • Format: PNG, JPG veya PDF
+     • Maks: 8MB
+     • Drag & drop veya tıklayıp seç
+  2. Sistem altına otomatik QR kodu basar
+  3. Konum/boyut/çerçeve ayarlanabilir:
+     • Konum: alt-orta, alt-sağ, alt-sol, üst-sağ
+     • Boyut: küçük (90px) / orta (130px) / büyük (180px)
+     • Çerçeve rengi: beyaz / koyu (tasarımın rengiyle uyumsa diye)
+     • "Dijital menü" etiketi: aç/kapat
+  4. PDF/PNG indirilir — yazıcıya hazır
+
+TEKNİK:
+  • Supabase storage 'business-assets' bucket'ında
+    'custom-menus/{businessId}/' altına yüklenir
+  • businesses.custom_menu jsonb alanında metadata tutulur
+  • Görsel yükleme: html-to-image ile kanvasa çevirip QR overlay
+    eklenip indirilir (3x pixel ratio)
+  • PDF yükleme: şu an PDF'i olduğu gibi gösteriyoruz (önizleme yok),
+    indirmede de PDF'i indirip "altına ekle" pipeline'ı sonraki sürümde
+    (gerekirse pdf-lib ile yapılır)
+
+DB ALANLARI:
+  ALTER TABLE businesses ADD custom_menu jsonb DEFAULT NULL
+  
+  Şema:
+    {
+      url: string,           -- public URL
+      path: string,           -- storage path
+      uploaded_at: ISO,
+      filename: string,
+      mime: 'image/png' | 'image/jpeg' | 'application/pdf',
+      width?: number,
+      height?: number
+    }
+
+
+PANEL UI
+========
+
+ANA SAYFA (/panel/menu-tasarim) ÜZERİNDE DEĞİŞİM:
+  Hero başlığının altına "Kendi tasarımım var" CTA banner.
+  Tıklandığında /ozel rotasına gider.
+
+ÖZEL SAYFA (/panel/menu-tasarim/ozel):
+
+  [Sol panel - 400px]                    [Sağ panel - önizleme]
+  ┌─────────────────────────┐            ┌──────────────────────────┐
+  │ ⤴ Drag & drop alanı     │            │                          │
+  │    veya                 │            │   [Yüklenen görsel]      │
+  │ ╔═════════════════╗     │            │                          │
+  │ ║ Yüklü tasarım   ║     │            │   ┌──────────┐           │
+  │ ║ menu.png        ║     │            │   │   QR     │ ← overlay │
+  │ ║ Değiştir / Sil  ║     │            │   └──────────┘           │
+  │ ╚═════════════════╝     │            │                          │
+  │                          │            │   (canlı önizleme)       │
+  │ QR Konumu (4 buton)     │            │                          │
+  │ QR Boyutu (3 buton)     │            └──────────────────────────┘
+  │ QR Çerçeve (2 buton)    │
+  │ Etiket (toggle)         │
+  │                          │
+  │ [PDF indir]             │
+  │ [PNG indir]             │
+  └─────────────────────────┘
+
+
+KURULUM SIRASI
+===============
+
+[1] DB MIGRATION:
+    Supabase SQL Editor → 0034_business_custom_menu.sql → run
+
+[2] DOSYALAR:
+    YENİ:
+      supabase/migrations/0034_business_custom_menu.sql
+      lib/actions/custom-menu.ts
+      app/panel/(shell)/menu-tasarim/ozel/page.tsx
+      app/panel/(shell)/menu-tasarim/ozel/client.tsx
+    
+    GÜNCELLEMELER (üzerine yaz):
+      lib/printable-menu/templates.ts
+      lib/printable-menu/print-menu-document.tsx
+      app/panel/(shell)/menu-tasarim/client.tsx
+
 
 PUSH
 ====
 
-  git add supabase/migrations/0033_product_dietary_tags.sql
-  git commit -m "fix: tur 8 migration - dietary_tags as text[] not jsonb"
+  git add .
+  git commit -m "feat: tur 9 - 3 new templates + custom menu upload with QR"
   git push origin main
+
 
 TEST
 ====
 
-1. Supabase SQL Editor'da migration'ı çalıştır
-2. Hata vermez ✅
-3. /panel/menu/urunler → ürün düzenle
-4. Diyet etiketleri seç + kaydet → DB'ye yazılır
-5. /panel/menu-tasarim → önizlemede rozetler görünür
+[A] Yeni şablonlar:
+    1. /panel/menu-tasarim
+    2. ✅ Şablon listesinde 8 şablon görünmeli (5 eski + 3 yeni)
+    3. "Foto Hero" seç → üstte koyu hero alan, altta menü
+    4. "Bold Badge" seç → büyük MENÜ + logo rozet
+    5. "Editorial" seç → sol koyu panel + sağ menü
+
+[B] PDF/PNG indir:
+    Her şablon için A4 indir → çıktı doğru görünmeli
+    Çoklu sayfa hâlâ çalışmalı (eski şablonlar gibi)
+
+[C] Özel tasarım yükleme:
+    1. /panel/menu-tasarim → "Kendi tasarımım var" CTA tıkla
+    2. /panel/menu-tasarim/ozel sayfası açılmalı
+    3. Bir PNG sürükle bırak → yüklensin
+    4. Önizleme alanında görsel + QR overlay görünmeli
+    5. QR konumunu değiştir → anında değişmeli
+    6. PDF indir → görselin altında QR'lı PDF iniyor
+
+[D] PDF dosya:
+    1. PDF yükle
+    2. ✅ Bilgi mesajı: "PDF önizlemesi şu an mevcut değil"
+    3. "PDF'i aç" butonu çalışmalı
+
+[E] Silme:
+    1. Yüklü dosyayı sil
+    2. ✅ Drag & drop alanı tekrar görünmeli
+
+
+SONRAKİ ADIMLAR
+================
+
+İlerleyen sürümde PDF custom menü için pdf-lib ile son sayfasına
+otomatik QR şeridi eklenebilir. Şu an sadece görsel (PNG/JPG)
+upload'larda canlı QR overlay çalışıyor.
