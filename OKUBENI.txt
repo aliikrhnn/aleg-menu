@@ -1,73 +1,84 @@
-ALEG TUR 17fg — Çoklu Kalemden Partial İkram + İptal
-======================================================
-
-Önceki Tur 17f (sadece ikram) genişletildi — İPTAL için de
-aynı partial qty mantığı eklendi.
+ALEG TUR 17g — Partial İkram/İptal Modal Tabanlı (FIX)
+==========================================================
 
 SORUN
 =====
 
-Kalem `2× am suyu` (qty=2) tek satır olarak görünüyor.
-Kasiyer bu satırı seçip:
-  • ★ İkram'a basınca → ikisi birden ikram (yanlış)
-  • × İptal'e basınca → ikisi birden iptal (yanlış)
+Tur 17fg'de partial ikram ve iptal için window.prompt() kullanılmıştı.
+Ama prompt() bazı tarayıcılarda (özellikle PWA modunda kasiyerin tablet'i
+veya Safari/iOS) ENGELLENİYOR veya görünmüyor.
 
-Bazen sadece 1 adet ikram veya iptal etmek istiyor.
+Sonuç: Kasiyer 2× kalemi seçip ★ İkram'a basınca prompt çıkmıyor,
+ve direkt "tüm seçili kalemler" akışına düşüyor → ikisi birden ikram!
+
+Aynı durum × İptal için de geçerli.
 
 
-ÇÖZÜM
-======
+ÇÖZÜM — TASARIM TUTARLI MODAL
+================================
 
-İki action'da da (makeItemsComplimentary, cancelOrderItems)
-opsiyonel `partialQty` parametresi:
+prompt() yerine güzel bir modal:
 
-  Tek kalem + qty > 1 seçili + partialQty < origQty:
-    → Mevcut kalem: quantity = partialQty, ikram/iptal
-    → Yeni satır:   quantity = (orig - partialQty), normal
+  ┌─────────────────────────────────────┐
+  │  İKRAM ADEDİ SEÇ                    │
+  │  am suyu                            │
+  │  Toplam 2 adet var. Kaç adet ikram? │
+  │                                     │
+  │      [−]    1    [+]                │
+  │                                     │
+  │      [1]   [2]                      │ ← hızlı seçim
+  │                                     │
+  │  1 adet ikram edilecek,             │
+  │  1 adet normal kalır                │
+  │                                     │
+  │  [Vazgeç]    [★ İKRAM ET]           │
+  └─────────────────────────────────────┘
 
-UI tarafında her iki butonda (★ İkram, × İptal) prompt çıkıyor:
-  "X — toplam N adet var. Kaç adet ikram/iptal?"
+Avantajlar:
+  ✓ Her tarayıcıda çalışır (prompt'un PWA sorunu yok)
+  ✓ Görsel olarak ne yapıldığı net (1 ikram, 1 normal kalır)
+  ✓ Hızlı seçim chip'leri (1, 2, 3, ... totalQty)
+  ✓ +/- butonları (büyük dokunma alanı, tablet uyumlu)
+  ✓ Modal görünmüyorsa Tur 17g deploy edilmemiş demektir
+    → kullanıcı kolayca teşhis eder
 
 
 KOD DEĞİŞİKLİKLERİ
 ==================
 
-[1] lib/actions/tables-status.ts
+[1] app/kasa/table-detail-modal.tsx
 
-  ▸ makeItemsComplimentary
-    • Yeni opsiyonel input: partialQty?: number
-    • Tek kalem + partialQty < origQty → kalemi böl:
-      - UPDATE: quantity = giftQty, is_complimentary=true
-      - INSERT: quantity = remaining, is_complimentary=false
-    • Order subtotal/total/complimentary_total güncellenir
-    • Audit log: details.partial = true, originalQty
-    • INSERT başarısızsa rollback
+  ▸ State eklendi:
+    const [partialQtyContext, setPartialQtyContext] = useState<{
+      mode: 'gift' | 'cancel';
+      orderId: string;
+      itemId: string;
+      productName: string;
+      totalQty: number;
+      qty: number;
+    } | null>(null);
 
-  ▸ cancelOrderItems  
-    • Aynı partialQty parametresi
-    • Tek kalem + partialQty < origQty → kalemi böl:
-      - UPDATE: quantity = cancelQty, status='cancelled', cancel_reason
-      - INSERT: quantity = remaining, status normal
-    • Eğer kalem ikramlıysa: complimentary_total düşer (subtotal/total değil)
-    • Eğer kalem normal ise: subtotal/total düşer
-    • cancel_reason kolonu yoksa fallback (sadece status)
-    • Audit log: details.partial = true, originalQty
-    • INSERT başarısızsa rollback
+  ▸ ESC handler'a partialQtyContext eklendi.
 
-[2] app/kasa/table-detail-modal.tsx
+  ▸ ★ İkram butonu:
+    Önceki: window.prompt(...) → bazı tarayıcılarda çalışmıyor
+    Sonraki: setPartialQtyContext({ mode: 'gift', ... })
+             → React-render modal gösterir, garantili çalışır.
 
-  Hem ★ İkram hem × İptal butonu için aynı UX:
-    
-    Tek kalem + qty > 1 seçili:
-      → window.prompt: "Kaç adet?"
-      → Validasyon: 1 ile totalQty arası tam sayı
-      → Onay diyaloğu (iptal için tone:'danger')
-      → action({..., partialQty: X})
-      → Toast: "X adet ürünadı ikram/iptal edildi"
-    
-    Çoklu kalem veya qty=1:
-      → Eski davranış (hepsi ikram/iptal)
-      → Toast adet bazlı: "5 adet ikram edildi"
+  ▸ × İptal butonu: aynı şekilde modal'a yönlendirir.
+
+  ▸ Yeni component: PartialQtyPicker
+    - Renk teması: ikram → gold, iptal → kırmızı
+    - +/- butonları (1 ile totalQty arası)
+    - Hızlı seçim chip'leri
+    - "Tüm qty mi seçildi?" otomatik tespit:
+        - isFull = ctx.qty === ctx.totalQty
+        - isFull ise partialQty parametresi gönderilmez
+          (action eski full-qty akışına düşer, kalem bölünmez)
+    - Backdrop'a tıklayınca kapanır
+
+[2] lib/actions/tables-status.ts (değişmedi)
+   Tur 17fg'deki partialQty desteği zaten kalıyor.
 
 
 KURULUM
@@ -75,96 +86,76 @@ KURULUM
 
 Migration veya yeni paket gerekmez. 2 dosyayı üzerine yaz:
 
-  lib/actions/tables-status.ts
   app/kasa/table-detail-modal.tsx
+  lib/actions/tables-status.ts
 
 
 PUSH
 ====
 
-  git add lib/actions/tables-status.ts \
-    app/kasa/table-detail-modal.tsx
-  git commit -m "feat: tur 17fg - partial qty for both gift and cancel"
+  git add app/kasa/table-detail-modal.tsx lib/actions/tables-status.ts
+  git commit -m "fix: tur 17g - modal-based partial qty picker (replace prompt)"
   git push origin main
 
 
 TEST
 ====
 
-[A] PARTIAL İKRAM (görüntüdeki senaryo):
+[A] PARTIAL İKRAM:
     1. 2× am suyu olan masaya gir
-    2. Bu kalemi seç (1 SEÇİLİ görünür)
-    3. ★ İkram → ✅ Prompt: "am suyu — toplam 2 adet var. Kaç adet ikram?"
-    4. "1" yaz → Tamam → Onay → İkram Et
-    5. ✅ Toast: "1 adet am suyu ikram edildi"
-    6. Liste yenilenir:
-       • 1× am suyu ★ İKRAM (üstü çizili)
-       • 1× am suyu ₺250 (normal, ödenecek)
-    7. ✅ Total: 500 → 250
+    2. Bu kalemi seç
+    3. ★ İkram butonuna bas
+    4. ✅ MODAL AÇILIR (gold renkli)
+       "İKRAM ADEDİ SEÇ"
+       "am suyu"
+       "Toplam 2 adet var. Kaç adet ikram et?"
+       [−] 1 [+]   [1] [2]
+       "1 adet ikram edilecek, 1 adet normal kalır"
+       [Vazgeç] [★ İKRAM ET]
+    5. + butonu kapalı (zaten 1 minimum)
+    6. "[2]" chip'ine tıkla → qty=2, "Tüm 2 adet ikram edilecek"
+    7. "[1]" chip'ine geri dön → qty=1
+    8. ★ İKRAM ET → modal kapanır
+    9. ✅ Toast: "1 adet am suyu ikram edildi"
+    10. Liste:
+        • 1× am suyu ★ İKRAM (üstü çizili)
+        • 1× am suyu ₺250 (normal)
 
 [B] PARTIAL İPTAL:
-    1. 3× horoz yumurtası (₺600) olan masada
-    2. Bu kalemi seç → × İptal
-    3. ✅ Prompt: "horoz yumurtası — toplam 3 adet var. Kaç adet iptal?"
-    4. "1" yaz → onay (kırmızı tone) → İptal Et
-    5. ✅ Toast: "1 adet horoz yumurtası iptal edildi"
-    6. Liste:
-       • 1× horoz yumurtası İPTAL (üstü çizili gri)
-       • 2× horoz yumurtası ₺400 (normal)
-    7. ✅ Total: 600 → 400
+    1. 3× horoz yumurtası seç → × İptal
+    2. ✅ MODAL AÇILIR (kırmızı renkli)
+       "İPTAL ADEDİ SEÇ"
+    3. [+] [+] basıp 2'ye getir
+    4. "2 adet iptal edilecek, 1 adet normal kalır"
+    5. × İPTAL ET
+    6. ✅ Toast: "2 adet horoz yumurtası iptal edildi"
 
-[C] FULL qty ikram (eski davranış):
-    1. 2× am suyu seç → ★ İkram → "2" yaz
-    2. ✅ Tek satır: 2× am suyu ★ İKRAM
-    3. Yeni satır eklenmez
+[C] FULL qty (modal yine açılır ama hepsi seçilebilir):
+    1. 2× am suyu seç → ★ İkram
+    2. Modal açılır → [2] chip'ine bas
+    3. "Tüm 2 adet ikram edilecek"
+    4. ★ İKRAM ET → tek satır kalır (kalem bölünmez)
 
-[D] FULL qty iptal:
-    1. 2× am suyu seç → × İptal → "2" yaz
-    2. ✅ 2× am suyu İPTAL (tek satır, üstü çizili)
-    3. Yeni satır eklenmez
+[D] qty = 1 (modal AÇILMAZ):
+    1. 1× horoz yumurtası seç → ★ İkram
+    2. ✅ Eski akış: direkt confirmDialog çıkar, hepsi ikram
 
-[E] qty = 1 (prompt çıkmaz):
-    1. 1× horoz yumurtası seç → ★ İkram veya × İptal
-    2. ✅ Direkt onay (prompt yok)
+[E] Çoklu kalem seç (modal AÇILMAZ):
+    1. am suyu + haşgerya seç → ★ İkram
+    2. ✅ Eski akış: direkt confirmDialog, hepsi ikram
 
-[F] Çoklu kalem seç (prompt çıkmaz):
-    1. 2 farklı kalem seç (am suyu + haşgerya)
-    2. ★ İkram → direkt onay → hepsi ikram
-    3. × İptal → direkt onay → hepsi iptal
-
-[G] Geçersiz giriş:
-    1. 2× am suyu seç → ★ İkram → "5" yaz
-    2. ✅ Toast: "1 ile 2 arasında bir sayı gir"
-
-[H] DB doğrulama (partial sonrası):
-    SELECT id, product_name, quantity, status, is_complimentary
-    FROM order_items
-    WHERE order_id = '<order>';
-    
-    İkram için:
-      | id_orig | am suyu | 1 | ordered  | true  |
-      | id_new  | am suyu | 1 | ordered  | false |
-    
-    İptal için:
-      | id_orig | am suyu | 1 | cancelled | false |
-      | id_new  | am suyu | 1 | ordered   | false |
-
-[I] Audit log:
-    /panel/raporlar/islem-gecmisi
-    İkram:  "Kalem ikram · am suyu ×1 · ₺250 · partial: true"
-    İptal:  "Kalem iptal · horoz yumurtası ×1 · ₺200 · partial: true"
+[F] Vazgeç testi:
+    1. Modal açıkken Vazgeç → modal kapanır
+    2. Modal açıkken backdrop'a tıkla → modal kapanır
+    3. Hiçbir değişiklik olmaz
 
 
-ÖZEL DURUMLAR
-==============
+DEPLOY DOĞRULAMA
+================
 
-▸ İkramlı kalemden iptal:
-  Bir kalem zaten ikram (is_complimentary=true), kasiyer bunu
-  partial olarak iptal ederse:
-    - Cancelled qty kadar complimentary_total düşer
-    - Subtotal/total etkilenmez (zaten 0'dı)
-
-▸ Sipariş tüm kalemleri iptal olursa:
-  Mevcut "tüm kalemler iptal → masa boşalt" mantığı sadece
-  full-qty iptal için çalışıyor. Partial iptalde kalem hâlâ
-  aktif (yeni satır var) → masa boşalmaz. Bu DOĞRU.
+Modal görünüyorsa Tur 17g doğru deploy edilmiş.
+Modal görünmüyorsa:
+  ▸ git log → "tur 17g" commit'i var mı?
+  ▸ Vercel dashboard → son build başarılı mı?
+  ▸ Tarayıcıda Hard Refresh (Ctrl+Shift+R) — eski cache olabilir
+  ▸ PWA varsa → Settings'ten cache temizle, yeniden install

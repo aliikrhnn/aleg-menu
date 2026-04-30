@@ -55,6 +55,15 @@ export function TableDetailModal({
   >(undefined);
   // Kalem seçimi (orderId + itemId set olarak)
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  // Partial qty seçici modal (ikram veya iptal için adet seç)
+  const [partialQtyContext, setPartialQtyContext] = useState<{
+    mode: 'gift' | 'cancel';
+    orderId: string;
+    itemId: string;
+    productName: string;
+    totalQty: number;
+    qty: number; // şu an seçili miktar
+  } | null>(null);
   const { cashier } = useCashierSession();
 
   // ESC ile kapama - iç modal'lar açıkken devre dışı
@@ -64,7 +73,8 @@ export function TableDetailModal({
     !changeTableOpen &&
     !splitOpen &&
     !quickAddOpen &&
-    !hesapPanelOpen;
+    !hesapPanelOpen &&
+    !partialQtyContext;
   useEscapeKey(onClose, escEnabled);
 
   const load = () => {
@@ -558,51 +568,20 @@ export function TableDetailModal({
                   <button
                     onClick={async () => {
                       // PARTIAL QTY MODU
-                      // Tek kalem seçildi ve qty > 1 ise kaç adet ikram?
+                      // Tek kalem seçildi ve qty > 1 ise modal aç
                       if (
                         selectedFlatItems.length === 1 &&
                         selectedFlatItems[0].item.quantity > 1
                       ) {
                         const fi = selectedFlatItems[0];
-                        const totalQty = fi.item.quantity;
-                        const userInput = window.prompt(
-                          `${fi.item.product_name} — toplam ${totalQty} adet var.\n\nKaç adet ikram etmek istiyorsun?`,
-                          '1'
-                        );
-                        if (userInput == null) return; // Vazgeç
-                        const giftQty = parseInt(userInput, 10);
-                        if (
-                          !Number.isInteger(giftQty) ||
-                          giftQty < 1 ||
-                          giftQty > totalQty
-                        ) {
-                          toast.error(
-                            `1 ile ${totalQty} arasında bir sayı gir`
-                          );
-                          return;
-                        }
-                        const ok = await confirmDialog({
-                          title: 'İkram onayı',
-                          body: `${giftQty} × ${fi.item.product_name} ikram edilecek (toplam ${totalQty} adetten).`,
-                          confirmLabel: 'İkram Et',
-                          cancelLabel: 'Vazgeç',
-                        });
-                        if (!ok) return;
-                        const r = await makeItemsComplimentary({
+                        setPartialQtyContext({
+                          mode: 'gift',
                           orderId: fi.orderId,
-                          itemIds: [fi.item.id],
-                          reason: 'Kasiyer ikram',
-                          partialQty: giftQty,
+                          itemId: fi.item.id,
+                          productName: fi.item.product_name,
+                          totalQty: fi.item.quantity,
+                          qty: 1,
                         });
-                        if (r.success) {
-                          toast.success(
-                            `${giftQty} adet ${fi.item.product_name} ikram edildi`
-                          );
-                        } else {
-                          toast.error(r.error || 'İkram hatası');
-                        }
-                        clearSelection();
-                        load();
                         return;
                       }
 
@@ -659,51 +638,20 @@ export function TableDetailModal({
                   <button
                     onClick={async () => {
                       // PARTIAL QTY MODU
-                      // Tek kalem seçildi ve qty > 1 ise kaç adet iptal?
+                      // Tek kalem seçildi ve qty > 1 ise modal aç
                       if (
                         selectedFlatItems.length === 1 &&
                         selectedFlatItems[0].item.quantity > 1
                       ) {
                         const fi = selectedFlatItems[0];
-                        const totalQty = fi.item.quantity;
-                        const userInput = window.prompt(
-                          `${fi.item.product_name} — toplam ${totalQty} adet var.\n\nKaç adet iptal etmek istiyorsun?`,
-                          '1'
-                        );
-                        if (userInput == null) return; // Vazgeç
-                        const cancelQty = parseInt(userInput, 10);
-                        if (
-                          !Number.isInteger(cancelQty) ||
-                          cancelQty < 1 ||
-                          cancelQty > totalQty
-                        ) {
-                          toast.error(
-                            `1 ile ${totalQty} arasında bir sayı gir`
-                          );
-                          return;
-                        }
-                        const ok = await confirmDialog({
-                          title: 'İptal onayı',
-                          body: `${cancelQty} × ${fi.item.product_name} iptal edilecek (toplam ${totalQty} adetten). Bu işlem geri alınamaz.`,
-                          confirmLabel: 'İptal Et',
-                          cancelLabel: 'Vazgeç',
-                          tone: 'danger',
+                        setPartialQtyContext({
+                          mode: 'cancel',
+                          orderId: fi.orderId,
+                          itemId: fi.item.id,
+                          productName: fi.item.product_name,
+                          totalQty: fi.item.quantity,
+                          qty: 1,
                         });
-                        if (!ok) return;
-                        const r = await cancelOrderItems({
-                          itemIds: [fi.item.id],
-                          reason: 'Kasiyer iptal',
-                          partialQty: cancelQty,
-                        });
-                        if (r.success) {
-                          toast.success(
-                            `${cancelQty} adet ${fi.item.product_name} iptal edildi`
-                          );
-                        } else {
-                          toast.error(r.error || 'İptal hatası');
-                        }
-                        clearSelection();
-                        load();
                         return;
                       }
 
@@ -880,6 +828,54 @@ export function TableDetailModal({
             }
           }}
           onClose={() => setGiftItemContext(null)}
+        />
+      )}
+
+      {/* Partial Qty Picker — kalemden bir kısmı ikram veya iptal */}
+      {partialQtyContext && (
+        <PartialQtyPicker
+          ctx={partialQtyContext}
+          onChange={(qty) =>
+            setPartialQtyContext((c) => (c ? { ...c, qty } : null))
+          }
+          onCancel={() => setPartialQtyContext(null)}
+          onConfirm={async () => {
+            const ctx = partialQtyContext;
+            if (!ctx) return;
+            const isFull = ctx.qty === ctx.totalQty;
+            if (ctx.mode === 'gift') {
+              const r = await makeItemsComplimentary({
+                orderId: ctx.orderId,
+                itemIds: [ctx.itemId],
+                reason: 'Kasiyer ikram',
+                ...(isFull ? {} : { partialQty: ctx.qty }),
+              });
+              setPartialQtyContext(null);
+              if (r.success) {
+                toast.success(
+                  `${ctx.qty} adet ${ctx.productName} ikram edildi`
+                );
+              } else {
+                toast.error(r.error || 'İkram hatası');
+              }
+            } else {
+              const r = await cancelOrderItems({
+                itemIds: [ctx.itemId],
+                reason: 'Kasiyer iptal',
+                ...(isFull ? {} : { partialQty: ctx.qty }),
+              });
+              setPartialQtyContext(null);
+              if (r.success) {
+                toast.success(
+                  `${ctx.qty} adet ${ctx.productName} iptal edildi`
+                );
+              } else {
+                toast.error(r.error || 'İptal hatası');
+              }
+            }
+            clearSelection();
+            load();
+          }}
         />
       )}
 
@@ -2031,6 +2027,182 @@ function CheckBoxIndicator({
           }}
         />
       )}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════
+// PARTIAL QTY PICKER
+// Kalemden bir kısmını ikram et veya iptal et için adet seçici modal
+// ════════════════════════════════════════════════════════════════════
+function PartialQtyPicker({
+  ctx,
+  onChange,
+  onCancel,
+  onConfirm,
+}: {
+  ctx: {
+    mode: 'gift' | 'cancel';
+    productName: string;
+    totalQty: number;
+    qty: number;
+  };
+  onChange: (qty: number) => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const isGift = ctx.mode === 'gift';
+  const accent = isGift ? 'var(--gold, #B8923B)' : '#C4553A';
+  const title = isGift ? 'İKRAM ADEDİ SEÇ' : 'İPTAL ADEDİ SEÇ';
+  const verb = isGift ? 'ikram et' : 'iptal et';
+  const confirmLabel = isGift ? '★ İKRAM ET' : '× İPTAL ET';
+
+  return (
+    <div
+      className="fixed inset-0 z-[200] grid place-items-center p-4"
+      style={{ background: 'rgba(42,31,24,0.55)' }}
+      onClick={onCancel}
+    >
+      <div
+        className="w-full max-w-[420px] rounded-[20px] p-6 shadow-2xl"
+        style={{
+          background: 'var(--paper)',
+          border: '2px solid var(--ink)',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Başlık */}
+        <div
+          className="text-[11px] font-semibold tracking-[0.12em] mb-2"
+          style={{
+            fontFamily: 'var(--f-mono)',
+            color: accent,
+          }}
+        >
+          {title}
+        </div>
+
+        {/* Ürün adı */}
+        <div
+          className="text-xl font-bold mb-1"
+          style={{
+            fontFamily: 'var(--f-serif)',
+            color: 'var(--ink)',
+          }}
+        >
+          {ctx.productName}
+        </div>
+
+        {/* Toplam adet bilgisi */}
+        <div className="text-sm mb-6" style={{ color: 'var(--ink-2)' }}>
+          Toplam <strong>{ctx.totalQty} adet</strong> var. Kaç adet {verb}?
+        </div>
+
+        {/* Adet seçici */}
+        <div className="flex items-center justify-center gap-4 mb-6">
+          <button
+            onClick={() => onChange(Math.max(1, ctx.qty - 1))}
+            disabled={ctx.qty <= 1}
+            className="w-14 h-14 rounded-full text-2xl font-bold grid place-items-center transition-all active:scale-90 disabled:opacity-30"
+            style={{
+              background: 'var(--paper-2)',
+              border: '1.5px solid var(--line)',
+              color: 'var(--ink)',
+            }}
+          >
+            −
+          </button>
+          <div
+            className="min-w-[100px] text-center"
+            style={{
+              fontFamily: 'var(--f-serif)',
+              fontStyle: 'italic',
+              fontSize: 56,
+              fontWeight: 700,
+              color: accent,
+              lineHeight: 1,
+            }}
+          >
+            {ctx.qty}
+          </div>
+          <button
+            onClick={() => onChange(Math.min(ctx.totalQty, ctx.qty + 1))}
+            disabled={ctx.qty >= ctx.totalQty}
+            className="w-14 h-14 rounded-full text-2xl font-bold grid place-items-center transition-all active:scale-90 disabled:opacity-30"
+            style={{
+              background: 'var(--paper-2)',
+              border: '1.5px solid var(--line)',
+              color: 'var(--ink)',
+            }}
+          >
+            +
+          </button>
+        </div>
+
+        {/* Hizli secim */}
+        <div className="flex flex-wrap items-center justify-center gap-2 mb-6">
+          {Array.from({ length: ctx.totalQty }, (_, i) => i + 1).map((n) => (
+            <button
+              key={n}
+              onClick={() => onChange(n)}
+              className="px-3 h-8 rounded-full text-xs font-semibold transition-all"
+              style={{
+                background: ctx.qty === n ? accent : 'transparent',
+                color: ctx.qty === n ? 'var(--paper)' : 'var(--ink-2)',
+                border: `1px solid ${ctx.qty === n ? accent : 'var(--line)'}`,
+                fontFamily: 'var(--f-mono)',
+              }}
+            >
+              {n}
+            </button>
+          ))}
+        </div>
+
+        {/* Ozet */}
+        <div className="text-center text-sm mb-5" style={{ color: 'var(--ink-2)' }}>
+          {ctx.qty === ctx.totalQty ? (
+            <>
+              Tüm <strong>{ctx.totalQty} adet</strong> {verb}lecek
+            </>
+          ) : (
+            <>
+              <strong>{ctx.qty} adet</strong> {verb}lecek,{' '}
+              <strong>{ctx.totalQty - ctx.qty} adet</strong> normal kalır
+            </>
+          )}
+        </div>
+
+        {/* Butonlar */}
+        <div className="flex gap-3">
+          <button
+            onClick={onCancel}
+            className="flex-1 h-12 rounded-[10px] font-semibold text-sm transition-all hover:opacity-70"
+            style={{
+              background: 'transparent',
+              color: 'var(--ink-2)',
+              border: '1px solid var(--line)',
+              fontFamily: 'var(--f-mono)',
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+            }}
+          >
+            Vazgeç
+          </button>
+          <button
+            onClick={onConfirm}
+            className="flex-1 h-12 rounded-[10px] font-semibold text-sm transition-all hover:opacity-90"
+            style={{
+              background: accent,
+              color: '#FAF5EA',
+              fontFamily: 'var(--f-mono)',
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+            }}
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
