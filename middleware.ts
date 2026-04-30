@@ -41,9 +41,16 @@ export async function middleware(request: NextRequest) {
     }
   } else if (currentHost === 'panel') {
     isPanelSubdomain = true;
-    if (!url.pathname.startsWith('/panel')) {
+    // /kasa ve /garson route'ları ana app altında — panel'de de
+    // doğrudan erişilebilsin, /panel prefix'i eklenmesin
+    const isStandaloneRoute =
+      url.pathname.startsWith('/kasa') ||
+      url.pathname.startsWith('/garson');
+
+    if (!url.pathname.startsWith('/panel') && !isStandaloneRoute) {
       rewrittenPath = `/panel${url.pathname}`;
     }
+    // /kasa, /garson ise rewrittenPath = url.pathname (değiştirilmedi)
   } else {
     if (!url.pathname.startsWith('/menu')) {
       rewrittenPath = `/menu/${currentHost}${url.pathname}`;

@@ -1,43 +1,121 @@
-ALEG TUR 17a-fix — TypeScript build hatası düzeltmesi
-========================================================
+ALEG TUR 17b — Panel Subdomain'inden /kasa ve /garson 404 Hatası
+==================================================================
 
 SORUN
 =====
 
-  ./app/panel/(shell)/raporlar/islem-gecmisi/client.tsx:494:23
-  Type error: Type 'unknown' is not assignable to type 'ReactNode'.
+  panel.alegstudio.com/kasa    → 404
+  panel.alegstudio.com/garson  → 404
 
-log.details.productName tipinde 'unknown' (jsonb'den geliyor).
-JSX'te bunu doğrudan koşul olarak yazınca render çıktısı 'unknown'
-oluyor, ReactNode değil.
+Ana sayfa diyip tekrar tıklayınca açılıyor, çünkü o zaman
+alegstudio.com/kasa'ya gidiyor.
+
+SEBEP ANALİZİ
+=============
+
+Middleware mantığı:
+  panel.alegstudio.com/<her şey>  →  rewrite to /panel/<her şey>
+
+Yani:
+  panel.alegstudio.com/kasa     →  /panel/kasa  ❌ (yok)
+  panel.alegstudio.com/garson   →  /panel/garson ❌ (yok)
+
+Çünkü /kasa ve /garson route'ları ana app altında
+(app/kasa/ ve app/garson/), panel altında değil.
+
+Aslında bu kasıtlı bir mimari: kasa ve garson tüm subdomain
+mantığından bağımsız, "tablet" uygulamaları olarak duruyor.
+Ama kullanıcı panel'deyken bu URL'leri yazınca 404 oluyor.
 
 ÇÖZÜM
-=====
+======
 
-Truthy kontrolünü Boolean() ile sarmalayarak ReactNode döndürdüğü
-kesinleştirildi:
+Middleware'de panel subdomain için /kasa ve /garson'u istisna yap:
+  • Bu path'ler /panel/ prefix almasın
+  • app/kasa/page.tsx ve app/garson/page.tsx doğrudan render edilsin
 
-  // ÖNCE (hata):
-  {log.details.productName && <span>...</span>}
+Avantaj:
+  • Kullanıcı panel'de URL yazarsa veya tarihçeden gelirse çalışır
+  • Aynı subdomain'de aynı oturum cookie'leri geçerli (auth sorunu yok)
+  • Panel auth check zaten bu path'lere uygulanıyor — yetkisiz erişim
+    olmuyor
 
-  // SONRA:
-  {Boolean(log.details.productName) && <span>...</span>}
+Dezavantaj: Yok, sadece middleware bir kontrol daha yapıyor.
 
-Aynı şekilde reason için ternary -> Boolean dönüştürüldü.
 
-KOD ETKİSİ: Davranış değişmedi, sadece TypeScript memnun.
+KOD DEĞİŞİKLİKLERİ
+==================
+
+[1] middleware.ts
+
+  ÖNCESİ:
+    } else if (currentHost === 'panel') {
+      isPanelSubdomain = true;
+      if (!url.pathname.startsWith('/panel')) {
+        rewrittenPath = `/panel${url.pathname}`;
+      }
+    }
+
+  SONRASI:
+    } else if (currentHost === 'panel') {
+      isPanelSubdomain = true;
+      const isStandaloneRoute =
+        url.pathname.startsWith('/kasa') ||
+        url.pathname.startsWith('/garson');
+      if (!url.pathname.startsWith('/panel') && !isStandaloneRoute) {
+        rewrittenPath = `/panel${url.pathname}`;
+      }
+    }
+
+[2] app/panel/(shell)/kasiyerler/cashier-manager.tsx
+  • "KASA'YI AÇ" butonundaki gereksiz JS handler kaldırıldı
+  • Artık panel.alegstudio.com/kasa direkt çalışıyor — root domain'e
+    yönlendirmeye gerek yok
+  • target="_blank" korundu (yeni sekmede açılsın)
 
 
 KURULUM
 =======
 
-1 dosyayı üzerine yaz:
-  app/panel/(shell)/raporlar/islem-gecmisi/client.tsx
+Migration veya yeni paket gerekmez.
+
+2 dosyayı üzerine yaz:
+  middleware.ts
+  app/panel/(shell)/kasiyerler/cashier-manager.tsx
 
 
 PUSH
 ====
 
-  git add app/panel/(shell)/raporlar/islem-gecmisi/client.tsx
-  git commit -m "fix: tur 17a-fix - TypeScript unknown to ReactNode in audit log UI"
+  git add middleware.ts \
+    "app/panel/(shell)/kasiyerler/cashier-manager.tsx"
+  git commit -m "fix: tur 17b - panel subdomain /kasa /garson 404"
   git push origin main
+
+
+TEST
+====
+
+[A] panel'den /kasa açma:
+    1. panel.alegstudio.com'da login ol
+    2. URL'ye /kasa yaz → Enter
+    3. ✅ Kasa ekranı açılır (404 değil)
+    4. ✅ URL: panel.alegstudio.com/kasa olarak kalır
+
+[B] panel'den /garson açma:
+    1. panel.alegstudio.com'da login
+    2. URL'ye /garson yaz → Enter
+    3. ✅ Garson ekranı açılır
+
+[C] root'tan /kasa hâlâ çalışmalı:
+    1. alegstudio.com/kasa
+    2. ✅ Kasa ekranı (eskisi gibi)
+
+[D] panel'de yetkisiz kullanıcı:
+    1. Login olmamışken panel.alegstudio.com/kasa
+    2. ✅ /giris'e redirect (panel auth check çalışıyor)
+
+[E] kasiyerler sayfası:
+    1. panel'de "KASA'YI AÇ" butonuna tıkla
+    2. ✅ Yeni sekmede panel.alegstudio.com/kasa açılır
+    3. ✅ Aynı oturumda — tekrar login gerekmez
