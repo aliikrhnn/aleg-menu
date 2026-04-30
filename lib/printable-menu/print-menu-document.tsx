@@ -1364,7 +1364,7 @@ const PhotoHeroLayout = forwardRef<HTMLDivElement, LayoutVariantProps>(
       totalPages,
       qrDataUrl,
       logoDataUrl,
-      showDietaryTags,
+      showDietaryTags: _showDietaryTags,
       showSinceBadge,
       footerVariant,
       customSignature,
@@ -1578,7 +1578,6 @@ const PhotoHeroLayout = forwardRef<HTMLDivElement, LayoutVariantProps>(
                     category={cat}
                     template={t}
                     isFirst={idx === 0}
-                    showDietaryTags={showDietaryTags}
                   />
                 ))}
             </div>
@@ -1591,7 +1590,6 @@ const PhotoHeroLayout = forwardRef<HTMLDivElement, LayoutVariantProps>(
                     category={cat}
                     template={t}
                     isFirst={idx === 0}
-                    showDietaryTags={showDietaryTags}
                   />
                 ))}
             </div>
@@ -1637,12 +1635,10 @@ function PhotoHeroCategoryBlock({
   category,
   template: t,
   isFirst,
-  showDietaryTags,
 }: {
   category: PrintableMenuCategory;
   template: TemplateSpec;
   isFirst: boolean;
-  showDietaryTags: boolean;
 }) {
   return (
     <div style={{ marginTop: isFirst ? 0 : '8mm' }}>
@@ -1741,10 +1737,10 @@ const BoldBadgeLayout = forwardRef<HTMLDivElement, LayoutVariantProps>(
       totalPages,
       qrDataUrl,
       logoDataUrl,
-      showDietaryTags,
-      showSinceBadge,
+      showDietaryTags: _showDietaryTags,
+      showSinceBadge: _showSinceBadge,
       footerVariant,
-      customSignature,
+      customSignature: _customSignature,
       scale = 1,
       widthPx,
       heightPx,
