@@ -9,7 +9,14 @@ import QRCode from 'qrcode';
 // SVG'yi sonra PNG'ye veya PDF'e çevirebiliriz.
 // ============================================================
 
-export type QrDesign = 'minimal' | 'warm' | 'dark' | 'kraft';
+export type QrDesign =
+  | 'minimal'
+  | 'warm'
+  | 'dark'
+  | 'kraft'
+  | 'boutique'
+  | 'mint'
+  | 'mono';
 
 export type QrLang = 'tr' | 'en';
 
@@ -29,18 +36,36 @@ const TEXTS = {
   tr: {
     topLabel: 'QR · SİPARİŞ',
     topLabelDark: 'DİJİTAL MENÜ',
+    topLabelBoutique: 'LA CARTE',
+    topLabelMint: 'MENÜ',
+    topLabelMono: 'SCAN',
     instruction: 'Kameranı aç · menüyü görüntüle',
     instructionWarm: 'kameranı aç, menüyü görüntüle',
     instructionDark: 'kamerayı yönelt · menüyü gör',
     instructionKraft: '— tara ve sipariş ver —',
+    instructionBoutique: 'kameranı yönelt — menü açılsın',
+    instructionMint: 'kamerayı QR\u2019a tut',
+    instructionMono: 'POINT · SCAN · ORDER',
+    welcome: 'hoş geldin',
+    welcomeBoutique: 'mutlu masalar',
+    welcomeMint: 'taze sipariş',
   },
   en: {
     topLabel: 'QR · ORDER',
     topLabelDark: 'DIGITAL MENU',
+    topLabelBoutique: 'A LA CARTE',
+    topLabelMint: 'MENU',
+    topLabelMono: 'SCAN',
     instruction: 'Open camera · view menu',
     instructionWarm: 'open camera, view menu',
     instructionDark: 'scan with camera · view menu',
     instructionKraft: '— scan & order —',
+    instructionBoutique: 'point camera — menu opens',
+    instructionMint: 'point camera at QR',
+    instructionMono: 'POINT · SCAN · ORDER',
+    welcome: 'welcome',
+    welcomeBoutique: 'happy tables',
+    welcomeMint: 'fresh order',
   },
 };
 
@@ -68,16 +93,44 @@ export const DESIGN_META: Record<
     description: 'Vintage, el yapımı his',
     preview: { bg: '#D6BE9B', accent: '#8B3B24', ink: '#3A2816' },
   },
+  boutique: {
+    label: 'Boutique Gold',
+    description: 'Altın detaylar, ipek krem zemin · butik mekanlar',
+    preview: { bg: '#FAF6EE', accent: '#B8903E', ink: '#1F1815' },
+  },
+  mint: {
+    label: 'Fresh Mint',
+    description: 'Taze yeşil, modern brunch · fitness/sağlıklı kafe',
+    preview: { bg: '#E8F2EC', accent: '#2D5F4C', ink: '#0F2620' },
+  },
+  mono: {
+    label: 'Mono Editorial',
+    description: 'Siyah-beyaz iddialı tipografi · sade ama güçlü',
+    preview: { bg: '#0A0A0A', accent: '#FFFFFF', ink: '#FFFFFF' },
+  },
 };
 
 // QR kodunu PNG data URL olarak üret
 export async function generateQrDataUrl(url: string, design: QrDesign): Promise<string> {
   // QR her zaman KOYU renkte - çünkü her tasarımda QR'ın arkasında
-  // açık renk bir kart var (dark tema'da da krem kart)
-  const fg =
-    design === 'kraft'
-      ? '#3A2816' // kraft'ta koyu kahverengi
-      : '#1A1410'; // diğerlerinde siyah-kahverengi
+  // açık renk bir kart var (dark/mono tema'da da krem/beyaz kart)
+  let fg: string;
+  switch (design) {
+    case 'kraft':
+      fg = '#3A2816';
+      break;
+    case 'boutique':
+      fg = '#1F1815';
+      break;
+    case 'mint':
+      fg = '#0F2620';
+      break;
+    case 'mono':
+      fg = '#0A0A0A'; // beyaz kart üzerinde siyah QR
+      break;
+    default:
+      fg = '#1A1410';
+  }
 
   return await QRCode.toDataURL(url, {
     margin: 1,
@@ -110,6 +163,12 @@ export function generateCardSvg(input: QrCardInput): string {
       return renderDark(W, H, qrDataUrl, tableName, businessName, lang);
     case 'kraft':
       return renderKraft(W, H, qrDataUrl, tableName, businessName, lang);
+    case 'boutique':
+      return renderBoutique(W, H, qrDataUrl, tableName, businessName, lang);
+    case 'mint':
+      return renderMint(W, H, qrDataUrl, tableName, businessName, lang);
+    case 'mono':
+      return renderMono(W, H, qrDataUrl, tableName, businessName, lang);
   }
 }
 
@@ -343,6 +402,244 @@ function renderKraft(
   
   <!-- Aleg mark -->
   ${alegMark(W - 28, H - 20, '#5C4327', true)}
+</svg>`.trim();
+}
+
+// ============================================================
+// 5. BOUTIQUE — Altın detaylar, krem zemin, butik lüks
+// ============================================================
+
+function renderBoutique(
+  W: number,
+  H: number,
+  qrDataUrl: string,
+  tableName: string,
+  businessName: string,
+  lang: QrLang
+): string {
+  const t = TEXTS[lang];
+  const qrSize = Math.min(W * 0.55, H * 0.45);
+  const qrX = (W - qrSize) / 2;
+  const qrY = H * 0.27;
+
+  return `
+<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+  <defs>
+    <linearGradient id="goldGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#A87926"/>
+      <stop offset="50%" stop-color="#D4A951"/>
+      <stop offset="100%" stop-color="#A87926"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="${W}" height="${H}" fill="#FAF6EE"/>
+
+  <!-- Top crest ornament -->
+  <g transform="translate(${W / 2} 60)">
+    <line x1="-90" y1="0" x2="-25" y2="0" stroke="url(#goldGrad)" stroke-width="1"/>
+    <circle cx="-15" cy="0" r="2.5" fill="#B8903E"/>
+    <path d="M -8 -8 L 0 -16 L 8 -8 L 0 0 Z" fill="#B8903E"/>
+    <circle cx="15" cy="0" r="2.5" fill="#B8903E"/>
+    <line x1="25" y1="0" x2="90" y2="0" stroke="url(#goldGrad)" stroke-width="1"/>
+  </g>
+
+  <!-- Top label -->
+  <text x="${W / 2}" y="100" text-anchor="middle"
+    font-family="ui-monospace, monospace" font-size="11" font-weight="700"
+    fill="#B8903E" letter-spacing="6">${escapeXml(t.topLabelBoutique)}</text>
+
+  <!-- Welcome line italic -->
+  <text x="${W / 2}" y="140" text-anchor="middle"
+    font-family="Georgia, 'Times New Roman', serif" font-style="italic" font-size="22"
+    fill="#5A4A3D" letter-spacing="0.3">${escapeXml(t.welcomeBoutique)}</text>
+
+  <!-- QR with double frame (gold border) -->
+  <rect x="${qrX - 26}" y="${qrY - 26}" width="${qrSize + 52}" height="${qrSize + 52}"
+    fill="#FFFFFF" stroke="#B8903E" stroke-width="2" rx="6"/>
+  <rect x="${qrX - 18}" y="${qrY - 18}" width="${qrSize + 36}" height="${qrSize + 36}"
+    fill="none" stroke="#E8D8B0" stroke-width="1" rx="3"/>
+  <image href="${qrDataUrl}" x="${qrX}" y="${qrY}" width="${qrSize}" height="${qrSize}" preserveAspectRatio="xMidYMid meet"/>
+
+  <!-- Table name with side ornaments -->
+  <g transform="translate(0 ${qrY + qrSize + 110})">
+    <line x1="${W / 2 - 130}" y1="0" x2="${W / 2 - 80}" y2="0" stroke="#B8903E" stroke-width="0.8"/>
+    <text x="${W / 2}" y="8" text-anchor="middle"
+      font-family="Georgia, 'Times New Roman', serif" font-style="italic" font-size="62" font-weight="500"
+      fill="#1F1815" letter-spacing="-1.5">${escapeXml(tableName)}</text>
+    <line x1="${W / 2 + 80}" y1="0" x2="${W / 2 + 130}" y2="0" stroke="#B8903E" stroke-width="0.8"/>
+  </g>
+
+  <!-- Business name -->
+  <text x="${W / 2}" y="${qrY + qrSize + 154}" text-anchor="middle"
+    font-family="ui-monospace, monospace" font-size="11" font-weight="700"
+    fill="#8C7548" letter-spacing="4.5">${escapeXml(businessName.toUpperCase())}</text>
+
+  <!-- Instructions -->
+  <text x="${W / 2}" y="${H - 90}" text-anchor="middle"
+    font-family="Georgia, serif" font-style="italic" font-size="22"
+    fill="#5A4A3D" font-weight="500">${escapeXml(t.instructionBoutique)}</text>
+
+  <!-- Bottom ornament line -->
+  <g transform="translate(${W / 2} ${H - 56})">
+    <line x1="-50" y1="0" x2="-10" y2="0" stroke="#B8903E" stroke-width="0.8"/>
+    <circle cx="0" cy="0" r="2" fill="#B8903E"/>
+    <line x1="10" y1="0" x2="50" y2="0" stroke="#B8903E" stroke-width="0.8"/>
+  </g>
+
+  <!-- Aleg mark -->
+  ${alegMark(W - 28, H - 20, '#8C7548', true)}
+</svg>`.trim();
+}
+
+// ============================================================
+// 6. MINT — Fresh, modern, brunch/sağlıklı
+// ============================================================
+
+function renderMint(
+  W: number,
+  H: number,
+  qrDataUrl: string,
+  tableName: string,
+  businessName: string,
+  lang: QrLang
+): string {
+  const t = TEXTS[lang];
+  const qrSize = Math.min(W * 0.6, H * 0.5);
+  const qrX = (W - qrSize) / 2;
+  const qrY = H * 0.24;
+
+  return `
+<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+  <defs>
+    <linearGradient id="mintBg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#EDF5EF"/>
+      <stop offset="100%" stop-color="#DFEBE2"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background gradient -->
+  <rect width="${W}" height="${H}" fill="url(#mintBg)"/>
+
+  <!-- Organic blob shapes (decoration) -->
+  <ellipse cx="60" cy="${H - 80}" rx="80" ry="40" fill="#C8E0CE" opacity="0.5"/>
+  <ellipse cx="${W - 50}" cy="60" rx="60" ry="30" fill="#C8E0CE" opacity="0.4"/>
+
+  <!-- Top ribbon banner -->
+  <g transform="translate(${W / 2} 70)">
+    <rect x="-110" y="-22" width="220" height="44" fill="#2D5F4C" rx="22"/>
+    <text x="0" y="6" text-anchor="middle"
+      font-family="ui-sans-serif, system-ui, sans-serif" font-size="14" font-weight="800"
+      fill="#FFFFFF" letter-spacing="3">${escapeXml(t.topLabelMint)}</text>
+  </g>
+
+  <!-- Welcome -->
+  <text x="${W / 2}" y="150" text-anchor="middle"
+    font-family="Georgia, serif" font-style="italic" font-size="20"
+    fill="#2D5F4C" font-weight="500">${escapeXml(t.welcomeMint)}</text>
+
+  <!-- QR with rounded white card -->
+  <rect x="${qrX - 22}" y="${qrY - 22}" width="${qrSize + 44}" height="${qrSize + 44}"
+    fill="#FFFFFF" rx="20" stroke="#2D5F4C" stroke-width="0"/>
+  <image href="${qrDataUrl}" x="${qrX}" y="${qrY}" width="${qrSize}" height="${qrSize}" preserveAspectRatio="xMidYMid meet"/>
+
+  <!-- Table name in big circle accent -->
+  <text x="${W / 2}" y="${qrY + qrSize + 100}" text-anchor="middle"
+    font-family="ui-sans-serif, system-ui, sans-serif" font-size="60" font-weight="800"
+    fill="#0F2620" letter-spacing="-2">${escapeXml(tableName)}</text>
+
+  <!-- Business name -->
+  <text x="${W / 2}" y="${qrY + qrSize + 138}" text-anchor="middle"
+    font-family="ui-monospace, monospace" font-size="12" font-weight="700"
+    fill="#5A8070" letter-spacing="3.5">${escapeXml(businessName.toUpperCase())}</text>
+
+  <!-- Instructions in ribbon -->
+  <g transform="translate(${W / 2} ${H - 76})">
+    <rect x="-130" y="-16" width="260" height="32" fill="#FFFFFF" stroke="#2D5F4C" stroke-width="1" rx="16"/>
+    <text x="0" y="6" text-anchor="middle"
+      font-family="ui-sans-serif, system-ui, sans-serif" font-size="13" font-weight="600"
+      fill="#2D5F4C" letter-spacing="0.5">${escapeXml(t.instructionMint)}</text>
+  </g>
+
+  <!-- Aleg mark -->
+  ${alegMark(W - 28, H - 20, '#5A8070', true)}
+</svg>`.trim();
+}
+
+// ============================================================
+// 7. MONO — Siyah-beyaz iddialı tipografi
+// ============================================================
+
+function renderMono(
+  W: number,
+  H: number,
+  qrDataUrl: string,
+  tableName: string,
+  businessName: string,
+  lang: QrLang
+): string {
+  const t = TEXTS[lang];
+  const qrSize = Math.min(W * 0.5, H * 0.42);
+  const qrX = (W - qrSize) / 2;
+  const qrY = H * 0.32;
+
+  return `
+<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+  <!-- Black background -->
+  <rect width="${W}" height="${H}" fill="#0A0A0A"/>
+
+  <!-- Diagonal stripe accent (top-left) -->
+  <polygon points="0,0 ${W * 0.4},0 0,${H * 0.18}" fill="#1A1A1A"/>
+
+  <!-- Top SCAN brutalist label -->
+  <text x="40" y="74" text-anchor="start"
+    font-family="ui-sans-serif, system-ui, sans-serif" font-size="48" font-weight="900"
+    fill="#FFFFFF" letter-spacing="-1">${escapeXml(t.topLabelMono)}</text>
+
+  <!-- Underline -->
+  <rect x="40" y="86" width="100" height="4" fill="#FFFFFF"/>
+
+  <!-- Row 1 marker -->
+  <text x="${W - 40}" y="62" text-anchor="end"
+    font-family="ui-monospace, monospace" font-size="11" font-weight="700"
+    fill="#888888" letter-spacing="3">No.${escapeXml(tableName.replace(/[^0-9]/g, '') || '01')}</text>
+  <text x="${W - 40}" y="80" text-anchor="end"
+    font-family="ui-monospace, monospace" font-size="11" font-weight="700"
+    fill="#888888" letter-spacing="3">QR-MENU</text>
+
+  <!-- Big white QR card (high contrast) -->
+  <rect x="${qrX - 30}" y="${qrY - 30}" width="${qrSize + 60}" height="${qrSize + 60}"
+    fill="#FFFFFF" rx="0"/>
+  <image href="${qrDataUrl}" x="${qrX}" y="${qrY}" width="${qrSize}" height="${qrSize}" preserveAspectRatio="xMidYMid meet"/>
+
+  <!-- Side L brackets around QR -->
+  <g stroke="#FFFFFF" stroke-width="3" fill="none">
+    <polyline points="${qrX - 50},${qrY - 30} ${qrX - 50},${qrY - 50} ${qrX - 30},${qrY - 50}"/>
+    <polyline points="${qrX + qrSize + 30},${qrY - 50} ${qrX + qrSize + 50},${qrY - 50} ${qrX + qrSize + 50},${qrY - 30}"/>
+    <polyline points="${qrX - 50},${qrY + qrSize + 30} ${qrX - 50},${qrY + qrSize + 50} ${qrX - 30},${qrY + qrSize + 50}"/>
+    <polyline points="${qrX + qrSize + 30},${qrY + qrSize + 50} ${qrX + qrSize + 50},${qrY + qrSize + 50} ${qrX + qrSize + 50},${qrY + qrSize + 30}"/>
+  </g>
+
+  <!-- Table name HUGE -->
+  <text x="${W / 2}" y="${qrY + qrSize + 130}" text-anchor="middle"
+    font-family="ui-sans-serif, system-ui, sans-serif" font-size="74" font-weight="900"
+    fill="#FFFFFF" letter-spacing="-3">${escapeXml(tableName.toUpperCase())}</text>
+
+  <!-- Business name in box -->
+  <g transform="translate(${W / 2} ${qrY + qrSize + 168})">
+    <rect x="-100" y="-14" width="200" height="28" fill="none" stroke="#FFFFFF" stroke-width="1.5"/>
+    <text x="0" y="6" text-anchor="middle"
+      font-family="ui-monospace, monospace" font-size="12" font-weight="700"
+      fill="#FFFFFF" letter-spacing="4">${escapeXml(businessName.toUpperCase())}</text>
+  </g>
+
+  <!-- Bottom instructions -->
+  <text x="${W / 2}" y="${H - 56}" text-anchor="middle"
+    font-family="ui-monospace, monospace" font-size="13" font-weight="700"
+    fill="#888888" letter-spacing="6">${escapeXml(t.instructionMono)}</text>
+
+  <!-- Aleg mark white -->
+  ${alegMark(W - 28, H - 20, '#FFFFFF', true)}
 </svg>`.trim();
 }
 

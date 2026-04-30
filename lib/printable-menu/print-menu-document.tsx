@@ -1116,7 +1116,7 @@ function SpicyMark({ level }: { level: number }) {
 function Footer({
   t,
   business,
-  qrUrl,
+  qrUrl: _qrUrl,
   qrDataUrl,
   variant,
   customSignature,
@@ -1178,12 +1178,14 @@ function Footer({
         <div
           style={{
             fontFamily: t.fonts.mono,
-            fontSize: '8pt',
-            color: t.colors.ink_soft,
-            letterSpacing: '0.04em',
+            fontSize: '7.5pt',
+            color: t.colors.ink_muted,
+            letterSpacing: '0.16em',
+            textTransform: 'uppercase',
+            fontWeight: 600,
           }}
         >
-          {qrUrl.replace(/^https?:\/\//, '')}
+          {tableLabel ? 'KAMERANI AÇ · TARA' : 'KAMERANI AÇ · MENÜYÜ GÖR'}
         </div>
 
         {/* Footer varyant detayları */}
@@ -1846,7 +1848,7 @@ const BoldBadgeLayout = forwardRef<HTMLDivElement, LayoutVariantProps>(
       pageNumber,
       totalPages,
       qrDataUrl,
-      qrUrlOverride,
+      qrUrlOverride: _qrUrlOverride,
       tableLabel,
       logoDataUrl,
       logoMode = 'original',
@@ -2091,9 +2093,9 @@ const BoldBadgeLayout = forwardRef<HTMLDivElement, LayoutVariantProps>(
                     lineHeight: 1.1,
                   }}
                 >
-                  {(qrUrlOverride || data.qr_url)
-                    .replace(/^https?:\/\//, '')
-                    .toLowerCase()}
+                  {tableLabel
+                    ? `${data.business.name} · ${tableLabel}`
+                    : data.business.name}
                 </div>
                 {(footerVariant === 'social' || footerVariant === 'full') && (
                   <div

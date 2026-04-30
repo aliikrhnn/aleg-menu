@@ -28,7 +28,15 @@ interface QrPickerModalProps {
   onClose: () => void;
 }
 
-const DESIGNS: QrDesign[] = ['minimal', 'warm', 'dark', 'kraft'];
+const DESIGNS: QrDesign[] = [
+  'minimal',
+  'warm',
+  'boutique',
+  'mint',
+  'dark',
+  'mono',
+  'kraft',
+];
 
 export function QrPickerModal({ mode, onClose }: QrPickerModalProps) {
   const [selected, setSelected] = useState<QrDesign>('warm');

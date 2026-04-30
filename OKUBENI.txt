@@ -1,218 +1,189 @@
-ALEG TUR 10 — Logo Modu + Masa-Bazlı QR + Toplu Masa İndirme
-==============================================================
+ALEG TUR 11 — Genel QR Kaldırıldı + URL'ler Gizlendi + 3 Yeni QR Tasarımı
+============================================================================
 
-İki büyük iyileştirme:
+Üç sorunu çözen güncelleme:
 
-  1. Logo Modu (3 seçenek): logoyla uyumsuzluk sorunu çözüldü
-  2. QR Hedefi (genel ya da belirli masa) + Toplu masa ZIP indirme
-
-
-SORUN 1: LOGO UYUMSUZLUK
-==========================
-
-Bazı temalarda (özellikle Elite, Foto Hero, Editorial — koyu zeminli)
-şeffaf veya koyu logolar kayboluyordu. Aynı şekilde beyaz logolar
-açık temalarda görünmüyordu.
-
-ÇÖZÜM: 3 logo modu (yeni Adım 3'te seçilebilir):
-
-  A) Orijinal — logo olduğu gibi basılır (default)
-  B) Beyaz çerçeve — logo arkasına otomatik beyaz daire eklenir
-     (koyu temalarda garantili görünür)
-  C) Sadece monogram — logo yerine işletme adının baş harfi
-     (her zeminde temiz durur, en güvenli seçim)
-
-Tüm 8 şablonda (klasik 5 + photo-hero + bold-badge + editorial)
-3 mod da çalışır. Header varyantları (centered/split/monogram) ile
-kombinasyon halinde de uygulanır.
+  1. Menü tasarım: "Genel QR" seçeneği kaldırıldı, sadece masa-bazlı
+  2. Tasarımlardan URL'ler tamamen kaldırıldı
+  3. Masa QR tasarımları: 4'ten 7'ye çıkarıldı (3 yeni tasarım)
 
 
-SORUN 2: QR MASAYA GÖRE OLSUN
-================================
+[1] GENEL QR KALDIRILDI
+========================
 
-Önce: Tüm basılı menülerde aynı genel işletme QR'ı vardı.
-Müşteri tarayınca masaya gitmiyordu, sadece menüye gidiyordu.
-Bu sipariş karışıklığına yol açıyordu.
+ÖNCESİ: Menü tasarım panelinde "QR Hedefi" accordion'unda iki seçenek
+       vardı: "Genel menü QR" veya "Belirli masa için". Genel QR
+       müşteriyi masaya değil sadece menüye yönlendirdiği için sipariş
+       karışıklığına yol açıyordu.
 
-ÇÖZÜM: 2 QR hedef seçeneği (yeni Adım 7'de seçilebilir):
+SONRASI: Sadece masa-bazlı QR. Accordion'un adı "QR hedefi" yerine
+        "Masa" oldu. Her basılı menüde mutlaka bir masanın QR'ı var.
+        Masa eklenmemişse uyarı çıkıyor:
 
-  A) Genel menü QR (default)
-     URL: https://{slug}.alegstudio.com
-     Kullanım: Pano, dış levha, vitrin, sosyal medya
-     Tarayan müşteri menü görür ama masa atanmaz
-
-  B) Belirli masa için
-     URL: https://{slug}.alegstudio.com/?t={masaSlug}
-     Kullanım: Masaya yapıştırılacak basılı menüler
-     Tarayan müşteri o masaya otomatik atanır
-
-Ayrıca Footer'da gösterilen yazı dinamik:
-  - Genel: "QR'ı tara, masandan sipariş ver"
-  - Masa: "Masa 5'a özel QR — tara ve sipariş ver"
-  - Eyebrow: "DİJİTAL MENÜ · MASA 5"
+        "Henüz masa eklenmemiş. Önce masa ekle ve QR kodlarını oluştur.
+         Masalar →"
 
 
-YENI ÖZELLİK: TÜM MASALAR İÇİN ZIP
-=====================================
+[2] TASARIMLARDAN URL'LER KALDIRILDI
+======================================
 
-İndir bölümünde yeni buton:
+ÖNCESİ: Footer'da QR'ın altında URL gösteriliyordu:
+        "rumeli-cafe.alegstudio.com/?t=masa-5"
+        — uzun ve çirkin görünüyordu.
 
-  [▦ N masa için ZIP]
-  
-İşlev:
-  • Tüm aktif masalar için ayrı ayrı PDF üretir
-  • Her PDF'in QR'ı o masaya özel
-  • Her PDF'in footer'ında masa adı yazılı
-  • Hepsi tek ZIP dosyasında iniyor:
-      {slug}-masa-menuleri-{template}-{size}.zip
-  • İçinde:
-      masa-1.pdf
-      masa-2.pdf
-      ...
+SONRASI:
+  • Standart şablonlar: URL yerine tipografik talimat:
+    "KAMERANI AÇ · TARA"  (mono font, küçük, accent renk)
 
-Kullanım:
-  1. Şablon ve boyut seç
-  2. Logo modu, header/footer varyantları seç
-  3. Kullanıcı bir kere "Tüm masalar için ZIP" butonuna basar
-  4. Tüm masaların PDF'leri otomatik üretilip ZIP olur
+  • Bold Badge şablonu (alt CTA bandı): URL yerine
+    işletme adı ve masa adı:
+    "Rumeli Cafe · Masa 5"
+
+  QR kod yine doğru URL'i taşıyor — sadece görsel olarak gizlendi.
 
 
-PANEL UI YAPISAL DEĞİŞİKLİK
-=============================
+[3] 3 YENİ MASA QR TASARIMI (4 → 7)
+======================================
 
-Accordion sırası 6'dan 8'e çıktı:
+Mevcut: minimal, warm, dark, kraft
 
-  ESKİ:                    YENİ:
-  1. Şablon                1. Şablon
-  2. Boyut                 2. Boyut
-  3. Üst bölge             3. ✨ Logo modu (yeni)
-  4. Alt bölge             4. Üst bölge
-  5. Rozetler              5. Alt bölge
-  6. İndir                 6. Rozetler
-                           7. ✨ QR hedefi (yeni)
-                           8. İndir
+YENİLER:
 
+  ⚜️ BOUTIQUE GOLD (boutique)
+     • İpek krem zemin (#FAF6EE)
+     • Altın detaylar (#B8903E) — gradient çizgiler, çift çerçeve
+     • Üst kısımda "À LA CARTE" + diamond ornament
+     • Side line dekoratifleriyle masa adı
+     • Hedef: butik kafeler, fine-dining, otel restoranları
+
+  🌿 FRESH MINT (mint)
+     • Açık yeşil gradient zemin (#EDF5EF → #DFEBE2)
+     • Koyu mint accent (#2D5F4C)
+     • Üst yuvarlak yeşil rozet "MENÜ" yazılı
+     • Organik ellipse dekoratifleri (köşelerde)
+     • Beyaz card içinde QR
+     • Alt rozet içinde instruction
+     • Hedef: brunch yerleri, fitness/sağlıklı kafeler, juice bar
+
+  ⚫ MONO EDITORIAL (mono)
+     • Saf siyah zemin (#0A0A0A)
+     • Beyaz tipografi, brutalist
+     • Üst sol "SCAN" dev font + altta beyaz çizgi
+     • Üst sağda "No.X · QR-MENU" mono yazı
+     • QR beyaz card üzerinde + 4 köşede L-bracket çerçeve
+     • Masa adı DEV (74pt, 900 weight) ortalı
+     • İşletme adı kutu içinde
+     • Hedef: minimalist mekanlar, art deco kafeler, "third wave" coffee
+
+
+KULLANIM
+========
+
+İlgili sayfalar:
+
+  /panel/menu-tasarim
+    → Adım 7 "Masa" sadece masa seçici
+    → Tasarımlardaki URL'ler kayboldu
+
+  /panel/masalar
+    → "QR İndir" veya tek masaya tıklayınca QR Picker Modal açılır
+    → Artık 7 tasarım seçeneği var
+    → Live preview otomatik
 
 KOD DEĞİŞİKLİKLERİ
 ==================
 
-[1] lib/actions/printable-menu.ts
-    • PrintableMenuData.tables eklendi (PrintableMenuTable[])
-    • Tablolar ve qr_codes paralel sorgu ile çekildi
-    • Her masa için qr_url üretildi: https://slug.alegstudio.com/?t=slug
+[1] lib/utils/qr-design.ts
+  • QrDesign tipi: 'boutique' | 'mint' | 'mono' eklendi
+  • DESIGN_META: 3 yeni meta (label, description, preview renkler)
+  • TEXTS: yeni instruction'lar (TR + EN)
+  • generateQrDataUrl: yeni temalar için QR rengi
+  • generateCardSvg switch: yeni 3 case
+  • renderBoutique, renderMint, renderMono fonksiyonları eklendi
 
-[2] lib/printable-menu/print-menu-document.tsx
-    • Props'a eklendi: qrUrlOverride, tableLabel, logoMode
-    • LayoutVariantProps'a eklendi: aynı 3 prop
-    • Header: logoMode'a göre 3 modlu logo render
-      - 'original': logo olduğu gibi
-      - 'white-frame': logo beyaz daire içinde
-      - 'monogram': logo yok, baş harf gösterilir
-    • Footer: tableLabel varsa eyebrow'a yazılır
-      ("DİJİTAL MENÜ · MASA 5")
-    • Tüm 3 alt layout (PhotoHero, BoldBadge, Editorial) güncellendi
-    • Tüm qrUrl referansları qrUrlOverride || data.qr_url oldu
+[2] components/panel/qr-picker-modal.tsx
+  • DESIGNS array: 4'ten 7'ye
 
-[3] app/panel/(shell)/menu-tasarim/client.tsx
-    • State: qrTarget, selectedTableId, logoMode eklendi
-    • activeQrUrl useMemo (target'a göre dinamik QR URL)
-    • QR generate dinamik (activeQrUrl bağımlı)
-    • Yeni accordion: "Logo modu" (3 seçenek)
-    • Yeni accordion: "QR hedefi" (genel / masa + masa seçici)
-    • Yeni fonksiyon: handleBulkTablesDownload (JSZip ile)
-    • Yeni buton: "▦ N masa için ZIP"
-    • PrintMenuDocument'e yeni 3 prop geçildi
+[3] lib/printable-menu/print-menu-document.tsx
+  • Footer: URL gösterimi kaldırıldı, "KAMERANI AÇ · TARA" tipografi
+  • Footer fonk: qrUrl artık _qrUrl (kullanılmıyor)
+  • BoldBadge CTA: URL yerine işletme adı + masa adı
+  • BoldBadge: qrUrlOverride → _qrUrlOverride
 
-[4] package.json
-    • Eklendi: jszip ^3.10.1
+[4] app/panel/(shell)/menu-tasarim/client.tsx
+  • qrTarget state KALDIRILDI (sadece masa-bazlı)
+  • activeQrUrl: doğrudan selectedTableId'ye bağlı
+  • handleBulkTablesDownload: qrTarget mantığı temizlendi
+  • Adım 7: "QR Hedefi" → "Masa" (sadece masa seçici)
+  • Yardım metni: "Her basılı menü, üzerine basıldığı masanın QR'ını
+    taşır. Müşteri taradığında otomatik o masaya atanır..."
 
 
 KURULUM
 =======
 
-[1] npm install (yeni jszip dep'i için):
-    cd aleg-menu-main
-    npm install
+4 dosya değişti, hepsini üzerine yaz:
 
-[2] Dosyaları yerine koy (4 dosya):
-    GÜNCELLEMELER (üzerine yaz):
-      lib/actions/printable-menu.ts
-      lib/printable-menu/print-menu-document.tsx
-      app/panel/(shell)/menu-tasarim/client.tsx
-      package.json
+  lib/utils/qr-design.ts
+  lib/printable-menu/print-menu-document.tsx
+  app/panel/(shell)/menu-tasarim/client.tsx
+  components/panel/qr-picker-modal.tsx
+
+Yeni paket veya migration YOK.
 
 
 PUSH
 ====
 
   git add .
-  git commit -m "feat: tur 10 - logo modes + table-specific QR + bulk tables ZIP"
+  git commit -m "feat: tur 11 - table-only QR + hidden URLs + 3 new QR designs"
   git push origin main
 
 
 TEST
 ====
 
-[A] Logo modu - white-frame:
+[A] Genel QR kaldırıldı:
     1. /panel/menu-tasarim aç
-    2. Şablon: "Elit" (koyu zemin)
-    3. Adım 3 → "Beyaz çerçeve" seç
-    4. ✅ Logo arkasında beyaz daire görünmeli
+    2. Sol panelde Adım 7 "Masa" olmalı (eski "QR Hedefi" değil)
+    3. ✅ "Genel menü QR" seçeneği YOK
+    4. Sadece masa dropdown ve yardım metni
 
-[B] Logo modu - monogram:
-    1. Adım 3 → "Sadece monogram"
-    2. ✅ Logo gitmeli, işletme baş harfi görünmeli
-    3. Tüm 8 şablonda dene → her zeminde okunabilir olmalı
+[B] Tasarımlardan URL kaldırıldı:
+    1. Klasik şablon → A4 PDF indir
+    2. ✅ Footer'da QR altında URL YAZMIYOR
+    3. Yerine "KAMERANI AÇ · TARA" mono yazı
+    4. Bold Badge şablon → A4 indir
+    5. ✅ Alt turuncu CTA bandında URL YOK
+    6. Yerine "Rumeli Cafe · Masa 5" görünüyor
 
-[C] QR hedefi - belirli masa:
-    1. Adım 7 → "Belirli masa için"
-    2. Masa dropdown → bir masa seç
-    3. ✅ Önizlemede QR değişmeli
-    4. Footer'da "DİJİTAL MENÜ · MASA X" yazıyor olmalı
-    5. Footer cümlesi: "Masa X'a özel QR — tara ve sipariş ver"
-    6. PDF indir → telefonla QR taradığında masa atanmalı
+[C] Yeni QR tasarımları:
+    1. /panel/masalar aç
+    2. Bir masaya tıkla → QR Picker Modal aç
+    3. ✅ 7 tasarım kartı görünüyor (eski 4 + yeni 3)
+    4. "Boutique Gold" seç → krem zemin + altın detaylar
+    5. "Fresh Mint" seç → yeşil zemin + ribbon banner
+    6. "Mono Editorial" seç → siyah zemin + büyük SCAN yazı
+    7. Her birinde live preview anında değişiyor
+    8. PDF indir → tasarım baskıya hazır
 
-[D] Tüm masalar için ZIP:
-    1. Adım 8 → "▦ N masa için ZIP"
-    2. ✅ Her masa için 1 PDF üretiliyor (toast: "X masa için ZIP'lendi")
-    3. ZIP açıldığında: masa-1.pdf, masa-2.pdf, ...
-    4. Her PDF'te o masanın QR'ı + masa adı footer'da
-
-[E] Logo yok kontrolü:
-    1. Logo silinmiş bir işletmede dene
-    2. Adım 3 → "Beyaz çerçeve" seç → uyarı görünmeli
-       "Logo yüklü değil. Logo yüklersen modlar farklı görünür."
-    3. Header zaten monogram fallback gösteriyordu, korunmalı
+[D] Sipariş akışı testi:
+    1. /panel/menu-tasarim → Bold Badge seç → Masa 1 seç
+    2. PDF indir
+    3. Telefonla QR'ı tara
+    4. ✅ /?t=masa-1 ile menüye git, Masa 1 atansın
+    5. Sipariş ver → kasada Masa 1 olarak görünmeli
 
 
-ÖNEMLİ TEKNİK NOTLAR
+SİPARİŞ MANTIK NOTU
 =====================
 
-[1] ZIP üretimi yavaş olabilir:
-    Her masa için PDF + her sayfa için DOM capture gerekiyor.
-    10 masa × 2 sayfa = ~20 capture × 200ms = 4s civarı.
-    Toast spinner gösteriliyor, kullanıcıya bilgi veriliyor.
+Tur 11'de "genel QR" seçeneğinin kaldırılması bilinçli bir karar:
+  • Genel QR + masa şartı sipariş karışıklığı yaratıyordu
+  • Bir müşteri masada otururken "genel QR" tarayınca masa atanmıyordu
+  • Sipariş kime gidecek belli olmuyordu
 
-[2] State kontrolü:
-    Bulk indirme sırasında qrTarget/selectedTableId/currentPage
-    state'leri değiştiriliyor. İşlem bitince eski değerlerine
-    dönüyor (try-finally bloğunda).
-
-[3] Masa QR slug'ları:
-    qr_codes tablosunda "active=true" olan masalar çekiliyor.
-    Eğer masa için QR henüz oluşturulmadıysa o masa listede
-    görünmez. /panel/qr ekranından QR oluşturmuşsa hepsi çıkar.
-
-[4] Editorial layout'ta tableLabel:
-    Editorial layout, sol panelde "NO. 24 · İSTANBUL" gibi
-    editorial başlık gösteriyor. tableLabel sadece footer'da
-    görünüyor (yan panelde değil).
-
-
-SIRADAKİ
-========
-
-Tur 10 onaylandığında bir sonraki adıma geçeriz. Test ederken
-özellikle DİKKAT:
-  • Build/lint pre-push hook'u
-  • npm install JSZip için
+Şimdi her basılı menü mutlaka bir masanın QR'ını taşır. Eğer pano/dış
+levha gibi yerlerde "menü gör" istiyorsan Tur 9'da eklediğimiz
+"Özel tasarım yükle" özelliği daha uygun (kendi tasarımına serbestçe
+QR yerleştirebilirsin).
