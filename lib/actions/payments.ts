@@ -2068,3 +2068,103 @@ export async function getZReport(
     };
   }
 }
+
+// ============================================================
+// Bölme ödemesi öncesi indirim/bahşiş uygula
+// ============================================================
+// Sipariş bölmeye gönderilmeden ÖNCE order.total'a discount/tip uygulanır.
+// Böylece server ve client aynı net total üzerinden hesap yapar.
+// Ödeme zaten kısmen yapılmışsa veya status paid'se hata döner.
+// ============================================================
+export async function applyAdjustmentsBeforeSplit(input: {
+  orderId: string;
+  discountAmount: number;
+  discountReason?: string;
+  tipAmount: number;
+}): Promise<{
+  success: boolean;
+  newTotal?: number;
+  error?: string;
+}> {
+  try {
+    const { businessId, memberId } = await requireBusinessAccess();
+    const admin = createAdminClient();
+
+    if (input.discountAmount < 0 || input.tipAmount < 0) {
+      return { success: false, error: 'İndirim/bahşiş eksi olamaz' };
+    }
+
+    const { data: order } = await admin
+      .from('orders')
+      .select(
+        'id, business_id, payment_status, total, subtotal, discount_amount, tip_amount'
+      )
+      .eq('id', input.orderId)
+      .maybeSingle();
+
+    if (!order || order.business_id !== businessId) {
+      return { success: false, error: 'Sipariş bulunamadı' };
+    }
+    if (order.payment_status === 'paid') {
+      return { success: false, error: 'Bu sipariş zaten ödenmiş' };
+    }
+
+    // Önceden kısmi ödeme yapılmış mı?
+    const { data: existingPartials } = await admin
+      .from('payment_logs')
+      .select('id')
+      .eq('order_id', input.orderId)
+      .eq('action', 'partial_payment')
+      .limit(1);
+
+    if (existingPartials && existingPartials.length > 0) {
+      return {
+        success: false,
+        error:
+          'Önceden kısmi ödeme yapılmış. İndirim/bahşiş artık uygulanamaz.',
+      };
+    }
+
+    // Subtotal: ham kalemler toplamı (zaten orders.subtotal'da)
+    const subtotal = Number(order.subtotal || order.total);
+    const newTotal =
+      Math.max(0, subtotal - input.discountAmount) + input.tipAmount;
+
+    const { error: updateError } = await admin
+      .from('orders')
+      .update({
+        total: newTotal,
+        discount_amount: input.discountAmount,
+        discount_reason: input.discountReason || null,
+        tip_amount: input.tipAmount,
+        // adjusted_at: new Date().toISOString(), // varsa
+      })
+      .eq('id', input.orderId);
+
+    if (updateError) {
+      return { success: false, error: updateError.message };
+    }
+
+    // Adjustment log
+    await admin.from('payment_logs').insert({
+      business_id: businessId,
+      order_id: input.orderId,
+      action: 'adjustment',
+      payment_method: 'other',
+      amount: 0,
+      amount_paid: 0,
+      change_given: 0,
+      note: `Bölme öncesi: indirim ₺${input.discountAmount.toFixed(2)}${input.discountReason ? ' (' + input.discountReason + ')' : ''}, bahşiş ₺${input.tipAmount.toFixed(2)}`,
+      performed_by: memberId,
+      performed_at: new Date().toISOString(),
+    });
+
+    revalidatePath('/panel/pos');
+    return { success: true, newTotal };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Bilinmeyen hata',
+    };
+  }
+}

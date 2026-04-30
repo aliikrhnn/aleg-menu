@@ -39,8 +39,8 @@ type PaidRecord = {
 
 export function SplitPaymentModal({
   order,
-  discountAmount,
-  tipAmount,
+  discountAmount: _discountAmount,
+  tipAmount: _tipAmount,
   onClose,
   onAllPaid,
 }: Props) {
@@ -59,10 +59,13 @@ export function SplitPaymentModal({
   // Ödeme yöntemi (her parça için)
   const [method, setMethod] = useState<PaymentMethod>('cash');
 
-  const baseTotal = Number(order.total); // zaten discount + tip hesaba katılmış olmalı
-  const netTotal = Math.max(0, baseTotal - discountAmount) + tipAmount;
-  // Order.total zaten sipariş tablosundaki değer — discount/tip burada bilgi amaçlı
-  // Split calculus'ta gerçek ödenecek = netTotal
+  const baseTotal = Number(order.total);
+  // PaymentModal'dan gelen discountAmount/tipAmount sadece bilgi amaçlı.
+  // Bölme açılmadan önce applyAdjustmentsBeforeSplit ile order.total'a yazılmış
+  // olmalı. Güvenlik için yine de hesaplayalım, ama çift sayım yapmayalım:
+  // Eğer discountAmount/tipAmount geliyorsa demek ki PaymentModal yine eski
+  // davranışla çağırmış (geriye dönük uyumluluk için).
+  const netTotal = baseTotal; // order.total ZATEN net toplamdır
 
   const loadPayments = useCallback(async () => {
     const r = await getPartialPayments(order.id);

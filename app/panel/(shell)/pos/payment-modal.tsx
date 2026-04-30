@@ -2,7 +2,10 @@
 
 import { useState, useEffect, useRef, useTransition } from 'react';
 import { useEscapeKey } from '@/lib/hooks/use-escape-key';
-import { type PaymentMethod } from '@/lib/actions/payments';
+import {
+  type PaymentMethod,
+  applyAdjustmentsBeforeSplit,
+} from '@/lib/actions/payments';
 import { makeItemsComplimentary } from '@/lib/actions/tables-status';
 import { useOfflineActions } from '@/lib/offline/use-offline-actions';
 import { playSuccess } from '@/lib/sounds';
@@ -401,7 +404,35 @@ export function PaymentModal({
             {tipAmount > 0 && <span>· +{fmt(tipAmount)}</span>}
           </button>
           <button
-            onClick={() => setSplitOpen(true)}
+            onClick={async () => {
+              // İndirim/bahşiş varsa bölmeden önce siparişe uygula
+              if (discountAmount > 0 || tipAmount > 0) {
+                const ok = window.confirm(
+                  `Bölmeye geçmeden önce uyguladığın indirim/bahşiş siparişe yazılacak:\n\nİndirim: ${fmt(discountAmount)}\nBahşiş: ${fmt(tipAmount)}\nNet toplam: ${fmt(total)}\n\nDevam edilsin mi?`
+                );
+                if (!ok) return;
+                const res = await applyAdjustmentsBeforeSplit({
+                  orderId: order.id,
+                  discountAmount,
+                  discountReason: discountReason || undefined,
+                  tipAmount,
+                });
+                if (!res.success) {
+                  alert(res.error || 'İndirim/bahşiş uygulanamadı');
+                  return;
+                }
+                // Local total'ı güncelle, indirim/bahşiş'i sıfırla (artık order.total'da)
+                setDiscountAmount(0);
+                setDiscountReason('');
+                setTipAmount(0);
+                // Order objesi parent'tan geldiği için SplitPaymentModal'a yeni total ile aç
+                // (split modal kendi içinde Number(order.total)'ı okuyor — refresh için
+                // küçük bir hack: order.total'ı in-place güncelle)
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (order as any).total = res.newTotal;
+              }
+              setSplitOpen(true);
+            }}
             disabled={isPending || baseTotal <= 0}
             className="h-9 px-3 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all hover:scale-[1.03] disabled:opacity-40 ml-auto"
             style={{

@@ -1,189 +1,182 @@
-ALEG TUR 11 — Genel QR Kaldırıldı + URL'ler Gizlendi + 3 Yeni QR Tasarımı
-============================================================================
+ALEG TUR 12 — Bölme + İndirim/Bahşiş Hesap Hatası + Hesap Al Butonu Kaldırma
+===============================================================================
 
-Üç sorunu çözen güncelleme:
+İki sorunu çözer:
 
-  1. Menü tasarım: "Genel QR" seçeneği kaldırıldı, sadece masa-bazlı
-  2. Tasarımlardan URL'ler tamamen kaldırıldı
-  3. Masa QR tasarımları: 4'ten 7'ye çıkarıldı (3 yeni tasarım)
-
-
-[1] GENEL QR KALDIRILDI
-========================
-
-ÖNCESİ: Menü tasarım panelinde "QR Hedefi" accordion'unda iki seçenek
-       vardı: "Genel menü QR" veya "Belirli masa için". Genel QR
-       müşteriyi masaya değil sadece menüye yönlendirdiği için sipariş
-       karışıklığına yol açıyordu.
-
-SONRASI: Sadece masa-bazlı QR. Accordion'un adı "QR hedefi" yerine
-        "Masa" oldu. Her basılı menüde mutlaka bir masanın QR'ı var.
-        Masa eklenmemişse uyarı çıkıyor:
-
-        "Henüz masa eklenmemiş. Önce masa ekle ve QR kodlarını oluştur.
-         Masalar →"
+  1. Bölmeden önce uygulanan indirim/bahşiş yanlış hesaplanıyordu
+  2. Siparişler ekranındaki "Hesap Al" butonu kaldırıldı
 
 
-[2] TASARIMLARDAN URL'LER KALDIRILDI
-======================================
+[1] BÖLME + İNDİRİM/BAHŞİŞ HESAP HATASI
+==========================================
 
-ÖNCESİ: Footer'da QR'ın altında URL gösteriliyordu:
-        "rumeli-cafe.alegstudio.com/?t=masa-5"
-        — uzun ve çirkin görünüyordu.
+ÖNCESİ:
+  • Toplam ₺625 olan siparişe önce indirim+bahşiş uygulanıyor
+  • PaymentModal'da görünen ödenecek: ₺643.75
+  • "Bölerek Öde" basınca SplitPaymentModal açılıyor
+  • UI hesabı: netTotal = order.total (625) - discount + tip = 643.75
+  • Server hesabı: remainingBefore = order.total (625) - paid
+  • UI 1. kişi için 321.88 gönderiyor
+  • Server 625 - 0 = 625 limit görüyor → 321.88 OK ✓
+  • UI 2. kişi için yine 321.88 gönderiyor
+  • Server 625 - 321.88 = 303.12 limit görüyor → 321.88 RED ✗
+  • Hata: "Kalan tutar ₺303.12, daha fazlası alınamaz"
+  
+  Yani UI ile server iki farklı total üzerinden hesap yapıyordu.
 
-SONRASI:
-  • Standart şablonlar: URL yerine tipografik talimat:
-    "KAMERANI AÇ · TARA"  (mono font, küçük, accent renk)
+ÇÖZÜM:
+  Yeni server action: applyAdjustmentsBeforeSplit
+  • Bölmeye geçmeden ÖNCE order.total'a indirim/bahşiş yansıtılır
+  • orders tablosuna yazılır: discount_amount, tip_amount, discount_reason
+  • payment_logs'a 'adjustment' kaydı düşülür
+  • Bundan sonra hem UI hem server aynı net total üzerinden çalışır
 
-  • Bold Badge şablonu (alt CTA bandı): URL yerine
-    işletme adı ve masa adı:
-    "Rumeli Cafe · Masa 5"
-
-  QR kod yine doğru URL'i taşıyor — sadece görsel olarak gizlendi.
-
-
-[3] 3 YENİ MASA QR TASARIMI (4 → 7)
-======================================
-
-Mevcut: minimal, warm, dark, kraft
-
-YENİLER:
-
-  ⚜️ BOUTIQUE GOLD (boutique)
-     • İpek krem zemin (#FAF6EE)
-     • Altın detaylar (#B8903E) — gradient çizgiler, çift çerçeve
-     • Üst kısımda "À LA CARTE" + diamond ornament
-     • Side line dekoratifleriyle masa adı
-     • Hedef: butik kafeler, fine-dining, otel restoranları
-
-  🌿 FRESH MINT (mint)
-     • Açık yeşil gradient zemin (#EDF5EF → #DFEBE2)
-     • Koyu mint accent (#2D5F4C)
-     • Üst yuvarlak yeşil rozet "MENÜ" yazılı
-     • Organik ellipse dekoratifleri (köşelerde)
-     • Beyaz card içinde QR
-     • Alt rozet içinde instruction
-     • Hedef: brunch yerleri, fitness/sağlıklı kafeler, juice bar
-
-  ⚫ MONO EDITORIAL (mono)
-     • Saf siyah zemin (#0A0A0A)
-     • Beyaz tipografi, brutalist
-     • Üst sol "SCAN" dev font + altta beyaz çizgi
-     • Üst sağda "No.X · QR-MENU" mono yazı
-     • QR beyaz card üzerinde + 4 köşede L-bracket çerçeve
-     • Masa adı DEV (74pt, 900 weight) ortalı
-     • İşletme adı kutu içinde
-     • Hedef: minimalist mekanlar, art deco kafeler, "third wave" coffee
+KULLANICI DENEYİMİ:
+  PaymentModal'da indirim/bahşiş varken "Bölerek Öde" butonuna basınca:
+  
+  ┌──────────────────────────────────────┐
+  │ Bölmeye geçmeden önce uyguladığın    │
+  │ indirim/bahşiş siparişe yazılacak:   │
+  │                                       │
+  │ İndirim: ₺18.75                       │
+  │ Bahşiş: ₺37.50                        │
+  │ Net toplam: ₺643.75                   │
+  │                                       │
+  │ Devam edilsin mi?                     │
+  │           [İptal]  [Tamam]            │
+  └──────────────────────────────────────┘
+  
+  Onaylanırsa:
+    • order.total = 643.75 olur
+    • discount_amount = 18.75 olarak kaydedilir
+    • tip_amount = 37.50 olarak kaydedilir
+    • SplitPayment açılır, artık 643.75 üzerinden bölünür
 
 
-KULLANIM
-========
+[2] SİPARİŞLER EKRANI HESAP AL BUTONU KALDIRILDI
+=================================================
 
-İlgili sayfalar:
+ÖNCESİ: /panel/pos siparişler ekranındaki her ödenmemiş sipariş kartında
+       "₺ Hesap Al" butonu vardı. Bu kafa karıştırıyordu çünkü ödeme
+       almak için iki ayrı yer (Siparişler ve Kasa) vardı.
 
-  /panel/menu-tasarim
-    → Adım 7 "Masa" sadece masa seçici
-    → Tasarımlardaki URL'ler kayboldu
+SONRASI: Siparişler ekranı sadece sipariş yönetimi için. Ödeme almak
+        için Kasa ekranı kullanılıyor. Tek doğru akış.
 
-  /panel/masalar
-    → "QR İndir" veya tek masaya tıklayınca QR Picker Modal açılır
-    → Artık 7 tasarım seçeneği var
-    → Live preview otomatik
 
 KOD DEĞİŞİKLİKLERİ
 ==================
 
-[1] lib/utils/qr-design.ts
-  • QrDesign tipi: 'boutique' | 'mint' | 'mono' eklendi
-  • DESIGN_META: 3 yeni meta (label, description, preview renkler)
-  • TEXTS: yeni instruction'lar (TR + EN)
-  • generateQrDataUrl: yeni temalar için QR rengi
-  • generateCardSvg switch: yeni 3 case
-  • renderBoutique, renderMint, renderMono fonksiyonları eklendi
+[1] supabase/migrations/0035_orders_adjustments.sql (YENİ)
+  • orders tablosuna eklendi:
+    - discount_amount NUMERIC(10,2) DEFAULT 0
+    - tip_amount NUMERIC(10,2) DEFAULT 0
+    - discount_reason TEXT
+  
+  ÖNEMLİ: Mevcut siparişlerde subtotal kolonu zaten kullanılıyorsa
+  hiç dokunmaz. subtotal yoksa ham total = subtotal kabul edilir
+  (action içinde `Number(order.subtotal || order.total)` fallback).
 
-[2] components/panel/qr-picker-modal.tsx
-  • DESIGNS array: 4'ten 7'ye
+[2] lib/actions/payments.ts
+  • Yeni: applyAdjustmentsBeforeSplit() server action
+    - İzin: business üyesi
+    - Ödenmiş veya kısmi ödenmiş siparişlerde RED döner
+    - subtotal'dan indirim düş, bahşişi ekle → newTotal
+    - orders.total güncelle
+    - payment_logs'a 'adjustment' kaydı
 
-[3] lib/printable-menu/print-menu-document.tsx
-  • Footer: URL gösterimi kaldırıldı, "KAMERANI AÇ · TARA" tipografi
-  • Footer fonk: qrUrl artık _qrUrl (kullanılmıyor)
-  • BoldBadge CTA: URL yerine işletme adı + masa adı
-  • BoldBadge: qrUrlOverride → _qrUrlOverride
+[3] app/panel/(shell)/pos/payment-modal.tsx
+  • "Bölerek Öde" butonu yeniden yazıldı:
+    - Discount/tip varsa onay diyaloğu çıkar
+    - Onaylanırsa applyAdjustmentsBeforeSplit çağrılır
+    - State'ler sıfırlanır (artık order.total'da)
+    - Order objesinin total'ı in-place güncellenir
+    - SplitPaymentModal açılır
 
-[4] app/panel/(shell)/menu-tasarim/client.tsx
-  • qrTarget state KALDIRILDI (sadece masa-bazlı)
-  • activeQrUrl: doğrudan selectedTableId'ye bağlı
-  • handleBulkTablesDownload: qrTarget mantığı temizlendi
-  • Adım 7: "QR Hedefi" → "Masa" (sadece masa seçici)
-  • Yardım metni: "Her basılı menü, üzerine basıldığı masanın QR'ını
-    taşır. Müşteri taradığında otomatik o masaya atanır..."
+[4] app/panel/(shell)/pos/split-payment-modal.tsx
+  • netTotal artık doğrudan order.total
+  • discountAmount/tipAmount prop'ları kullanılmıyor (geriye uyum için bırakıldı)
+  • Server ile aynı total üzerinden bölme yapılır
+
+[5] app/panel/(shell)/pos/orders-board.tsx
+  • OrderCard'taki "Hesap Al" butonu kaldırıldı
+  • onPayment prop'u korundu ama _onPayment olarak rename (geriye uyum için)
 
 
 KURULUM
 =======
 
-4 dosya değişti, hepsini üzerine yaz:
+[1] DB MIGRATION (ÖNEMLİ):
+    Supabase SQL Editor → 0035_orders_adjustments.sql → run
 
-  lib/utils/qr-design.ts
-  lib/printable-menu/print-menu-document.tsx
-  app/panel/(shell)/menu-tasarim/client.tsx
-  components/panel/qr-picker-modal.tsx
-
-Yeni paket veya migration YOK.
+[2] DOSYALAR (üzerine yaz):
+    YENİ:
+      supabase/migrations/0035_orders_adjustments.sql
+    
+    GÜNCELLEMELER:
+      lib/actions/payments.ts
+      app/panel/(shell)/pos/payment-modal.tsx
+      app/panel/(shell)/pos/split-payment-modal.tsx
+      app/panel/(shell)/pos/orders-board.tsx
 
 
 PUSH
 ====
 
   git add .
-  git commit -m "feat: tur 11 - table-only QR + hidden URLs + 3 new QR designs"
+  git commit -m "fix: tur 12 - split payment with adjustments + remove pay btn from orders"
   git push origin main
 
 
 TEST
 ====
 
-[A] Genel QR kaldırıldı:
-    1. /panel/menu-tasarim aç
-    2. Sol panelde Adım 7 "Masa" olmalı (eski "QR Hedefi" değil)
-    3. ✅ "Genel menü QR" seçeneği YOK
-    4. Sadece masa dropdown ve yardım metni
+[A] Bölme + indirim+bahşiş senaryosu (ekran görüntüsündeki):
+    1. Kasa ekranı → Masa 1 → Hesap Al
+    2. PaymentModal açılır, toplam ₺625
+    3. İndirim ekle (örn. ₺18.75)
+    4. Bahşiş ekle (örn. ₺37.50)
+    5. Görünen yeni toplam: ₺643.75
+    6. "BÖLEREK ÖDE" butonuna bas
+    7. ✅ Onay diyaloğu çıkar: "Bölmeye geçmeden önce..."
+    8. Onayla
+    9. SplitPaymentModal açılır
+    10. ✅ TOPLAM artık ₺643.75 (eskiden 643.75 ama hesap 625'e takılıyordu)
+    11. 2 kişi seç → her biri ₺321.88
+    12. 1. kişi öde
+    13. ✅ Kalan ₺321.87 (önce kişi öderken hata yoktu)
+    14. 2. kişi öde
+    15. ✅ HATA YOK, ödeme tamamlanır
+    16. Order delivered olur, masa boşalır
 
-[B] Tasarımlardan URL kaldırıldı:
-    1. Klasik şablon → A4 PDF indir
-    2. ✅ Footer'da QR altında URL YAZMIYOR
-    3. Yerine "KAMERANI AÇ · TARA" mono yazı
-    4. Bold Badge şablon → A4 indir
-    5. ✅ Alt turuncu CTA bandında URL YOK
-    6. Yerine "Rumeli Cafe · Masa 5" görünüyor
+[B] İndirim/bahşiş yokken bölme:
+    1. Toplam ₺625, indirim/bahşiş yok
+    2. "BÖLEREK ÖDE" basınca onay çıkmamalı (zaten gerek yok)
+    3. Direkt SplitPayment açılır
+    4. Eski davranışla aynı
 
-[C] Yeni QR tasarımları:
-    1. /panel/masalar aç
-    2. Bir masaya tıkla → QR Picker Modal aç
-    3. ✅ 7 tasarım kartı görünüyor (eski 4 + yeni 3)
-    4. "Boutique Gold" seç → krem zemin + altın detaylar
-    5. "Fresh Mint" seç → yeşil zemin + ribbon banner
-    6. "Mono Editorial" seç → siyah zemin + büyük SCAN yazı
-    7. Her birinde live preview anında değişiyor
-    8. PDF indir → tasarım baskıya hazır
+[C] Önce kısmi ödeme yapılmış sipariş:
+    1. Bir siparişte 1 kişi ödeme yapmış (kısmi)
+    2. PaymentModal'a dön, indirim eklemeye çalış → bölmeye geç
+    3. ✅ Hata: "Önceden kısmi ödeme yapılmış. İndirim/bahşiş artık uygulanamaz."
 
-[D] Sipariş akışı testi:
-    1. /panel/menu-tasarim → Bold Badge seç → Masa 1 seç
-    2. PDF indir
-    3. Telefonla QR'ı tara
-    4. ✅ /?t=masa-1 ile menüye git, Masa 1 atansın
-    5. Sipariş ver → kasada Masa 1 olarak görünmeli
+[D] Siparişler ekranı:
+    1. /panel/pos açık (ana ekran)
+    2. Aktif sipariş kartlarında "₺ Hesap Al" butonu YOK
+    3. Sadece İptal, Hazır, Teslim Edildi gibi durum butonları var
+    4. Ödeme almak için Kasa ekranını kullan
 
 
-SİPARİŞ MANTIK NOTU
-=====================
+SCHEMA NOTU
+===========
 
-Tur 11'de "genel QR" seçeneğinin kaldırılması bilinçli bir karar:
-  • Genel QR + masa şartı sipariş karışıklığı yaratıyordu
-  • Bir müşteri masada otururken "genel QR" tarayınca masa atanmıyordu
-  • Sipariş kime gidecek belli olmuyordu
+orders tablosunda subtotal kolonu varsa applyAdjustmentsBeforeSplit
+onu okur. Yoksa current order.total'ı subtotal kabul edip ondan düşer
+(fallback).
 
-Şimdi her basılı menü mutlaka bir masanın QR'ını taşır. Eğer pano/dış
-levha gibi yerlerde "menü gör" istiyorsan Tur 9'da eklediğimiz
-"Özel tasarım yükle" özelliği daha uygun (kendi tasarımına serbestçe
-QR yerleştirebilirsin).
+İlk kez bu siparişe indirim/bahşiş uygulandığında:
+  - order.total = subtotal - discount + tip
+  - subtotal değişmez
+
+Bu şekilde subtotal ham kalemler toplamı olarak kalır,
+total ise net (ödenecek) tutar olur.

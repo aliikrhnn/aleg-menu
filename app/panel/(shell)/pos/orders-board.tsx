@@ -629,7 +629,7 @@ function OrderCard({
   nextAction,
   onStatusChange,
   onCancel,
-  onPayment,
+  onPayment: _onPayment,
   busy,
   isFlashing = false,
 }: {
@@ -861,24 +861,8 @@ function OrderCard({
             </button>
           )}
 
-          {/* Hesap Al butonu - ödeme modali açar - ödenmemişse */}
-          {!isPaid &&
-            order.payment_status !== 'refunded' && (
-              <button
-                onClick={() => onPayment(order)}
-                disabled={busy}
-                className="px-3 py-1.5 rounded-[10px] text-xs font-semibold transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-50 flex items-center gap-1"
-                style={{
-                  background: 'var(--accent)',
-                  color: '#FAF5EA',
-                  letterSpacing: '0.02em',
-                }}
-                title="Hesap al (ödeme)"
-              >
-                <span>₺</span>
-                <span>Hesap Al</span>
-              </button>
-            )}
+          {/* Hesap Al butonu Siparişler ekranından kaldırıldı (Tur 12).
+              Ödeme almak için Kasa ekranını kullan. */}
 
           {/* Next action — tamamen bitmiş olmayanlar için görünür */}
           {/* Ödenmiş ama hazırlanıyor olanlarda da kasiyer 'Hazır' / 'Teslim Edildi' diyebilmeli */}
