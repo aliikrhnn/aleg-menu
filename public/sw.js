@@ -15,7 +15,7 @@
  */
 
 // Versiyon — sw.js güncellenince burayı değiştir, eski cache temizlenir
-const SW_VERSION = 'v1.0.0';
+const SW_VERSION = 'v1.0.2';
 
 // ────────────────────────────────────────────────────────────────────
 // LIFECYCLE
@@ -38,39 +38,66 @@ self.addEventListener('activate', (event) => {
 // ────────────────────────────────────────────────────────────────────
 
 self.addEventListener('push', (event) => {
-  if (!event.data) {
-    console.warn('[Aleg SW] Push geldi ama data yok');
-    return;
-  }
+  console.log('[Aleg SW] push event geldi', event);
 
-  let payload;
-  try {
-    payload = event.data.json();
-  } catch {
-    // Payload JSON değilse text olarak göster
-    payload = {
-      title: 'Aleg',
-      body: event.data.text(),
-    };
+  // Default değerler — payload yoksa veya parse edilemezse bunları kullan
+  // (iOS Safari ve bazı durumlarda push payload boş gelebilir)
+  let payload = {
+    title: 'Aleg',
+    body: 'Yeni bildirim',
+    url: '/',
+  };
+
+  if (event.data) {
+    try {
+      const parsed = event.data.json();
+      payload = { ...payload, ...parsed };
+    } catch (jsonErr) {
+      console.warn('[Aleg SW] JSON parse hatası, text olarak deniyorum', jsonErr);
+      try {
+        payload.body = event.data.text();
+      } catch {
+        // text da fail ederse default kullan
+      }
+    }
+  } else {
+    console.warn('[Aleg SW] Push event geldi ama data yok, default göster');
   }
 
   const title = payload.title || 'Aleg';
+
+  // showNotification options — sadece destekli alanları geç
+  // (iOS Safari requireInteraction desteklemez, vb.)
   const options = {
     body: payload.body || '',
     icon: payload.icon || '/icons/garson-icon.svg',
     badge: payload.badge || '/icons/garson-icon.svg',
-    tag: payload.tag, // aynı tag'li bildirimleri birleştir
     data: {
       url: payload.url || '/',
     },
-    silent: payload.silent === true,
-    vibrate: payload.vibrate || [200, 100, 200],
-    requireInteraction: payload.requireInteraction === true,
-    // iOS Safari için actions desteklenmez ama Android Chrome destekler
-    actions: payload.actions || [],
   };
 
-  event.waitUntil(self.registration.showNotification(title, options));
+  // Opsiyonel alanlar — destekleyen tarayıcılarda eklenir, desteklemeyen sessizce yok sayar
+  if (payload.tag) options.tag = payload.tag;
+  if (payload.silent === true) options.silent = true;
+  if (payload.vibrate) options.vibrate = payload.vibrate;
+  if (payload.requireInteraction === true) options.requireInteraction = true;
+  if (Array.isArray(payload.actions)) options.actions = payload.actions;
+
+  event.waitUntil(
+    self.registration
+      .showNotification(title, options)
+      .then(() => {
+        console.log('[Aleg SW] Bildirim gösterildi:', title);
+      })
+      .catch((err) => {
+        console.error('[Aleg SW] showNotification hatası:', err);
+        // En basit form ile tekrar dene (tüm options'ları çıkar)
+        return self.registration.showNotification(title, {
+          body: payload.body || '',
+        });
+      })
+  );
 });
 
 // ────────────────────────────────────────────────────────────────────

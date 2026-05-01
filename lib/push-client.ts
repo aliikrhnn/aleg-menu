@@ -47,6 +47,86 @@ export function isPushSupported(): boolean {
   );
 }
 
+/**
+ * Detaylı tanı bilgisi — neden desteklenmediğini gösterir.
+ * Mobil debug için kullanışlı.
+ */
+export function getPushSupportDetails(): {
+  supported: boolean;
+  hasServiceWorker: boolean;
+  hasPushManager: boolean;
+  hasNotification: boolean;
+  isSecureContext: boolean;
+  isStandalone: boolean; // PWA olarak ana ekrandan açıldı mı (iOS için kritik)
+  userAgent: string;
+  isIOS: boolean;
+  isAndroid: boolean;
+  isSafari: boolean;
+  reason?: string;
+} {
+  if (typeof window === 'undefined') {
+    return {
+      supported: false,
+      hasServiceWorker: false,
+      hasPushManager: false,
+      hasNotification: false,
+      isSecureContext: false,
+      isStandalone: false,
+      userAgent: '',
+      isIOS: false,
+      isAndroid: false,
+      isSafari: false,
+      reason: 'window yok (SSR)',
+    };
+  }
+
+  const ua = navigator.userAgent || '';
+  const isIOS = /iPad|iPhone|iPod/.test(ua) && !(window as unknown as { MSStream?: unknown }).MSStream;
+  const isAndroid = /Android/.test(ua);
+  const isSafari = /Safari/.test(ua) && !/Chrome|CriOS|FxiOS|EdgiOS/.test(ua);
+
+  const hasServiceWorker = 'serviceWorker' in navigator;
+  const hasPushManager = 'PushManager' in window;
+  const hasNotification = 'Notification' in window;
+  const isSecureContext = window.isSecureContext;
+
+  // PWA olarak ana ekrandan açıldı mı (display-mode: standalone)
+  const isStandalone =
+    window.matchMedia?.('(display-mode: standalone)').matches ||
+    (window.navigator as unknown as { standalone?: boolean }).standalone === true;
+
+  const supported = hasServiceWorker && hasPushManager && hasNotification;
+
+  let reason: string | undefined;
+  if (!isSecureContext) {
+    reason = 'HTTPS gerekli (insecure context)';
+  } else if (isIOS && isSafari && !isStandalone) {
+    reason = 'iOS Safari: önce "Ana Ekrana Ekle" ile yüklemen gerekiyor. Safari Paylaş menüsü → "Ana Ekrana Ekle"';
+  } else if (isIOS && !isSafari) {
+    reason = 'iOS\'ta tüm tarayıcılar Safari motorunu kullanır. Safari\'den aç ve "Ana Ekrana Ekle" yap';
+  } else if (!hasServiceWorker) {
+    reason = 'Tarayıcı Service Worker desteklemiyor';
+  } else if (!hasPushManager) {
+    reason = 'Tarayıcı Push API desteklemiyor';
+  } else if (!hasNotification) {
+    reason = 'Tarayıcı Notification API desteklemiyor';
+  }
+
+  return {
+    supported,
+    hasServiceWorker,
+    hasPushManager,
+    hasNotification,
+    isSecureContext,
+    isStandalone,
+    userAgent: ua,
+    isIOS,
+    isAndroid,
+    isSafari,
+    reason,
+  };
+}
+
 // ════════════════════════════════════════════════════════════════════
 // SERVICE WORKER REGISTER
 // ════════════════════════════════════════════════════════════════════
@@ -54,6 +134,9 @@ export function isPushSupported(): boolean {
 /**
  * Service worker'ı register eder (yoksa).
  * Aleg'in tek service worker'ı /sw.js, scope: '/' (tüm site).
+ *
+ * updateViaCache: 'none' → Tarayıcı sw.js'i HTTP cache'inden değil,
+ * her zaman ağdan kontrol eder. Versiyon güncellemesi anında yansır.
  */
 export async function registerServiceWorker(): Promise<ServiceWorkerRegistration | null> {
   if (!isPushSupported()) return null;
@@ -61,11 +144,16 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
   try {
     // Önce mevcut registration var mı bak
     const existing = await navigator.serviceWorker.getRegistration('/');
-    if (existing) return existing;
+    if (existing) {
+      // Güncel versiyon var mı kontrol et (background)
+      existing.update().catch(() => { /* ignore */ });
+      return existing;
+    }
 
     // Yoksa register et
     const reg = await navigator.serviceWorker.register('/sw.js', {
       scope: '/',
+      updateViaCache: 'none',
     });
 
     // Active olmasını bekle
