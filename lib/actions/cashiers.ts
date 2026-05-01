@@ -3,7 +3,13 @@
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { revalidatePath } from 'next/cache';
+import { headers } from 'next/headers';
 import bcrypt from 'bcryptjs';
+import {
+  checkPinRateLimit,
+  recordPinAttempt,
+  extractIpFromHeaders,
+} from '@/lib/security/pin-rate-limit';
 
 // ============================================================
 // İzin kontrolü
@@ -375,6 +381,35 @@ export async function verifyCashierPin(
       return { success: false, error: 'Geçersiz PIN' };
     }
 
+    // ╔══════════════════════════════════════════════════════════════╗
+    // ║ BRUTE FORCE KORUMASI                                         ║
+    // ║ IP + cashierId başına aşamalı kilit:                         ║
+    // ║   3 yanlış → 60sn · 6 yanlış → 15dk · 10+ → 1 saat           ║
+    // ╚══════════════════════════════════════════════════════════════╝
+    const headerStore = headers();
+    const ipAddress = extractIpFromHeaders(headerStore);
+    const userAgent = headerStore.get('user-agent') || null;
+
+    const rateLimit = await checkPinRateLimit({
+      admin,
+      ipAddress,
+      cashierId,
+    });
+
+    if (!rateLimit.allowed) {
+      // Kilitli denemeyi de logla (audit için)
+      await recordPinAttempt({
+        admin,
+        businessId,
+        cashierId,
+        ipAddress,
+        userAgent,
+        result: 'locked',
+        expectedRole,
+      });
+      return { success: false, error: rateLimit.message };
+    }
+
     const { data: cashier } = await admin
       .from('cashier_accounts')
       .select(
@@ -388,11 +423,31 @@ export async function verifyCashierPin(
       cashier.business_id !== businessId ||
       !cashier.is_active
     ) {
+      // Cashier bulunamadıysa da logla (saldırı pattern tespiti için)
+      await recordPinAttempt({
+        admin,
+        businessId,
+        cashierId,
+        ipAddress,
+        userAgent,
+        result: 'not_found',
+        expectedRole,
+      });
       return { success: false, error: 'Kasiyer bulunamadı' };
     }
 
     const valid = await bcrypt.compare(pin, cashier.pin_hash);
     if (!valid) {
+      // Yanlış PIN — logla (rate limit için kritik)
+      await recordPinAttempt({
+        admin,
+        businessId,
+        cashierId,
+        ipAddress,
+        userAgent,
+        result: 'wrong_pin',
+        expectedRole,
+      });
       return { success: false, error: 'Yanlış PIN' };
     }
 
@@ -400,17 +455,46 @@ export async function verifyCashierPin(
     // garson uygulaması 'waiter' rolündekileri. 'both' rolü her ikisinde de geçerli.
     const cashierRole = (cashier.role as CashierRole) || 'cashier';
     if (expectedRole === 'cashier' && cashierRole === 'waiter') {
+      await recordPinAttempt({
+        admin,
+        businessId,
+        cashierId,
+        ipAddress,
+        userAgent,
+        result: 'wrong_role',
+        expectedRole,
+      });
       return {
         success: false,
         error: 'Bu hesabın kasa yetkisi yok',
       };
     }
     if (expectedRole === 'waiter' && cashierRole === 'cashier') {
+      await recordPinAttempt({
+        admin,
+        businessId,
+        cashierId,
+        ipAddress,
+        userAgent,
+        result: 'wrong_role',
+        expectedRole,
+      });
       return {
         success: false,
         error: 'Bu hesabın garson yetkisi yok',
       };
     }
+
+    // BAŞARILI — audit log
+    await recordPinAttempt({
+      admin,
+      businessId,
+      cashierId,
+      ipAddress,
+      userAgent,
+      result: 'success',
+      expectedRole,
+    });
 
     // last_used_at güncelle (arka planda, hata olsa sorun değil)
     admin
