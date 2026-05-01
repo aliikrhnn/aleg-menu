@@ -968,10 +968,14 @@ export function MenuView({
         <FeaturedHeroCarousel
           products={featured}
           lang={lang}
-          onAdd={(p, el) => {
-            flyToCart(el, p);
-            addToCart(p);
-          }}
+          onAdd={
+            orderingEnabled
+              ? (p, el) => {
+                  flyToCart(el, p);
+                  addToCart(p);
+                }
+              : undefined
+          }
         />
       )}
 
@@ -1049,10 +1053,14 @@ export function MenuView({
                       key={p.id}
                       product={p}
                       lang={lang}
-                      onAdd={(el) => {
-                        flyToCart(el, p);
-                        addToCart(p);
-                      }}
+                      onAdd={
+                        orderingEnabled
+                          ? (el) => {
+                              flyToCart(el, p);
+                              addToCart(p);
+                            }
+                          : undefined
+                      }
                       onShowDetail={() => setDetailModal(p)}
                       animationDelay={i * 25}
                     />
@@ -1152,10 +1160,14 @@ export function MenuView({
                 key={p.id}
                 product={p}
                 lang={lang}
-                onAdd={(el) => {
-                  flyToCart(el, p);
-                  addToCart(p);
-                }}
+                onAdd={
+                  orderingEnabled
+                    ? (el) => {
+                        flyToCart(el, p);
+                        addToCart(p);
+                      }
+                    : undefined
+                }
                 onShowDetail={() => setDetailModal(p)}
                 animationDelay={i * 25}
               />
@@ -1837,16 +1849,20 @@ export function MenuView({
           product={detailModal}
           lang={lang}
           onClose={() => setDetailModal(null)}
-          onAdd={() => {
-            const p = detailModal;
-            setDetailModal(null);
-            // Varyasyonlu ürünse option modal'ı, değilse direkt sepete
-            if (p.presets && p.presets.length > 0) {
-              setOptionModal(p);
-            } else {
-              addToCart(p);
-            }
-          }}
+          onAdd={
+            orderingEnabled
+              ? () => {
+                  const p = detailModal;
+                  setDetailModal(null);
+                  // Varyasyonlu ürünse option modal'ı, değilse direkt sepete
+                  if (p.presets && p.presets.length > 0) {
+                    setOptionModal(p);
+                  } else {
+                    addToCart(p);
+                  }
+                }
+              : undefined
+          }
         />
       )}
 
@@ -1925,7 +1941,7 @@ function ProductRow({
 }: {
   product: Product;
   lang: Lang;
-  onAdd: (el: HTMLElement) => void;
+  onAdd?: (el: HTMLElement) => void; // undefined ise sipariş kapalı, buton gösterilmez
   onShowDetail?: () => void;
   animationDelay?: number;
 }) {
@@ -2207,26 +2223,28 @@ function ProductRow({
           {money(product.price, lang)}
         </span>
 
-        <button
-          onClick={(e) => onAdd(e.currentTarget)}
-          disabled={isOut}
-          className="rounded-full flex items-center justify-center font-bold transition-all active:scale-90 disabled:opacity-30 disabled:cursor-not-allowed"
-          style={{
-            width: 32,
-            height: 32,
-            background: isOut ? 'var(--ink-3)' : 'var(--accent)',
-            color: '#FAF5EA',
-            fontSize: 18,
-            lineHeight: 1,
-            boxShadow: isOut
-              ? 'none'
-              : '0 2px 8px -2px color-mix(in srgb, var(--accent) 40%, transparent)',
-          }}
-          title={lang === 'tr' ? 'Masaya ekle' : 'Add to table'}
-          aria-label={lang === 'tr' ? 'Masaya ekle' : 'Add to table'}
-        >
-          +
-        </button>
+        {onAdd && (
+          <button
+            onClick={(e) => onAdd(e.currentTarget)}
+            disabled={isOut}
+            className="rounded-full flex items-center justify-center font-bold transition-all active:scale-90 disabled:opacity-30 disabled:cursor-not-allowed"
+            style={{
+              width: 32,
+              height: 32,
+              background: isOut ? 'var(--ink-3)' : 'var(--accent)',
+              color: '#FAF5EA',
+              fontSize: 18,
+              lineHeight: 1,
+              boxShadow: isOut
+                ? 'none'
+                : '0 2px 8px -2px color-mix(in srgb, var(--accent) 40%, transparent)',
+            }}
+            title={lang === 'tr' ? 'Masaya ekle' : 'Add to table'}
+            aria-label={lang === 'tr' ? 'Masaya ekle' : 'Add to table'}
+          >
+            +
+          </button>
+        )}
       </div>
     </div>
   );
@@ -2661,7 +2679,7 @@ function FeaturedHeroCarousel({
 }: {
   products: Product[];
   lang: Lang;
-  onAdd: (p: Product, el: HTMLElement) => void;
+  onAdd?: (p: Product, el: HTMLElement) => void; // undefined ise sipariş kapalı
 }) {
   const [active, setActive] = useState(0);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -2778,7 +2796,7 @@ function FeaturedHeroCarousel({
             key={p.id}
             product={p}
             lang={lang}
-            onAdd={(el) => onAdd(p, el)}
+            onAdd={onAdd ? (el) => onAdd(p, el) : undefined}
             active={idx === active}
           />
         ))}
@@ -2821,7 +2839,7 @@ function FeaturedHeroCard({
 }: {
   product: Product;
   lang: Lang;
-  onAdd: (el: HTMLElement) => void;
+  onAdd?: (el: HTMLElement) => void; // undefined ise sipariş kapalı
   active: boolean;
 }) {
   const isOut = product.status === 'soldout';
@@ -2994,25 +3012,27 @@ function FeaturedHeroCard({
           </div>
         </div>
 
-        <button
-          onClick={(e) => onAdd(e.currentTarget)}
-          disabled={isOut}
-          className="rounded-full flex items-center justify-center transition-all active:scale-90 disabled:opacity-40 flex-shrink-0"
-          style={{
-            width: 48,
-            height: 48,
-            background: 'var(--accent)',
-            color: '#FAF5EA',
-            fontSize: 26,
-            fontWeight: 400,
-            lineHeight: 1,
-            boxShadow:
-              '0 4px 14px -4px color-mix(in srgb, var(--accent) 55%, transparent)',
-          }}
-          aria-label={lang === 'tr' ? 'Masaya ekle' : 'Add to table'}
-        >
-          +
-        </button>
+        {onAdd && (
+          <button
+            onClick={(e) => onAdd(e.currentTarget)}
+            disabled={isOut}
+            className="rounded-full flex items-center justify-center transition-all active:scale-90 disabled:opacity-40 flex-shrink-0"
+            style={{
+              width: 48,
+              height: 48,
+              background: 'var(--accent)',
+              color: '#FAF5EA',
+              fontSize: 26,
+              fontWeight: 400,
+              lineHeight: 1,
+              boxShadow:
+                '0 4px 14px -4px color-mix(in srgb, var(--accent) 55%, transparent)',
+            }}
+            aria-label={lang === 'tr' ? 'Masaya ekle' : 'Add to table'}
+          >
+            +
+          </button>
+        )}
       </div>
     </div>
   );
@@ -3032,7 +3052,7 @@ function ProductDetailModal({
   product: Product;
   lang: Lang;
   onClose: () => void;
-  onAdd: () => void;
+  onAdd?: () => void; // undefined ise sipariş kapalı, "Masaya Ekle" butonu gizli
 }) {
   const name = tt(product.name, lang);
   const description = tt(product.description, lang);
@@ -3367,33 +3387,35 @@ function ProductDetailModal({
           </div>
         </div>
 
-        {/* Footer — sepete ekle */}
-        <div
-          className="p-4 border-t flex-shrink-0"
-          style={{
-            borderColor: 'var(--line)',
-            background: 'var(--paper)',
-          }}
-        >
-          <button
-            onClick={onAdd}
-            disabled={isOut}
-            className="w-full h-12 rounded-[12px] font-bold text-sm transition-all active:scale-[0.98] disabled:opacity-40"
+        {/* Footer — sepete ekle (sadece sipariş açıkken) */}
+        {onAdd && (
+          <div
+            className="p-4 border-t flex-shrink-0"
             style={{
-              background: isOut ? 'var(--ink-3)' : 'var(--accent)',
-              color: '#FAF5EA',
-              fontFamily: 'var(--f-mono)',
-              letterSpacing: '0.06em',
-              textTransform: 'uppercase',
+              borderColor: 'var(--line)',
+              background: 'var(--paper)',
             }}
           >
-            {isOut
-              ? lang === 'tr' ? 'TÜKENDİ' : 'OUT OF STOCK'
-              : product.presets && product.presets.length > 0
-                ? lang === 'tr' ? 'SEÇENEKLERİ GÖR' : 'SEE OPTIONS'
-                : lang === 'tr' ? 'MASAYA EKLE' : 'ADD TO TABLE'}
-          </button>
-        </div>
+            <button
+              onClick={onAdd}
+              disabled={isOut}
+              className="w-full h-12 rounded-[12px] font-bold text-sm transition-all active:scale-[0.98] disabled:opacity-40"
+              style={{
+                background: isOut ? 'var(--ink-3)' : 'var(--accent)',
+                color: '#FAF5EA',
+                fontFamily: 'var(--f-mono)',
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+              }}
+            >
+              {isOut
+                ? lang === 'tr' ? 'TÜKENDİ' : 'OUT OF STOCK'
+                : product.presets && product.presets.length > 0
+                  ? lang === 'tr' ? 'SEÇENEKLERİ GÖR' : 'SEE OPTIONS'
+                  : lang === 'tr' ? 'MASAYA EKLE' : 'ADD TO TABLE'}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
