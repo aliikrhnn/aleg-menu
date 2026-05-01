@@ -2499,9 +2499,11 @@ export async function applyAdjustmentsBeforeSplit(input: {
       .from('orders')
       .update({
         total: newTotal,
-        discount_amount: input.discountAmount,
+        discount: input.discountAmount, // Z-Report bu kolonu okur
+        discount_amount: input.discountAmount, // legacy uyum
         discount_reason: input.discountReason || null,
-        tip_amount: input.tipAmount,
+        tip: input.tipAmount, // Z-Report bu kolonu okur
+        tip_amount: input.tipAmount, // legacy uyum
         // adjusted_at: new Date().toISOString(), // varsa
       })
       .eq('id', input.orderId);

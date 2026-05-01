@@ -29,7 +29,11 @@ import {
   closeOrderOnAccount,
   type TableOrderDetail,
 } from '@/lib/actions/tables-status';
-import { takePayment } from '@/lib/actions/payments';
+import {
+  takePayment,
+  takePartialPayment,
+  applyAdjustmentsBeforeSplit,
+} from '@/lib/actions/payments';
 import { MenuPicker } from './menu-picker';
 import { CustomerPicker } from './customer-picker';
 
@@ -546,22 +550,41 @@ export function HesapPanel({
         targetOrderId = splitR.newOrderId;
       }
 
-      // Her parça için ayrı takePayment
-      // Birinci parça indirimi de taşır
+      // ──────────────────────────────────────────────────────────────
+      // İndirim/bahşiş varsa BÖLME ÖNCESİ uygula
+      // (takePartialPayment indirim parametresi almıyor — siparişin total'ını
+      // doğrudan güncellememiz gerek ki kalan tutar takibi doğru çalışsın)
+      // ──────────────────────────────────────────────────────────────
+      if (discountAmount > 0) {
+        const adjR = await applyAdjustmentsBeforeSplit({
+          orderId: targetOrderId,
+          discountAmount,
+          discountReason: discount?.reason,
+          tipAmount: 0,
+        });
+        if (!adjR.success) {
+          setSubmitting(false);
+          toast.error(adjR.error || 'İndirim uygulanamadı');
+          return;
+        }
+      }
+
+      // Her parça için takePartialPayment
+      // SON parça siparişi otomatik 'paid' yapar (kalan tutar kapanırsa)
+      // ÖNEMLİ: takePayment YANLIŞTI — ilk çağrı siparişi paid yapıyordu,
+      // sonraki çağrılar "zaten ödenmiş" hatası alıp KAYIP veriye yol açıyordu.
+      const splitGroup = `${targetOrderId}-multi-${Date.now()}`;
       let allOk = true;
       const failures: string[] = [];
       for (let i = 0; i < entries.length; i++) {
         const e = entries[i];
-        const isFirst = i === 0;
-        const r = await takePayment({
+        const r = await takePartialPayment({
           orderId: targetOrderId,
           paymentMethod: e.method,
           amount: e.amount,
-          discountAmount:
-            isFirst && discountAmount > 0 ? discountAmount : undefined,
-          discountReason: isFirst && discount ? discount.reason : undefined,
           note: `Parçalı ödeme ${i + 1}/${entries.length}`,
-          autoPrint: false,
+          splitGroup,
+          partyLabel: `Kişi ${i + 1}/${entries.length}`,
         });
         if (!r.success) {
           allOk = false;
