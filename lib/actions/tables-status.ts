@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { closeOrderAndMaybeFreeTable, ensureOpenCashSession } from './payments';
+import { closeOrderAndMaybeFreeTable } from './payments';
 import { logAction, fetchPerformerInfo } from './audit-log';
 import { revalidatePath } from 'next/cache';
 
@@ -437,11 +437,6 @@ export type CreateManualOrderInput = {
   orderType?: 'dine_in' | 'pickup' | 'delivery';
   cashierId: string;
   note?: string;
-  // Sipariş kaynağı (SERT vardiya kontrolü için kullanılır)
-  // 'manual' = kasa, kasa ile sipariş alır → vardiya AÇIK olmak ZORUNDA
-  // 'waiter' = garson tablet'inden gelen sipariş → vardiya kontrolü YOK
-  // (garson siparişi akabinde kasada ödenir, vardiya orada kontrol edilir)
-  source?: 'manual' | 'waiter';
   items: Array<{
     productId: string;
     productName: string;
@@ -489,19 +484,6 @@ export async function createManualOrder(input: CreateManualOrderInput): Promise<
 
     if (input.items.length === 0) {
       return { success: false, error: 'En az bir ürün ekle' };
-    }
-
-    // ╔════════════════════════════════════════════════════════════╗
-    // ║ SERT VARDIYA MODU                                          ║
-    // ║ POS'tan yeni sipariş oluşturmak için vardiya AÇIK olmalı.  ║
-    // ║ QR kod / garson siparişi (source !== 'manual') muaf.       ║
-    // ║ Sadece kasiyer manuel siparişlerinde kontrol var.          ║
-    // ╚════════════════════════════════════════════════════════════╝
-    if (input.source === 'manual' || !input.source) {
-      const shiftCheck = await ensureOpenCashSession(admin, businessId);
-      if (!shiftCheck.ok) {
-        return { success: false, error: shiftCheck.error };
-      }
     }
 
     // Cashier güvenliği
@@ -936,16 +918,6 @@ export async function addItemsToOrder(input: {
     // Idempotency (basit - items.note'a sync id sakla)
     if (input.items.length === 0) {
       return { success: false, error: 'En az bir ürün ekle' };
-    }
-
-    // ╔════════════════════════════════════════════════════════════╗
-    // ║ SERT VARDIYA MODU                                          ║
-    // ║ Kasadan mevcut siparişe kalem ekleme = satış hareketi      ║
-    // ║ Vardiya AÇIK olmak zorunda.                                ║
-    // ╚════════════════════════════════════════════════════════════╝
-    const shiftCheck = await ensureOpenCashSession(admin, businessId);
-    if (!shiftCheck.ok) {
-      return { success: false, error: shiftCheck.error };
     }
 
     const { data: order } = await admin

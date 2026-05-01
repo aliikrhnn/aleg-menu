@@ -843,81 +843,61 @@ export function KasaBoard({ initialOrders, businessId }: Props) {
 
       {/* TAB İÇERİK */}
       <div className="flex-1 flex flex-col px-4 md:px-6 py-4 min-h-0">
-        {/* SERT VARDIYA MODU — Kasa kapalıyken büyük kırmızı uyarı bandı */}
+        {/* Kasa kapalı uyarı bandı (register sekmesi hariç, açık DEĞİLSE göster) */}
         {kasaOpen !== true && activeTab !== 'register' && (
           <div
-            className="mb-4 rounded-[12px] px-4 py-3.5 flex items-center gap-3 relative overflow-hidden"
+            className="mb-4 rounded-[10px] px-4 py-3 flex items-center gap-3"
             style={{
-              background:
-                'linear-gradient(135deg, color-mix(in srgb, var(--danger, #C4553A) 14%, var(--paper)) 0%, color-mix(in srgb, var(--danger, #C4553A) 8%, var(--paper)) 100%)',
-              border: '2px solid var(--danger, #C4553A)',
-              boxShadow:
-                '0 2px 12px -4px color-mix(in srgb, var(--danger, #C4553A) 30%, transparent)',
+              background: 'color-mix(in srgb, var(--warn) 10%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--warn) 40%, var(--line))',
             }}
           >
-            {/* Diagonal stripe pattern (dikkat çekme) */}
-            <div
-              aria-hidden
-              className="absolute inset-0 pointer-events-none opacity-[0.06]"
-              style={{
-                backgroundImage:
-                  'repeating-linear-gradient(45deg, var(--danger, #C4553A) 0px, var(--danger, #C4553A) 8px, transparent 8px, transparent 16px)',
-              }}
-            />
             <div
               style={{
-                width: 36,
-                height: 36,
-                borderRadius: 10,
-                background: 'var(--danger, #C4553A)',
+                width: 28,
+                height: 28,
+                borderRadius: 8,
+                background: 'var(--warn)',
                 color: '#FAF5EA',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontWeight: 800,
-                fontSize: 18,
+                fontWeight: 700,
+                fontSize: 14,
                 flexShrink: 0,
-                position: 'relative',
-                zIndex: 1,
               }}
             >
               !
             </div>
-            <div className="flex-1 min-w-0 relative z-10">
+            <div className="flex-1 min-w-0">
               <div
                 className="uppercase"
                 style={{
                   fontFamily: 'var(--f-mono)',
-                  fontSize: 10,
-                  fontWeight: 800,
-                  letterSpacing: '0.18em',
-                  color: 'var(--danger, #C4553A)',
-                  marginBottom: 3,
+                  fontSize: 9,
+                  fontWeight: 700,
+                  letterSpacing: '0.14em',
+                  color: 'var(--warn)',
+                  marginBottom: 2,
                 }}
               >
-                ⚠ VARDİYA KAPALI · SATIŞ ALINAMIYOR
+                KASA KAPALI
               </div>
-              <div
-                className="text-sm font-medium"
-                style={{ color: 'var(--ink)' }}
-              >
-                Sipariş veya ödeme almak için önce vardiyayı başlat. Tüm satışlar
-                vardiyaya bağlanır, gün sonu sayım için kritik.
+              <div className="text-sm" style={{ color: 'var(--ink-2)' }}>
+                Sipariş veya ödeme alabilmek için önce kasayı açman gerekiyor.
               </div>
             </div>
             <button
               onClick={() => setActiveTab('register')}
-              className="h-10 px-4 rounded-[10px] text-xs font-bold transition-all hover:opacity-95 active:scale-95 flex-shrink-0 relative z-10"
+              className="h-9 px-3 rounded-[8px] text-xs font-semibold transition-all hover:opacity-90 flex-shrink-0"
               style={{
-                background: 'var(--danger, #C4553A)',
+                background: 'var(--accent)',
                 color: '#FAF5EA',
                 fontFamily: 'var(--f-mono)',
-                letterSpacing: '0.1em',
-                boxShadow:
-                  '0 2px 8px -2px color-mix(in srgb, var(--danger, #C4553A) 50%, transparent)',
+                letterSpacing: '0.08em',
               }}
             >
-              VARDİYA AÇ →
+              KASAYA GİT
             </button>
           </div>
         )}
