@@ -250,6 +250,15 @@ export type ProductInput = {
   dietary_tags?: string[];
   spicy_level?: number;
   hero_icon?: string;
+  // Beslenme & alerjen (Sprint 1 — opsiyonel, AI üretebilir veya manuel)
+  allergens?: string[];
+  calories?: number | null;
+  serving_size?: string | null;
+  ingredients_tr?: string;
+  ingredients_en?: string;
+  contains_alcohol?: boolean;
+  nutrition_ai_generated?: boolean;
+  ai_notes?: string;
 };
 
 export async function createProduct(
@@ -317,6 +326,20 @@ export async function createProduct(
           typeof input.spicy_level === 'number' ? input.spicy_level : 0,
         hero_icon: input.hero_icon || null,
         sort_order: sortOrder,
+        // Beslenme & alerjen
+        allergens: input.allergens || [],
+        calories: input.calories ?? null,
+        serving_size: input.serving_size || null,
+        ingredients:
+          input.ingredients_tr || input.ingredients_en
+            ? {
+                tr: input.ingredients_tr || '',
+                en: input.ingredients_en || '',
+              }
+            : { tr: '', en: '' },
+        contains_alcohol: input.contains_alcohol || false,
+        nutrition_ai_generated: input.nutrition_ai_generated || false,
+        ai_notes: input.ai_notes || null,
       })
       .select('id')
       .single();
@@ -394,6 +417,28 @@ export async function updateProduct(
       updates.dietary_tags = input.dietary_tags;
     if (input.spicy_level !== undefined) updates.spicy_level = input.spicy_level;
     if (input.hero_icon !== undefined) updates.hero_icon = input.hero_icon || null;
+    // Beslenme & alerjen
+    if (input.allergens !== undefined) updates.allergens = input.allergens;
+    if (input.calories !== undefined) updates.calories = input.calories;
+    if (input.serving_size !== undefined)
+      updates.serving_size = input.serving_size || null;
+    if (input.ingredients_tr !== undefined || input.ingredients_en !== undefined) {
+      const { data: current } = await supabase
+        .from('products')
+        .select('ingredients')
+        .eq('id', productId)
+        .single();
+      const currentIng = (current?.ingredients as LocalizedText) || { tr: '', en: '' };
+      updates.ingredients = {
+        tr: input.ingredients_tr !== undefined ? input.ingredients_tr : currentIng.tr || '',
+        en: input.ingredients_en !== undefined ? input.ingredients_en : currentIng.en || '',
+      };
+    }
+    if (input.contains_alcohol !== undefined)
+      updates.contains_alcohol = input.contains_alcohol;
+    if (input.nutrition_ai_generated !== undefined)
+      updates.nutrition_ai_generated = input.nutrition_ai_generated;
+    if (input.ai_notes !== undefined) updates.ai_notes = input.ai_notes || null;
 
     const { error } = await supabase.from('products').update(updates).eq('id', productId);
 

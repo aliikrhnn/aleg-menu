@@ -446,3 +446,59 @@ export async function updateProductNutrition(params: {
     };
   }
 }
+
+// ============================================================
+// STATELESS NUTRITION — kaydedilmemiş ürün için AI üret (DB'ye yazmaz)
+// Yeni ürün ekleme formu kullanır, sonuç form state'ine yazılır
+// Kaydet butonuna basıldığında createProduct ile birlikte DB'ye gider
+// ============================================================
+export async function aiGenerateNutritionFromText(params: {
+  name: string;
+  description?: string;
+  category?: string;
+  price?: number;
+}): Promise<{
+  success: boolean;
+  nutrition?: NutritionInfo;
+  error?: string;
+  rateLimited?: boolean;
+}> {
+  try {
+    const { businessId, user } = await requireBusinessAccess();
+
+    if (!params.name || params.name.trim().length < 2) {
+      return { success: false, error: 'Önce ürün adını yaz' };
+    }
+
+    // Rate limit
+    const limit = await checkLimit(businessId, 'nutrition');
+    if (!limit.allowed) {
+      return {
+        success: false,
+        rateLimited: true,
+        error: `Günlük AI limiti doldu (${limit.used}/${limit.limit}). ${limit.resetsIn} saat sonra sıfırlanır.`,
+      };
+    }
+
+    const result = await generateNutritionInfo({
+      productName: params.name,
+      description: params.description,
+      category: params.category,
+      price: params.price,
+    });
+
+    if (!result.success) {
+      return { success: false, error: result.error };
+    }
+
+    // Kullanım kaydı
+    await recordUsage(businessId, user.id, 'nutrition');
+
+    return { success: true, nutrition: result.nutrition };
+  } catch (e) {
+    return {
+      success: false,
+      error: e instanceof Error ? e.message : 'AI hatası',
+    };
+  }
+}

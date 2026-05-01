@@ -1,17 +1,124 @@
-SPRINT 1A FIX 3 — recordUsage signature uyumu
+SPRINT 1A — Yeni Ürün Eklerken AI Beslenme Desteği
+====================================================
 
-Sorun:
-  recordUsage(businessId, feature) çağırmıştım.
-  Mevcut signature: recordUsage(businessId, userId, feature, tokensUsed?)
+Önceden: AI beslenme bilgisi sadece kaydedilmiş ürünler için
+çalışıyordu (önce ürün ekle, sonra Beslenme butonuna bas).
 
-Düzeltme:
-  - requireBusinessAccess()'ten user'ı destructure ettim
-  - recordUsage(businessId, user.id, 'nutrition')
+Şimdi: Yeni ürün eklerken de form içinde AI üretebilir.
 
-Sadece 1 dosya:
-  lib/actions/ai.ts
 
-Push:
-  git add lib/actions/ai.ts
-  git commit -m "fix: recordUsage signature with userId"
-  git push origin main
+YAPILAN
+========
+
+[1] lib/actions/ai.ts
+   • Yeni stateless fonksiyon: aiGenerateNutritionFromText
+     - DB'ye yazmaz, sadece AI sonucu döner
+     - Form state'ine yazılır, kaydet'te createProduct ile DB'ye gider
+   • Rate limit aynı (günde 200 ürün)
+
+[2] lib/actions/menu.ts
+   • ProductInput tipine nutrition alanları eklendi
+     - allergens, calories, serving_size, ingredients_tr/en
+     - contains_alcohol, nutrition_ai_generated, ai_notes
+   • createProduct insert'e nutrition kolonları
+   • updateProduct'a nutrition kolonları (Beslenme butonu hala
+     standalone modal'la da çalışsın diye optional)
+
+[3] app/panel/(shell)/menu/urunler/product-list.tsx
+   • Form state init'e nutrition alanları
+   • handleGenerateNutrition + toggleAllergen fonksiyonları
+   • Form içine "Beslenme & Alerjen Bilgisi" bölümü eklendi
+     - "✨ AI ile beslenme bilgisi üret" butonu
+     - 14 alerjen chip seçici
+     - Kalori + Porsiyon
+     - İçerik TR + EN textarea
+     - Alkol checkbox
+     - AI notu (varsa)
+   • Diyet etiketlerinden hemen sonra görünür
+
+
+KULLANIM
+=========
+
+Yeni ürün eklerken:
+   1. "+ Yeni Ürün" tıkla
+   2. Ürün adı, fiyat yaz (zorunlu)
+   3. Açıklama yaz (opsiyonel — AI daha iyi sonuç verir)
+   4. Beslenme bölümünde "✨ AI ile beslenme bilgisi üret"
+   5. AI form'u doldurur
+   6. Düzenle (gerekirse)
+   7. "Kaydet" → ürün + beslenme bilgisi tek seferde DB'ye gider
+
+Mevcut ürün düzenlerken:
+   • Aynı form, beslenme bölümü görünür
+   • Önceki bilgi (varsa) form'da yüklü
+   • AI ile yeniden üretebilir veya manuel düzenleyebilir
+
+
+KURULUM
+========
+
+3 dosyayı üzerine yaz:
+
+   lib/actions/ai.ts
+   lib/actions/menu.ts
+   app/panel/(shell)/menu/urunler/product-list.tsx
+
+Migration GEREK YOK (zaten önceki sprint'te uygulandı).
+
+
+PUSH
+=====
+
+   git add lib/actions/ lib/actions/menu.ts \
+     "app/panel/(shell)/menu/urunler/product-list.tsx"
+   git commit -m "feat: ai nutrition in new product form (stateless)"
+   git push origin main
+
+
+TEST
+=====
+
+[A] Yeni ürün AI ile:
+    1. Panel → menu → urunler → "+ Yeni Ürün"
+    2. Ad: "Avokadolu Tost"
+    3. Fiyat: 150
+    4. Açıklama (opsiyonel): "Ekşi maya ekmek, avokado, fesleğen"
+    5. Aşağı kaydır → "Beslenme & Alerjen Bilgisi" bölümünü gör
+    6. ✨ "AI ile beslenme bilgisi üret" tıkla
+    7. ⏳ AI analiz ediyor... (5-10 sn)
+    8. ✅ Form doldu:
+       - Alerjen chip'leri seçili (gluten)
+       - Kalori dolu
+       - İçerik TR + EN dolu
+       - "AI tarafından üretildi" rozeti
+    9. "Kaydet" → liste yenilendi, yeni ürünün 🍎 Beslenme rozeti yeşil
+
+[B] Yeni ürün manuel:
+    1. AI butonuna BASMA, manuel doldur
+    2. Alerjen chip'lerini seç
+    3. Kalori + içerik gir
+    4. "Kaydet" → manuel beslenme bilgisi DB'ye yazılır
+
+[C] Mevcut ürün düzenle:
+    1. Bir ürünün "Düzenle" butonuna bas
+    2. Form açılır → Beslenme bölümünde mevcut bilgi yüklü
+    3. AI ile yeniden üret veya manuel değiştir
+    4. "Kaydet" → güncellenmiş bilgi DB'de
+
+[D] Hata durumları:
+    1. Ürün adı boş → AI butonu disabled
+    2. AI hatası → kırmızı "AI hatası" mesajı
+    3. Limit dolduysa → "Günlük AI limiti doldu" mesajı
+
+
+NOTLAR
+=======
+
+⚠ AI butonu için ürün adı zorunlu (en az 2 karakter)
+   Açıklama opsiyonel — boşken AI sadece ürün adından tahmin yapar.
+   Açıklama dolu olduğunda doğruluk artar.
+
+⚠ Form'da AI ile üretildikten sonra manuel düzenleme YAPILABİLİR.
+   nutrition_ai_generated flag'i true kalır. Sadece "yeniden üret"
+   ile yeni AI çıktısı alınır.

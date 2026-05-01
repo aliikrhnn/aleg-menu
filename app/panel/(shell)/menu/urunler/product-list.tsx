@@ -20,6 +20,7 @@ import {
   aiTranslateText,
   aiGenerateProductNutrition,
   aiGenerateNutritionForAllProducts,
+  aiGenerateNutritionFromText,
   updateProductNutrition,
 } from '@/lib/actions/ai';
 import type { LocalizedText } from '@/types/database';
@@ -1264,6 +1265,15 @@ function ProductFormModal({
     dietary_tags: initial?.dietary_tags || [],
     spicy_level: initial?.spicy_level || 0,
     hero_icon: initial?.hero_icon || '',
+    // Beslenme & alerjen (Sprint 1)
+    allergens: initial?.allergens || [],
+    calories: initial?.calories ?? null,
+    serving_size: initial?.serving_size || '',
+    ingredients_tr: initial?.ingredients?.tr || '',
+    ingredients_en: initial?.ingredients?.en || '',
+    contains_alcohol: initial?.contains_alcohol || false,
+    nutrition_ai_generated: initial?.nutrition_ai_generated || false,
+    ai_notes: initial?.ai_notes || '',
   });
 
   // AI işlemleri için loading state
@@ -1339,6 +1349,50 @@ function ProductFormModal({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit(form);
+  };
+
+  // ✨ AI ile beslenme bilgisi üret (kaydedilmemiş ürün için)
+  const handleGenerateNutrition = async () => {
+    if (!form.name_tr.trim()) {
+      setAiError('Önce ürün adını yaz');
+      return;
+    }
+    setAiLoading('nutrition');
+    setAiError(null);
+    const res = await aiGenerateNutritionFromText({
+      name: form.name_tr,
+      description: form.description_tr,
+      category: categoryName,
+      price: form.price,
+    });
+    setAiLoading(null);
+    if (res.success && res.nutrition) {
+      setForm((f) => ({
+        ...f,
+        allergens: res.nutrition!.allergens,
+        calories: res.nutrition!.calories,
+        serving_size: res.nutrition!.serving_size,
+        ingredients_tr: res.nutrition!.ingredients_tr,
+        ingredients_en: res.nutrition!.ingredients_en,
+        contains_alcohol: res.nutrition!.contains_alcohol,
+        nutrition_ai_generated: true,
+        ai_notes: res.nutrition!.ai_notes,
+      }));
+    } else {
+      setAiError(res.error || 'AI hatası');
+    }
+  };
+
+  const toggleAllergen = (key: string) => {
+    setForm((f) => {
+      const current = f.allergens || [];
+      return {
+        ...f,
+        allergens: current.includes(key)
+          ? current.filter((a) => a !== key)
+          : [...current, key],
+      };
+    });
   };
 
   const isValid = form.name_tr.trim().length >= 2 && form.price >= 0;
@@ -1626,6 +1680,238 @@ function ProductFormModal({
                 style={{ color: 'var(--ink-3)' }}
               >
                 Basılı menüde bu rozetler görünür. Birden fazla seçilebilir.
+              </p>
+            </Field>
+
+            {/* ═══════════════════════════════════════════════════════ */}
+            {/* BESLENME & ALERJEN — Sprint 1 (Türkiye Yasal Uyum)       */}
+            {/* ═══════════════════════════════════════════════════════ */}
+            <Field label="Beslenme & Alerjen Bilgisi">
+              <div
+                className="rounded-[10px] p-4 space-y-4"
+                style={{
+                  background: 'var(--paper-2)',
+                  border: '1px solid var(--line)',
+                }}
+              >
+                {/* AI üret butonu + AI rozeti */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={handleGenerateNutrition}
+                    disabled={
+                      !form.name_tr.trim() || aiLoading === 'nutrition'
+                    }
+                    className="h-9 px-4 rounded-[8px] text-xs font-semibold transition-opacity disabled:opacity-50"
+                    style={{
+                      background: 'var(--accent)',
+                      color: '#FAF5EA',
+                      fontFamily: 'var(--f-mono)',
+                      letterSpacing: '0.04em',
+                    }}
+                  >
+                    {aiLoading === 'nutrition'
+                      ? '⏳ AI analiz ediyor...'
+                      : form.nutrition_ai_generated
+                        ? '🔄 AI ile yenile'
+                        : '✨ AI ile beslenme bilgisi üret'}
+                  </button>
+                  {form.nutrition_ai_generated && (
+                    <span
+                      className="text-[10px] px-2 py-1 rounded-full"
+                      style={{
+                        background: 'rgba(196,85,58,0.1)',
+                        color: 'var(--accent)',
+                        fontFamily: 'var(--f-mono)',
+                      }}
+                    >
+                      ✨ AI tarafından üretildi
+                    </span>
+                  )}
+                </div>
+
+                {/* Alerjenler */}
+                <div>
+                  <div
+                    className="text-[10px] font-semibold tracking-[0.05em] mb-2"
+                    style={{
+                      fontFamily: 'var(--f-mono)',
+                      color: 'var(--ink-2)',
+                    }}
+                  >
+                    ALERJENLER {(form.allergens?.length || 0) > 0 && `(${form.allergens?.length})`}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      { key: 'gluten', tr: 'Gluten', emoji: '🌾' },
+                      { key: 'milk', tr: 'Süt', emoji: '🥛' },
+                      { key: 'eggs', tr: 'Yumurta', emoji: '🥚' },
+                      { key: 'nuts', tr: 'Kuruyemiş', emoji: '🥜' },
+                      { key: 'peanuts', tr: 'Yer fıstığı', emoji: '🥜' },
+                      { key: 'sesame', tr: 'Susam', emoji: '🌰' },
+                      { key: 'soybeans', tr: 'Soya', emoji: '🫘' },
+                      { key: 'fish', tr: 'Balık', emoji: '🐟' },
+                      { key: 'crustaceans', tr: 'Kabuklu', emoji: '🦐' },
+                      { key: 'molluscs', tr: 'Yumuşakça', emoji: '🦑' },
+                      { key: 'celery', tr: 'Kereviz', emoji: '🥬' },
+                      { key: 'mustard', tr: 'Hardal', emoji: '🟡' },
+                      { key: 'sulphites', tr: 'Sülfit', emoji: '🍷' },
+                      { key: 'lupin', tr: 'Acı bakla', emoji: '🌱' },
+                    ].map((opt) => {
+                      const selected = (form.allergens || []).includes(opt.key);
+                      return (
+                        <button
+                          key={opt.key}
+                          type="button"
+                          onClick={() => toggleAllergen(opt.key)}
+                          className="h-7 px-2.5 rounded-full text-[11px] font-semibold transition-all"
+                          style={{
+                            background: selected ? 'var(--accent)' : 'transparent',
+                            color: selected ? '#FAF5EA' : 'var(--ink-2)',
+                            border: `1px solid ${selected ? 'var(--accent)' : 'var(--line)'}`,
+                          }}
+                        >
+                          {opt.emoji} {opt.tr}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Kalori + Porsiyon */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div
+                      className="text-[10px] font-semibold tracking-[0.05em] mb-1.5"
+                      style={{
+                        fontFamily: 'var(--f-mono)',
+                        color: 'var(--ink-2)',
+                      }}
+                    >
+                      KALORİ (kcal)
+                    </div>
+                    <input
+                      type="number"
+                      value={form.calories ?? ''}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          calories: e.target.value
+                            ? parseInt(e.target.value, 10)
+                            : null,
+                        }))
+                      }
+                      placeholder="örn. 720"
+                      className="w-full h-9 px-3 rounded-[8px] bg-card border border-line text-sm focus:outline-none focus:border-accent"
+                    />
+                  </div>
+                  <div>
+                    <div
+                      className="text-[10px] font-semibold tracking-[0.05em] mb-1.5"
+                      style={{
+                        fontFamily: 'var(--f-mono)',
+                        color: 'var(--ink-2)',
+                      }}
+                    >
+                      PORSIYON
+                    </div>
+                    <input
+                      type="text"
+                      value={form.serving_size ?? ''}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, serving_size: e.target.value }))
+                      }
+                      placeholder="1 porsiyon (350gr)"
+                      className="w-full h-9 px-3 rounded-[8px] bg-card border border-line text-sm focus:outline-none focus:border-accent"
+                    />
+                  </div>
+                </div>
+
+                {/* İçerik TR */}
+                <div>
+                  <div
+                    className="text-[10px] font-semibold tracking-[0.05em] mb-1.5"
+                    style={{
+                      fontFamily: 'var(--f-mono)',
+                      color: 'var(--ink-2)',
+                    }}
+                  >
+                    İÇERİK LİSTESİ (TR)
+                  </div>
+                  <textarea
+                    value={form.ingredients_tr ?? ''}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, ingredients_tr: e.target.value }))
+                    }
+                    rows={2}
+                    placeholder="180gr dana eti, ekmek (**buğday**), peynir (**süt**)..."
+                    className="w-full px-3 py-2 rounded-[8px] bg-card border border-line text-sm focus:outline-none focus:border-accent resize-none"
+                  />
+                </div>
+
+                {/* İçerik EN */}
+                <div>
+                  <div
+                    className="text-[10px] font-semibold tracking-[0.05em] mb-1.5"
+                    style={{
+                      fontFamily: 'var(--f-mono)',
+                      color: 'var(--ink-2)',
+                    }}
+                  >
+                    İÇERİK LİSTESİ (EN)
+                  </div>
+                  <textarea
+                    value={form.ingredients_en ?? ''}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, ingredients_en: e.target.value }))
+                    }
+                    rows={2}
+                    placeholder="180g beef, bun (**wheat**), cheese (**milk**)..."
+                    className="w-full px-3 py-2 rounded-[8px] bg-card border border-line text-sm focus:outline-none focus:border-accent resize-none"
+                  />
+                </div>
+
+                {/* Alkol */}
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.contains_alcohol || false}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        contains_alcohol: e.target.checked,
+                      }))
+                    }
+                    className="w-4 h-4"
+                  />
+                  <span className="text-xs font-medium">
+                    🍷 Alkol içeriyor (18+ uyarısı görünür)
+                  </span>
+                </label>
+
+                {/* AI notu */}
+                {form.ai_notes && (
+                  <div
+                    className="p-2 rounded-[6px] text-[11px]"
+                    style={{
+                      background: 'rgba(196,85,58,0.05)',
+                      border: '1px dashed var(--accent)',
+                      color: 'var(--ink-2)',
+                    }}
+                  >
+                    <strong style={{ color: 'var(--accent)' }}>
+                      AI Notu:
+                    </strong>{' '}
+                    {form.ai_notes}
+                  </div>
+                )}
+              </div>
+              <p
+                className="mt-2 text-[11px]"
+                style={{ color: 'var(--ink-3)' }}
+              >
+                Türkiye 1 Temmuz 2026 yönetmeliği — alerjen ve kalori bilgisi zorunlu.
+                İstersen ürün adı + açıklama yazdıktan sonra AI ile otomatik doldurabilirsin.
               </p>
             </Field>
           </div>
