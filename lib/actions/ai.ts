@@ -279,7 +279,7 @@ export async function aiGenerateNutritionForAllProducts(params: {
     const maxProducts = Math.min(params.maxProducts || 50, 200);
 
     // Hangi ürünler işlenecek
-    let query = admin
+    const query = admin
       .from('products')
       .select('id, name, calories, allergens, ingredients')
       .eq('business_id', businessId)
