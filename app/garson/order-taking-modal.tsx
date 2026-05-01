@@ -211,6 +211,7 @@ export function OrderTakingModal({
       tableId: table.id,
       orderType: 'dine_in',
       cashierId,
+      source: 'waiter', // Garson siparişi - SERT vardiya kontrolünden muaf
       items: cart.map((it) => ({
         productId: it.productId,
         productName: it.productName,

@@ -37,10 +37,38 @@ async function requireBusinessAccess() {
 }
 
 // ============================================================
+// SERT VARDIYA MODU
+// Açık vardiya yoksa yeni satış / ödeme YAPILMAZ.
+// Sadece düzeltici işlemler (iptal, ikram, taşıma) yapılır.
+// ============================================================
+type AdminClient = ReturnType<typeof createAdminClient>;
+
+export async function ensureOpenCashSession(
+  admin: AdminClient,
+  businessId: string
+): Promise<{ ok: boolean; sessionId?: string; error?: string }> {
+  const { data: session } = await admin
+    .from('cash_drawer_sessions')
+    .select('id')
+    .eq('business_id', businessId)
+    .is('closed_at', null)
+    .maybeSingle();
+
+  if (!session) {
+    return {
+      ok: false,
+      error:
+        'Vardiya kapalı. Satış almak için önce kasayı açmanız gerekir.',
+    };
+  }
+
+  return { ok: true, sessionId: session.id };
+}
+
+// ============================================================
 // Yardımcı: Siparişi delivered'a çek ve masada başka aktif sipariş yoksa masayı boşalt
 // ============================================================
 // Üç yerde kullanılır: takePayment (normal + giftAll) ve takePartialPayment (tam kapanınca)
-type AdminClient = ReturnType<typeof createAdminClient>;
 
 export async function closeOrderAndMaybeFreeTable(
   admin: AdminClient,
@@ -169,6 +197,19 @@ export async function takePayment(input: TakePaymentInput): Promise<{
 
     if (order.payment_status === 'paid') {
       return { success: false, error: 'Bu sipariş zaten ödenmiş' };
+    }
+
+    // ╔════════════════════════════════════════════════════════════╗
+    // ║ SERT VARDIYA MODU                                          ║
+    // ║ Gerçek ödeme alımı için vardiya AÇIK olmalı.               ║
+    // ║ giftAll (tümü ikram) düzeltici bir işlem olduğu için       ║
+    // ║ vardiya kontrolünden muaf.                                  ║
+    // ╚════════════════════════════════════════════════════════════╝
+    if (!input.giftAll) {
+      const shiftCheck = await ensureOpenCashSession(admin, businessId);
+      if (!shiftCheck.ok) {
+        return { success: false, error: shiftCheck.error };
+      }
     }
 
     // Açık kasa oturumu var mı? (nakit ise otomatik bağla)
@@ -444,6 +485,14 @@ export async function takePartialPayment(input: TakePartialPaymentInput): Promis
     }
     if (order.payment_status === 'paid') {
       return { success: false, error: 'Bu sipariş zaten ödenmiş' };
+    }
+
+    // ╔════════════════════════════════════════════════════════════╗
+    // ║ SERT VARDIYA MODU — parsiyel ödeme de gerçek ödemedir      ║
+    // ╚════════════════════════════════════════════════════════════╝
+    const shiftCheck = await ensureOpenCashSession(admin, businessId);
+    if (!shiftCheck.ok) {
+      return { success: false, error: shiftCheck.error };
     }
 
     // Şimdiye kadar yapılmış partial payment toplam

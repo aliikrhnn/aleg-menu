@@ -1,59 +1,153 @@
-SPRINT 1B GERÇEK FIX — formattedProducts mapping
-==================================================
+ALEG SPRINT 2A — Vardiya SERT Mod
+====================================
 
-KESİN KÖK SEBEP BULUNDU!
-=========================
+İŞLETME GÜVENLİĞİ KURALLARI
+==============================
 
-page.tsx'te 3 aşama var:
-  1. DB'den products SELECT et (allergens, calories, ingredients hepsi geliyor) ✓
-  2. formattedProducts MAPPING (eski alanlar kopyalanıyor, NUTRITION DROP) ✗
-  3. MenuView'a geçir
+SERT VARDIYA MODU artık aktif. Açık vardiya yoksa:
+  ❌ Kasadan yeni sipariş ALINAMAZ
+  ❌ Mevcut siparişe kalem EKLENEMEZ
+  ❌ Ödeme (tam veya parsiyel) ALINAMAZ
+  ✓  Tümü ikram, iptal, masa taşıma yine yapılabilir
+     (düzeltici işlemler vardiyaya bağlı değil)
 
-2. ADIMDA NUTRITION KOLONLARI KAYBOLUYORDU!
-
-Sprint 1A'da SELECT kısmına allergens, calories ekledim
-ama 14 satır aşağıdaki .map() içine ekleme yapmamışım.
-DB'den geliyor ama React'a ulaşmıyor.
-
-Bu yüzden DB'de Burger=720 kcal, 2 alerjen, içerik dolu OLSA da
-müşteri modal'ında görünmüyordu.
+  ✓  Garson siparişleri vardiya kontrolünden MUAF
+     (kasada ödeme alınırken vardiya zaten kontrol edilir)
+  ✓  QR menü siparişleri MUAF
+     (müşterinin sipariş vermesini engellemiyoruz)
 
 
-DÜZELTME
-=========
+YAPILAN DEĞİŞİKLİKLER
+======================
 
-formattedProducts mapping'ine 6 yeni alan eklendi:
+[1] lib/actions/payments.ts
+   Yeni helper:
+     ensureOpenCashSession(admin, businessId)
+       - cash_drawer_sessions tablosundan açık session arar
+       - Yoksa: { ok: false, error: "Vardiya kapalı..." }
+       - AdminClient tipi yukarı taşındı (helper kullanabilsin)
 
-  allergens, calories, serving_size, ingredients,
-  contains_alcohol, dietary_tags
+   Eklenen kontroller:
+     • takePayment      → giftAll dışında zorunlu
+     • takePartialPayment → her zaman zorunlu
+
+[2] lib/actions/tables-status.ts
+   • CreateManualOrderInput tipine `source` field eklendi:
+     - 'manual' (kasiyer) | 'waiter' (garson)
+     - Default 'manual' (legacy çağrılar SERT moda takılır)
+   • createManualOrder    → source='manual' iken zorunlu
+   • addItemsToOrder      → her zaman zorunlu
+   • ensureOpenCashSession import edildi
+
+[3] app/garson/order-taking-modal.tsx
+   • createManualOrder({ source: 'waiter' }) — garson muaf
+
+[4] app/kasa/kasa-board.tsx
+   Mevcut sarı "KASA KAPALI" bandı KIRMIZI SERT moda çevrildi:
+     • Diagonal stripe pattern (dikkat çekici)
+     • Daha büyük ! ikonu (36x36)
+     • "⚠ VARDİYA KAPALI · SATIŞ ALINAMIYOR" başlığı
+     • Mesaj: "Tüm satışlar vardiyaya bağlanır, gün sonu sayım için kritik."
+     • "VARDİYA AÇ →" kırmızı CTA butonu
+     • Arka plan: linear-gradient + danger color box-shadow
+
+[5] app/panel/(shell)/pos/cash-session-modal.tsx
+   • Başlangıç tutarı BOŞ bırakılamaz
+   • Net hata: "Başlangıç tutarı zorunlu. Kasada hiç para yoksa 0 yaz."
+   • Açma ve kapama akışlarını ayrı mesaj
 
 
 KURULUM
 ========
 
-1 dosya:
-  app/menu/[slug]/page.tsx
+5 dosyayı üzerine yaz:
 
-Üzerine yaz.
+  lib/actions/payments.ts
+  lib/actions/tables-status.ts
+  app/kasa/kasa-board.tsx
+  app/garson/order-taking-modal.tsx
+  app/panel/(shell)/pos/cash-session-modal.tsx
+
+Migration GEREK YOK. Mevcut cash_drawer_sessions tablosu kullanılıyor.
 
 
 PUSH
 =====
 
-  git add "app/menu/[slug]/page.tsx"
-  git commit -m "fix: pass nutrition fields through formattedProducts mapping"
+  git add lib/actions/payments.ts lib/actions/tables-status.ts \
+    app/kasa/kasa-board.tsx \
+    app/garson/order-taking-modal.tsx \
+    "app/panel/(shell)/pos/cash-session-modal.tsx"
+  git commit -m "feat: sprint 2a - SERT vardiya modu (vardiya kapalıyken satış engelli)"
   git push origin main
 
 
-TEST
-=====
+TEST AKIŞI
+===========
 
-Vercel deploy bekle (~30 sn), sonra demo.alegstudio.com aç:
+[A] Vardiya kapalıyken kasaya gir:
+    1. Demo kafede kasiyer girişi yap
+    2. ✅ Üstte BÜYÜK KIRMIZI BANT görmeli:
+       "⚠ VARDİYA KAPALI · SATIŞ ALINAMIYOR"
+       "VARDİYA AÇ →" butonu
+    3. Boş masaya tıkla
+    4. ✅ Toast: "Kasa kapalı - önce Kasa sekmesinden kasayı aç"
+    5. Hızlı satış sekmesi → "+ Yeni Satış" butonu disabled
 
-✓ Ürün satırında mini emoji'ler: 🌾 🥛 🥚 ... · 720 kcal     detay →
-✓ Burger'a tıkla → modal açılır:
-  - 🔥 720 kcal kutusu
-  - ⚠ ALERJEN UYARISI: 🌾 Gluten, 🥛 Süt
-  - İçerik: alerjenler dalgalı altı çizili turuncu
+[B] Vardiya başlat:
+    1. "VARDİYA AÇ →" tıkla
+    2. CashSessionModal açıldı, mode='open'
+    3. "Başlangıç tutarı" alanını BOŞ bırak, "Aç" tıkla
+    4. ✅ Hata: "Başlangıç tutarı zorunlu. Kasada hiç para yoksa 0 yaz."
+    5. "0" yaz, Aç tıkla
+    6. ✅ Vardiya açıldı, kırmızı bant kayboldu
+    7. Masa tıkla → composer açılır → sipariş kaydedilir
 
-KESİNLİKLE ÇALIŞACAK!
+[C] Backend savunma testi (frontend bypass etse bile):
+    1. Vardiyayı kapat (RegisterPanel'den "Gün Sonu" wizard)
+    2. Frontend cache eski state tutarsa → masaya tıklayıp sipariş gönderse bile
+    3. ✅ Backend: { success: false, error: "Vardiya kapalı. Satış almak için..." }
+
+[D] Garson siparişi vardiya kapalıyken (MUAF):
+    1. Vardiya kapalı
+    2. /garson sayfasına gir, PIN ile login
+    3. Masa seç → ürün ekle → "Sipariş Gönder"
+    4. ✅ Sipariş başarıyla gönderildi (garson source='waiter' geçiyor)
+    5. Sipariş orders tablosunda görünür
+    6. Kasada görünür ama ÖDENEMEZ → "Vardiya kapalı" hatası
+    7. Önce vardiya açılır, sonra ödeme alınır → ✓
+
+[E] Düzeltici işlemler vardiya kapalıyken:
+    1. Önceden ödenmiş bir siparişe ikram uygulamak istiyorsun
+    2. Tümü ikram (giftAll) → ✅ çalışır
+    3. Tek kalem iptal → ✅ çalışır
+    4. Masa taşı → ✅ çalışır
+    (Bu işlemler vardiyaya bağlanmıyor, düzeltme amaçlı)
+
+
+SONRAKI SPRINT (2B)
+====================
+
+QR menü "sadece görüntüleme" modu:
+  • Genel ayarlardan toplu kapatılabilir (zaten orders-tab var)
+  • Müşteri tarafında + butonu ve sepet gizlenir
+  • Sadece menü gösterilir, sipariş alınmaz
+
+
+NOTLAR
+=======
+
+⚠ source='waiter' parametresi yeni eklendi. Garson çağrısı güncellendi.
+   Eğer eski offline cache'te source'suz garson siparişi varsa,
+   sync sırasında SERT kontrole takılabilir → manual sayılır.
+   Bu durumda offline cache'i temizletmek gerekebilir (rare edge case).
+
+⚠ Düzeltici işlemler (cancelOrderItems, makeItemsComplimentary,
+   changeOrderTable, splitOrderItems, mergeTables) vardiya kontrolü
+   ALMADI bilinçli olarak — gece gelen şikayetlerde vardiya açılmadan
+   düzeltme yapılabilir. Eğer iş süreçleri farklı, isteğe bağlı eklenir.
+
+⚠ Bu sprint takePayment'ı korur. closeOrderOnAccount (cari hesaba yaz)
+   ayrı bir akış — şu an kontrol yok. İşletme veresiyeye yazıp ödemeyi
+   sonra alıyorsa zaten ödeme adımında kontrol var. Yine de istersen
+   eklenebilir.

@@ -38,6 +38,15 @@ export function CashSessionModal({
   useEscapeKey(onClose, !isPending);
 
   const handleSubmit = () => {
+    // SERT MOD: amount input boş olamaz (0 girmek serbest, ama BOŞ değil)
+    if (amount.trim() === '') {
+      setError(
+        mode === 'open'
+          ? 'Başlangıç tutarı zorunlu. Kasada hiç para yoksa 0 yaz.'
+          : 'Sayılan nakit tutarı zorunlu'
+      );
+      return;
+    }
     const num = Number(amount);
     if (isNaN(num) || num < 0) {
       setError('Geçerli bir tutar girin');
