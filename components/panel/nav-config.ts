@@ -11,7 +11,8 @@ export type PanelNavItem = {
   color?: string;
   badge?: string | number;
   comingSoon?: boolean;
-  external?: boolean; // yeni sekmede aç
+  external?: boolean; // yeni sekmede aç + URL'i root domain'e taşı (kasa/garson için)
+  openInNewTab?: boolean; // yeni sekmede aç ama URL'i değiştirme (KDS için)
 };
 
 export type PanelNavGroup = {

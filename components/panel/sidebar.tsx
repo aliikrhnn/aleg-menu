@@ -158,6 +158,9 @@ export function PanelSidebar({
       <nav className="px-2 py-2.5 overflow-y-auto grid content-start gap-0.5">
         {(() => {
           // Dinamik MUTFAK EKRANLARI grubu oluştur
+          // KDS'ler yeni sekmede açılır (openInNewTab) — kullanıcı geri tuşuyla
+          // panele dönebilsin, mutfak ekranı kapansa bile panel açık kalır.
+          // openInNewTab: target=_blank ama URL transform yapmaz (KDS aynı subdomain'de).
           const kitchenGroup = {
             group: 'MUTFAK EKRANLARI',
             items: [
@@ -166,6 +169,7 @@ export function PanelSidebar({
                 label: 'Tümü',
                 href: '/kds',
                 icon: '◈',
+                openInNewTab: true,
               },
               ...stations.map((s) => ({
                 id: `kds-${s.slug}`,
@@ -173,6 +177,7 @@ export function PanelSidebar({
                 href: `/kds/${s.slug}`,
                 icon: s.icon,
                 color: s.color,
+                openInNewTab: true,
               })),
             ],
           };
@@ -218,8 +223,13 @@ export function PanelSidebar({
 
               // external: yeni sekmede açılacak (/kasa gibi ayrı app)
               const external = 'external' in item && item.external;
+              // openInNewTab: yeni sekme ama URL transform YOK (KDS gibi aynı subdomain'de kalan)
+              const openInNewTab = 'openInNewTab' in item && item.openInNewTab;
+              const opensNewTab = external || openInNewTab;
+
               // External linkler her zaman absolute '/kasa' gibi
               // Subdomain'deysek root domain'e gitmek için tam URL kullan
+              // openInNewTab durumunda URL'i panel altında bırak (KDS panel.alegstudio.com/kds)
               const resolvedHref = external
                 ? isOnPanelSubdomain
                   ? `${window.location.protocol}//${window.location.hostname.replace('panel.', '')}${item.href}`
@@ -234,8 +244,8 @@ export function PanelSidebar({
                 <Link
                   key={item.id}
                   href={disabled ? '#' : resolvedHref}
-                  target={external ? '_blank' : undefined}
-                  rel={external ? 'noopener' : undefined}
+                  target={opensNewTab ? '_blank' : undefined}
+                  rel={opensNewTab ? 'noopener' : undefined}
                   onClick={(e) => {
                     if (disabled) e.preventDefault();
                   }}
