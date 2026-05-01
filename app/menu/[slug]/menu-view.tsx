@@ -976,6 +976,7 @@ export function MenuView({
                 }
               : undefined
           }
+          onShowDetail={(p) => setDetailModal(p)}
         />
       )}
 
@@ -2676,10 +2677,12 @@ function FeaturedHeroCarousel({
   products,
   lang,
   onAdd,
+  onShowDetail,
 }: {
   products: Product[];
   lang: Lang;
   onAdd?: (p: Product, el: HTMLElement) => void; // undefined ise sipariş kapalı
+  onShowDetail?: (p: Product) => void; // karta tıklayınca detay modal açar
 }) {
   const [active, setActive] = useState(0);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -2797,6 +2800,7 @@ function FeaturedHeroCarousel({
             product={p}
             lang={lang}
             onAdd={onAdd ? (el) => onAdd(p, el) : undefined}
+            onShowDetail={onShowDetail ? () => onShowDetail(p) : undefined}
             active={idx === active}
           />
         ))}
@@ -2835,11 +2839,13 @@ function FeaturedHeroCard({
   product,
   lang,
   onAdd,
+  onShowDetail,
   active,
 }: {
   product: Product;
   lang: Lang;
   onAdd?: (el: HTMLElement) => void; // undefined ise sipariş kapalı
+  onShowDetail?: () => void; // karta tıklayınca detay modal
   active: boolean;
 }) {
   const isOut = product.status === 'soldout';
@@ -2849,6 +2855,7 @@ function FeaturedHeroCard({
 
   return (
     <div
+      onClick={onShowDetail}
       className="flex-shrink-0 relative overflow-hidden rounded-[20px] transition-all"
       style={{
         width: 'calc(100vw - 56px)',
@@ -2856,6 +2863,7 @@ function FeaturedHeroCard({
         height: 200,
         scrollSnapAlign: 'start',
         scrollSnapStop: 'always',
+        cursor: onShowDetail ? 'pointer' : 'default',
         background: hasImage
           ? 'var(--ink)'
           : 'linear-gradient(135deg, color-mix(in srgb, var(--accent) 20%, var(--paper-2)), var(--paper-2))',
@@ -3014,7 +3022,10 @@ function FeaturedHeroCard({
 
         {onAdd && (
           <button
-            onClick={(e) => onAdd(e.currentTarget)}
+            onClick={(e) => {
+              e.stopPropagation(); // kart tıklamasıyla çakışmasın (detay modal açılmasın)
+              onAdd(e.currentTarget);
+            }}
             disabled={isOut}
             className="rounded-full flex items-center justify-center transition-all active:scale-90 disabled:opacity-40 flex-shrink-0"
             style={{
