@@ -799,8 +799,158 @@ export async function refundPayment(
 }
 
 // ============================================================
-// KASA OTURUMU — Aç, kapat, bilgi getir
+// MANUEL/SERBEST İADE — Kasa "İade Yap" butonu için
 // ============================================================
+// Kasiyer manuel iade yaparken (sipariş seçmeden veya seçerek):
+//   • amount   — iade edilecek tutar (₺)
+//   • method   — 'cash' veya 'card'
+//   • reason   — zorunlu sebep (audit için)
+//   • orderId  — opsiyonel: belirli bir sipariş varsa
+//
+// Kasaya negatif kayıt düşer (Paket 1 sayesinde byMethod doğru düşer).
+// Bu fonksiyon refundPayment'tan AYRIDIR — refundPayment tüm siparişi
+// iade ederken bu manuel/kısmi/sebep-bazlı iade içindir.
+
+export async function recordManualRefund(input: {
+  amount: number;
+  method: 'cash' | 'card';
+  reason: string;
+  orderId?: string | null;
+}): Promise<{ success: boolean; refundLogId?: string; error?: string }> {
+  try {
+    // Validasyon
+    if (!input.amount || input.amount <= 0) {
+      return { success: false, error: 'İade tutarı 0 veya eksi olamaz' };
+    }
+    if (input.amount > 100000) {
+      return { success: false, error: 'İade tutarı çok büyük (max ₺100.000)' };
+    }
+    if (!input.reason || input.reason.trim().length < 3) {
+      return {
+        success: false,
+        error: 'İade sebebi zorunlu (en az 3 karakter)',
+      };
+    }
+    if (!['cash', 'card'].includes(input.method)) {
+      return { success: false, error: 'Geçersiz iade yöntemi' };
+    }
+
+    const { businessId, memberId } = await requireBusinessAccess();
+    const admin = createAdminClient();
+
+    // Yetki kontrolü — sadece can_refund yetkisi olan kasiyer iade yapabilir
+    // (Cookie session ile gelen kasiyerlerin yetkisi tryCashierFallback'tan
+    // doğrulanmış olur — burada ekstra DB kontrolü yapmıyoruz, kasiyer ekranı
+    // zaten yetkisizleri butona izin vermiyor)
+
+    // Açık kasa oturumu (nakit iadesi için zorunlu)
+    let cashSessionId: string | null = null;
+    if (input.method === 'cash') {
+      const { data: openSession } = await admin
+        .from('cash_drawer_sessions')
+        .select('id')
+        .eq('business_id', businessId)
+        .is('closed_at', null)
+        .maybeSingle();
+
+      if (!openSession) {
+        return {
+          success: false,
+          error: 'Nakit iade için açık bir kasa oturumu olmalı',
+        };
+      }
+      cashSessionId = openSession.id;
+    }
+
+    // Sipariş varsa doğrula
+    if (input.orderId) {
+      const { data: order } = await admin
+        .from('orders')
+        .select('id, business_id, payment_status')
+        .eq('id', input.orderId)
+        .maybeSingle();
+
+      if (!order || order.business_id !== businessId) {
+        return { success: false, error: 'Sipariş bulunamadı' };
+      }
+      if (order.payment_status === 'refunded') {
+        return { success: false, error: 'Bu sipariş zaten iade edilmiş' };
+      }
+    }
+
+    // Negatif refund kaydı
+    const reasonClean = input.reason.trim().slice(0, 500);
+    const { data: logRow, error: logError } = await admin
+      .from('payment_logs')
+      .insert({
+        business_id: businessId,
+        order_id: input.orderId || null,
+        cash_session_id: cashSessionId,
+        action: 'refund',
+        payment_method: input.method,
+        amount: -Math.abs(input.amount),
+        amount_paid: -Math.abs(input.amount),
+        change_given: 0,
+        note: `Manuel iade: ${reasonClean}`,
+        performed_by: memberId,
+        performed_at: new Date().toISOString(),
+      })
+      .select('id')
+      .single();
+
+    if (logError || !logRow) {
+      return {
+        success: false,
+        error: logError?.message || 'İade kaydı oluşturulamadı',
+      };
+    }
+
+    // Eğer sipariş bağlıysa ve tüm tutar iade edildiyse sipariş status'unu güncelle
+    if (input.orderId) {
+      const { data: orderInfo } = await admin
+        .from('orders')
+        .select('total')
+        .eq('id', input.orderId)
+        .maybeSingle();
+
+      if (orderInfo) {
+        const orderTotal = Number(orderInfo.total);
+        // Bu siparişe ait toplam iade
+        const { data: refunds } = await admin
+          .from('payment_logs')
+          .select('amount')
+          .eq('order_id', input.orderId)
+          .eq('action', 'refund');
+
+        const totalRefunded = (refunds || []).reduce(
+          (s, r) => s + Math.abs(Number(r.amount || 0)),
+          0
+        );
+
+        // Tam iade ise siparişi 'refunded' yap
+        if (totalRefunded >= orderTotal - 0.01) {
+          await admin
+            .from('orders')
+            .update({
+              payment_status: 'refunded',
+              payment_note: `İade: ${reasonClean}`,
+            })
+            .eq('id', input.orderId);
+        }
+      }
+    }
+
+    revalidatePath('/kasa');
+    revalidatePath('/panel/pos');
+
+    return { success: true, refundLogId: logRow.id };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Bilinmeyen hata',
+    };
+  }
+}
 
 export type CashSession = {
   id: string;

@@ -23,7 +23,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useOnlineStatus } from '@/lib/hooks/use-online-status';
-import { useCashierSession } from '@/lib/cashier-session';
+import { useCashierSession, useCanRefund } from '@/lib/cashier-session';
 import {
   getActiveCashSession,
   getZReport,
@@ -35,6 +35,7 @@ import { CashSessionModal } from '@/app/panel/(shell)/pos/cash-session-modal';
 import { KasaPinLock } from './kasa-pin-lock';
 import { DaySummaryPreview } from './day-summary-preview';
 import { DaySummaryWizard } from './day-summary-wizard';
+import { RefundModal } from './refund-modal';
 import { toast } from '@/components/ui/toast';
 
 const METHOD_LABELS: Record<string, string> = {
@@ -165,6 +166,8 @@ function RegisterContent({
     }
   });
   const [openCashModalOpen, setOpenCashModalOpen] = useState(false);
+  const [refundOpen, setRefundOpen] = useState(false);
+  const canRefund = useCanRefund();
   const [report, setReport] = useState<ZReport | null>(() => {
     if (typeof window === 'undefined') return null;
     try {
@@ -630,28 +633,65 @@ function RegisterContent({
               </div>
             </div>
             {session ? (
-              <div
-                key="kasa-aktif"
-                className="h-9 px-4 rounded-[8px] text-xs font-semibold flex items-center gap-1.5 flex-shrink-0 uppercase"
-                style={{
-                  background: 'color-mix(in srgb, var(--ok) 10%, transparent)',
-                  color: 'var(--ok)',
-                  fontFamily: 'var(--f-mono)',
-                  letterSpacing: '0.1em',
-                  border: '1px solid color-mix(in srgb, var(--ok) 25%, var(--line))',
-                  animation: 'aleg-badge-in 0.4s cubic-bezier(0.16,1,0.3,1)',
-                }}
-                title="Kasa Gün Sonu alındığında otomatik kapanır"
-              >
-                <span
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {/* İade Yap butonu - sadece can_refund yetkisi olan kasiyer için */}
+                {canRefund && (
+                  <button
+                    onClick={() => setRefundOpen(true)}
+                    className="h-9 px-3 rounded-[8px] text-xs font-semibold transition-all hover:opacity-90 flex items-center gap-1.5"
+                    style={{
+                      background: 'color-mix(in srgb, var(--danger) 10%, transparent)',
+                      color: 'var(--danger)',
+                      border:
+                        '1px solid color-mix(in srgb, var(--danger) 30%, var(--line))',
+                      fontFamily: 'var(--f-mono)',
+                      letterSpacing: '0.08em',
+                      textTransform: 'uppercase',
+                    }}
+                    title="Müşteriye iade et"
+                  >
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M9 14l-4-4 4-4" />
+                      <path d="M5 10h11a4 4 0 0 1 4 4v3" />
+                    </svg>
+                    İade
+                  </button>
+                )}
+
+                <div
+                  key="kasa-aktif"
+                  className="h-9 px-4 rounded-[8px] text-xs font-semibold flex items-center gap-1.5 uppercase"
                   style={{
-                    fontSize: 10,
-                    animation: 'aleg-pulse-dot 2s ease-in-out infinite',
+                    background:
+                      'color-mix(in srgb, var(--ok) 10%, transparent)',
+                    color: 'var(--ok)',
+                    fontFamily: 'var(--f-mono)',
+                    letterSpacing: '0.1em',
+                    border:
+                      '1px solid color-mix(in srgb, var(--ok) 25%, var(--line))',
+                    animation: 'aleg-badge-in 0.4s cubic-bezier(0.16,1,0.3,1)',
                   }}
+                  title="Kasa Gün Sonu alındığında otomatik kapanır"
                 >
-                  ●
-                </span>
-                AKTİF
+                  <span
+                    style={{
+                      fontSize: 10,
+                      animation: 'aleg-pulse-dot 2s ease-in-out infinite',
+                    }}
+                  >
+                    ●
+                  </span>
+                  AKTİF
+                </div>
               </div>
             ) : (
               <button
@@ -2047,6 +2087,19 @@ function RegisterContent({
           onClose={() => setOpenCashModalOpen(false)}
           onSuccess={async () => {
             setOpenCashModalOpen(false);
+            await loadSession();
+            await loadReport();
+          }}
+        />
+      )}
+
+      {/* İade Yap modalı */}
+      {refundOpen && (
+        <RefundModal
+          onClose={() => setRefundOpen(false)}
+          onSuccess={async () => {
+            setRefundOpen(false);
+            // Session ve raporu yenile (iade kasaya yansısın)
             await loadSession();
             await loadReport();
           }}
