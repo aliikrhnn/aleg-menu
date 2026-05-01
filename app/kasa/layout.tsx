@@ -10,6 +10,9 @@ export const metadata: Metadata = {
     statusBarStyle: 'black-translucent',
     title: 'Aleg Kasa',
   },
+  other: {
+    'mobile-web-app-capable': 'yes',
+  },
 };
 
 export const viewport: Viewport = {

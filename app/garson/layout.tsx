@@ -10,6 +10,11 @@ export const metadata: Metadata = {
     statusBarStyle: 'black-translucent',
     title: 'Aleg Garson',
   },
+  other: {
+    // Apple'ın deprecated tag'ı yerine modern karşılığı
+    // (Chrome/Edge yeni tag'ı tercih eder, eski olanı uyarı verir)
+    'mobile-web-app-capable': 'yes',
+  },
 };
 
 export const viewport: Viewport = {

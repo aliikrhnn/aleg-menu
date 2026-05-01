@@ -30,25 +30,53 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Manifest icon: kafe logosu veya default
-  const icons = logoUrl
-    ? [
-        {
-          src: logoUrl,
-          sizes: 'any',
-          type: 'image/png',
-          purpose: 'any maskable',
-        },
-      ]
-    : [
-        // Default: SVG icon (her boyutta scale eder)
-        {
-          src: '/icons/garson-icon.svg',
-          sizes: 'any',
-          type: 'image/svg+xml',
-          purpose: 'any maskable',
-        },
-      ];
+  // Logo URL'sinden MIME type tespit
+  function detectMimeType(url: string): string {
+    const lower = url.toLowerCase();
+    if (lower.endsWith('.svg')) return 'image/svg+xml';
+    if (lower.endsWith('.png')) return 'image/png';
+    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
+    if (lower.endsWith('.webp')) return 'image/webp';
+    return 'image/png'; // varsayılan
+  }
+
+  // İkonlar: önce kafenin logosu (varsa), sonra her zaman default SVG fallback.
+  // Default fallback olunca tarayıcı PNG yüklenemediğinde SVG'yi kullanır.
+  const icons: Array<{
+    src: string;
+    sizes: string;
+    type: string;
+    purpose?: string;
+  }> = [];
+
+  if (logoUrl) {
+    icons.push({
+      src: logoUrl,
+      sizes: '512x512',
+      type: detectMimeType(logoUrl),
+      purpose: 'any',
+    });
+    icons.push({
+      src: logoUrl,
+      sizes: '192x192',
+      type: detectMimeType(logoUrl),
+      purpose: 'maskable',
+    });
+  }
+
+  // Her zaman default SVG fallback ekle (PNG/SVG yüklenemezse)
+  icons.push({
+    src: '/icons/garson-icon.svg',
+    sizes: '512x512',
+    type: 'image/svg+xml',
+    purpose: 'any',
+  });
+  icons.push({
+    src: '/icons/garson-icon.svg',
+    sizes: '192x192',
+    type: 'image/svg+xml',
+    purpose: 'maskable',
+  });
 
   const manifest = {
     name: businessName,
