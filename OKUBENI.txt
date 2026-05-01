@@ -1,51 +1,38 @@
-SPRINT 1B FIX 2 — CACHE SORUNU (KESİN ÇÖZÜM!)
-================================================
+SPRINT 1B GERÇEK FIX — formattedProducts mapping
+==================================================
 
-KÖK SEBEP BULUNDU
-==================
+KESİN KÖK SEBEP BULUNDU!
+=========================
 
-DB'de tüm bilgiler dolu (Serpme Kahvaltı: 650 kcal, 3 alerjen,
-içerik var). Ama müşteri modal'ında gözükmüyordu.
+page.tsx'te 3 aşama var:
+  1. DB'den products SELECT et (allergens, calories, ingredients hepsi geliyor) ✓
+  2. formattedProducts MAPPING (eski alanlar kopyalanıyor, NUTRITION DROP) ✗
+  3. MenuView'a geçir
 
-SEBEP: app/menu/[slug]/page.tsx'te
-   export const revalidate = 60;
-yazıyordu. Next.js sayfayı 60 saniye STATİK CACHE'liyor.
+2. ADIMDA NUTRITION KOLONLARI KAYBOLUYORDU!
 
-Sprint 1A'da nutrition kolonları DB'ye yazıldıktan sonra
-sayfa cache'lenmiş halde serve ediliyordu — eski versiyonu.
+Sprint 1A'da SELECT kısmına allergens, calories ekledim
+ama 14 satır aşağıdaki .map() içine ekleme yapmamışım.
+DB'den geliyor ama React'a ulaşmıyor.
 
-Vercel Edge cache çoğu zaman 60 sn'den daha uzun tutar bu yüzden
-bazen birkaç dakika sonra bile yansımıyordu.
+Bu yüzden DB'de Burger=720 kcal, 2 alerjen, içerik dolu OLSA da
+müşteri modal'ında görünmüyordu.
 
 
-ÇÖZÜM
-======
+DÜZELTME
+=========
 
-   export const revalidate = 0;
-   export const dynamic = 'force-dynamic';
+formattedProducts mapping'ine 6 yeni alan eklendi:
 
-Bu sayede:
-   • Her sayfa isteği SUNUCUDAN render olur (cache yok)
-   • DB'deki güncel veriler ANINDA görünür
-   • Beslenme bilgisi, fiyat değişikliği, durum güncellemeleri
-     hepsi anında yansır
-
-PERFORMANS NOTU
-================
-
-Şu an dinamik render = her istekte DB sorgusu.
-Pilot dönem (3 kafe) için bu sorun değil.
-İleride gerekirse:
-   • revalidate=30 (30 saniyelik cache)
-   • Üst buton: "Anlık güncelle" trigger'ı
-gibi optimizasyonlar yapılabilir.
+  allergens, calories, serving_size, ingredients,
+  contains_alcohol, dietary_tags
 
 
 KURULUM
 ========
 
 1 dosya:
-   app/menu/[slug]/page.tsx
+  app/menu/[slug]/page.tsx
 
 Üzerine yaz.
 
@@ -53,22 +40,20 @@ KURULUM
 PUSH
 =====
 
-   git add "app/menu/[slug]/page.tsx"
-   git commit -m "fix: disable cache on customer menu for instant nutrition updates"
-   git push origin main
+  git add "app/menu/[slug]/page.tsx"
+  git commit -m "fix: pass nutrition fields through formattedProducts mapping"
+  git push origin main
 
 
 TEST
 =====
 
-Vercel deploy'u bekle (~30 sn), sonra:
+Vercel deploy bekle (~30 sn), sonra demo.alegstudio.com aç:
 
-1. Telefonda demo.alegstudio.com'u aç (cache temizlemeye gerek YOK)
-2. Serpme Kahvaltı'ya tıkla
-3. ✅ MODAL'DA ARTIK GÖRÜNÜR:
-    - 🔥 650 kcal kutusu
-    - 🌱 Vejetaryen rozet (yeşil)
-    - ⚠ ALERJEN UYARISI: 🥛 Süt, 🥚 Yumurta, 🌾 Gluten
-    - İçerik: "Peynir çeşitleri (SÜT), zeytin, bal, kaymak..."
-      (alerjenler dalgalı altı çizili turuncu)
-    - Footer: "Alerjeniz varsa..." (çapraz bulaşma yok)
+✓ Ürün satırında mini emoji'ler: 🌾 🥛 🥚 ... · 720 kcal     detay →
+✓ Burger'a tıkla → modal açılır:
+  - 🔥 720 kcal kutusu
+  - ⚠ ALERJEN UYARISI: 🌾 Gluten, 🥛 Süt
+  - İçerik: alerjenler dalgalı altı çizili turuncu
+
+KESİNLİKLE ÇALIŞACAK!

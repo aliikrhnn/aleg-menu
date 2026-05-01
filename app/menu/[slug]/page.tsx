@@ -176,6 +176,13 @@ export default async function CustomerMenuPage({ params, searchParams }: Props) 
     presets: (productPresetsMap.get(p.id) || [])
       .map((pid) => presetMap.get(pid))
       .filter((p): p is NonNullable<typeof p> => p !== undefined),
+    // Beslenme & alerjen (Sprint 1B - Türkiye yasal uyum)
+    allergens: (p.allergens as string[] | null) || [],
+    calories: (p.calories as number | null) ?? null,
+    serving_size: (p.serving_size as string | null) ?? null,
+    ingredients: (p.ingredients as LocalizedText | null) ?? null,
+    contains_alcohol: (p.contains_alcohol as boolean | null) ?? false,
+    dietary_tags: (p.dietary_tags as string[] | null) || [],
   }));
 
   // Çağrı butonlarını çek (panel'den eklenmiş aktif olanlar)
