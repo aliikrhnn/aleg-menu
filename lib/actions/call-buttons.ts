@@ -361,8 +361,11 @@ export async function getActiveWaiterCalls(): Promise<{
 }> {
   try {
     const { businessId } = await requireBusinessAccess();
-    const supabase = createClient();
-    const { data, error } = await supabase
+    // Admin client kullan — cashier session'da auth user yok, RLS engellemesin
+    // Güvenlik: businessId zaten requireBusinessAccess'te doğrulandı,
+    // .eq('business_id', businessId) ile manuel filter yapıyoruz.
+    const admin = createAdminClient();
+    const { data, error } = await admin
       .from('waiter_calls')
       .select('id, business_id, table_id, button_id, button_name_snapshot, button_emoji_snapshot, note, status, created_at, resolved_at')
       .eq('business_id', businessId)
@@ -381,7 +384,7 @@ export async function getActiveWaiterCalls(): Promise<{
       .filter((id): id is string => !!id);
 
     if (tableIds.length > 0) {
-      const { data: tables } = await supabase
+      const { data: tables } = await admin
         .from('tables')
         .select('id, name')
         .in('id', tableIds);
@@ -413,14 +416,18 @@ export async function resolveWaiterCall(
   callId: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const supabase = createClient();
-    const { error } = await supabase
+    const { businessId } = await requireBusinessAccess();
+    const admin = createAdminClient();
+    // Güvenlik: callId business'a ait mi kontrol et
+    // (Yoksa cashier başka kafenin çağrısını çözebilir)
+    const { error } = await admin
       .from('waiter_calls')
       .update({
         status: 'resolved',
         resolved_at: new Date().toISOString(),
       })
-      .eq('id', callId);
+      .eq('id', callId)
+      .eq('business_id', businessId);
 
     if (error) {
       return { success: false, error: error.message };
