@@ -95,7 +95,8 @@ export async function GET(req: NextRequest) {
   return Response.json(manifest, {
     headers: {
       'Content-Type': 'application/manifest+json',
-      'Cache-Control': 'public, max-age=300', // 5 dakika cache
+      // Logo değişiklikleri 60sn içinde yansısın
+      'Cache-Control': 'public, max-age=60, must-revalidate',
     },
   });
 }
