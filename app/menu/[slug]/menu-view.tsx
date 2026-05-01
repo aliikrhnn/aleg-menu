@@ -3331,8 +3331,8 @@ function ProductDetailModal({
             }}
           >
             {lang === 'tr'
-              ? 'Alerjeniz veya gıda hassasiyetiniz varsa lütfen siparişten önce personelimize bildirin. Mutfağımızda çapraz bulaşma ihtimali bulunmaktadır.'
-              : 'If you have allergies or food sensitivities, please inform our staff before ordering. Cross-contamination may occur in our kitchen.'}
+              ? 'Alerjeniz veya gıda hassasiyetiniz varsa lütfen siparişten önce personelimize bildirin.'
+              : 'If you have allergies or food sensitivities, please inform our staff before ordering.'}
           </div>
         </div>
 

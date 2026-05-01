@@ -1,142 +1,79 @@
-SPRINT 1B — Müşteri Menüsü Beslenme & Alerjen UI
-==================================================
+SPRINT 1B FIX — Çapraz bulaşma sil + page.tsx kesin güncel
+============================================================
 
-Türkiye Tarım & Ticaret Bakanlığı 1 Temmuz 2026 yönetmeliği —
-müşteri tarafı görsel UI tamamlandı.
+İKİ SORUN
+==========
+
+[1] Çapraz bulaşma cümlesi
+   • Yasal footer'dan "Mutfağımızda çapraz bulaşma..." kısmı kaldırıldı
+   • Sadece kalıyor: "Alerjeniz varsa siparişten önce personelimize bildirin"
+   • EN versiyonu da kısaltıldı
+
+[2] Modal'da kalori/alerjen GÖZÜKMÜYOR sorunu
+   • DB tamamen dolu (kontrol edildi: Burger calories=720, alerjen=2,
+     içerik var, AI üretildi)
+   • Ama müşteri modal'ında çıkmıyor
+   • SEBEP: Sprint 1A push'unda belki page.tsx güncellenmedi
+     (sadece menu-view.tsx push'lanmış olabilir)
+   • page.tsx server-side select, nutrition kolonlarını çekmezse
+     veriler undefined olarak modal'a gider, koşullu render
+     bunları gizler — boş modal!
 
 
 YAPILAN
 ========
 
-[1] Mini alerjen rozetleri (ürün satırında)
-   • Ürünün allergens veya calories varsa rozetler görünür
-   • Ürün satırında, açıklamanın altında küçük chip'ler:
-     - 🌾 (gluten)  🥛 (süt)  🥚 (yumurta) ...
-     - Max 5 emoji + "+3 daha" şeklinde
-     - 18+ alkol rozeti (varsa, kırmızı)
-     - Kalori (varsa, "· 720 kcal")
-     - Sağa hizalı "detay →" link'i
+[1] menu-view.tsx
+   • Çapraz bulaşma cümlesi silindi (TR + EN)
 
-[2] Ürün satırı tıklanabilir
-   • Açıklama veya beslenme bilgisi olan ürünler tıklanabilir
-   • Tıklanınca ProductDetailModal açılır
-   • + butonuna tıklamada modal açılmaz (event yakalama)
-
-[3] ProductDetailModal — yeni komponent
-   • Hero görseli (varsa, 220px)
-   • Ürün adı (italic serif, büyük)
-   • Diyet rozetleri (Vegan, Vejetaryen, Glütensiz vs)
-   • Açıklama
-   • Fiyat + porsiyon (yan yana)
-   • 🔥 Kalori kutusu (büyük, vurgulanmış)
-   • 🍷 Alkol uyarısı (kırmızı, 18+ rozeti)
-   • ⚠ Alerjen uyarısı (yasal vurgulama):
-     - Kalın + altı çizili (yasa böyle istiyor)
-     - Grid'de 2 sütun, emoji + isim
-   • İçerik listesi (markdown ** ** ile alerjen vurgulaması)
-   • Yasal footer uyarısı:
-     "Alerjeniz veya gıda hassasiyetiniz varsa lütfen
-      siparişten önce personelimize bildirin..."
-   • Alt buton: "MASAYA EKLE" (varyasyonluysa "SEÇENEKLERİ GÖR")
-   • ESC ile kapanır
-   • Backdrop'a tıklayınca kapanır
-
-[4] Markdown render
-   • İçerik listesinde **kalın** ifadeler vurgulanır:
-     - color: accent (turuncu)
-     - underline: wavy (dalgalı altı çizili)
-     - bold: 700
-
-[5] Sabit veriler (ALLERGEN_EMOJI, ALLERGEN_LABELS_TR/EN)
-   • 14 ana alerjen için emoji + TR + EN etiketleri
-   • Backend'le tutarlı (EU 1169/2011)
-
-
-KULLANICI AKIŞI
-================
-
-1. QR ile menüye gir (demo.alegstudio.com)
-2. Ürünleri gör — beslenme bilgisi olanlarda mini emoji'ler ✓
-3. İlgini çeken ürüne tıkla
-4. Detay modal'ı açılır:
-   - Kalori
-   - Alerjen uyarısı (vurgulanmış)
-   - İçerik (alerjenler dalgalı altı çizili)
-   - Yasal uyarı footer
-5. "MASAYA EKLE" → sepete ekler
+[2] page.tsx
+   • SERVER-SIDE SELECT garantili güncel
+   • allergens, calories, serving_size, ingredients,
+     contains_alcohol, dietary_tags kolonları hepsi çekiliyor
 
 
 KURULUM
 ========
 
-1 dosya değişti:
-   app/menu/[slug]/menu-view.tsx
+İki dosyayı üzerine yaz:
 
-Migration GEREK YOK.
+   app/menu/[slug]/menu-view.tsx
+   app/menu/[slug]/page.tsx
+
+Önemli: page.tsx'i kesinlikle üzerine yaz!
 
 
 PUSH
 =====
 
-   git add "app/menu/[slug]/menu-view.tsx"
-   git commit -m "feat: sprint 1b - allergen badges + nutrition modal (customer)"
+   git add "app/menu/[slug]/menu-view.tsx" "app/menu/[slug]/page.tsx"
+   git commit -m "fix: nutrition data fetching + remove cross-contamination notice"
    git push origin main
 
 
-TEST
-=====
+NASIL TEST EDİLİR
+==================
 
-[A] Mini rozetler:
-    1. demo.alegstudio.com aç
-    2. "Cafe Aleg Burger" satırını bul
-    3. ✅ Açıklamanın altında küçük emoji'ler:
-       🌾 🥛 🥚 ... · 720 kcal      detay →
+Push sonrası Vercel deploy'u bekle (~30 sn), sonra:
 
-[B] Detay modal:
-    1. Burger satırına tıkla (+ butonu DEĞİL)
-    2. ✅ Modal aşağıdan açılır
-    3. Kontrol et:
-       - Ürün adı büyük italic
-       - Açıklama
-       - Fiyat ₺280, porsiyon "1 porsiyon (350gr)"
-       - 🔥 Kalori kutusu: 720 kcal
-       - ⚠ Alerjen Uyarısı: 🌾 Gluten, 🥛 Süt, 🥚 Yumurta
-         (Hepsi altı çizili, kalın)
-       - İçerik: "180gr dana eti, ekmek (BUĞDAY), peynir (SÜT)..."
-         (BUĞDAY ve SÜT dalgalı altı çizili turuncu)
-       - Yasal footer: "Alerjeniz veya gıda hassasiyetiniz..."
-       - "MASAYA EKLE" butonu
-    4. ESC bas → kapanır
-    5. Backdrop'a tıkla → kapanır
-
-[C] Alkol uyarısı:
-    • Şarap/bira ürün eklersen panel'den "Alkol" toggle aç
-    • Müşteride 18+ kırmızı rozet görünmeli
-
-[D] Diyet rozetleri:
-    • Vegan ürünler "🌱 Vegan" yeşil rozet
-    • Glütensiz "GF Glütensiz" rozet
-
-[E] EN dil testi:
-    1. Dili değiştir → English
-    2. ✅ Modal'da "ALLERGEN WARNING", "INGREDIENTS",
-       "ADD TO TABLE", İngilizce alerjen isimleri
-
-[F] Beslenme bilgisi olmayan ürünler:
-    • Henüz AI ile doldurulmamış ürünlerde:
-      - Mini rozet GÖRÜNMEZ
-      - Tıklamada modal AÇILIR (sadece ad + açıklama + fiyat)
+1. Bilgisayarda Chrome → gizli pencere (Ctrl+Shift+N)
+2. demo.alegstudio.com aç
+3. Cafe Aleg Burger'a tıkla
+4. Modal'da görmeli:
+   - 🔥 720 kcal kutusu
+   - ⚠ ALERJEN UYARISI: 🌾 Gluten, 🥛 Süt
+   - İçerik: "180gr dana eti, ekmek (BUĞDAY)..."
+     (BUĞDAY ve SÜT dalgalı altı çizili turuncu)
+   - Footer: "Alerjeniz varsa siparişten önce personelimize bildirin"
+     (çapraz bulaşma kısmı YOK)
 
 
-NOTLAR
-=======
+GIT KONTROL (OPSIYONEL)
+========================
 
-⚠ Yasal uyumun bel kemiği:
-   - 14 ana alerjen ✓
-   - Vurgulu gösterim (kalın + altı çizili) ✓
-   - QR menüde sunulabilir ✓
-   - Müşteri uyarısı footer ✓
+Önceki push'larda page.tsx git'e gitmiş mi öğrenmek için:
 
-⚠ Cross-contamination uyarısı eklendi (yasal güvence)
-⚠ Alkol için 18+ rozeti (Türkiye yasası)
-⚠ Modal her cihazda çalışır (mobile-first responsive)
+   git log --oneline app/menu/[slug]/page.tsx
+
+E�er son commit'lerde görünmüyorsa, page.tsx ilk Sprint 1A'da
+güncellenmemiş demektir. Bu push ile garantili düzelir.
