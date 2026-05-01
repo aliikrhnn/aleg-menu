@@ -67,6 +67,11 @@ export function KasaPinLock({ businessId, onUnlock }: Props) {
         if (!exists) {
           onUnlock();
         }
+      } else {
+        // Hata durumunda PIN ekranı göster ki kullanıcı sıkışmasın
+        // (örn. cashier session henüz kurulmamış olabilir)
+        console.warn('[kasa-pin-lock] PIN durumu alınamadı:', r.error);
+        setPinExists(true);
       }
     })();
   }, [onUnlock, businessId]);
