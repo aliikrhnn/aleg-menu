@@ -1279,6 +1279,11 @@ function ProductFormModal({
   // AI işlemleri için loading state
   const [aiLoading, setAiLoading] = useState<string | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
+  // Beslenme bölümü açık mı (varsayılan: kapalı, kullanıcı tıklarsa açılır)
+  // Eğer mevcut ürün düzenleniyorsa ve bilgi varsa, açık başlasın
+  const [nutritionExpanded, setNutritionExpanded] = useState<boolean>(
+    !!(initial?.calories || (initial?.allergens && initial.allergens.length > 0))
+  );
 
   // Kategoriyi ad olarak bul - AI'ya context vermek için
   const categoryName = categories.find((c) => c.id === form.category_id)?.name.tr;
@@ -1685,10 +1690,62 @@ function ProductFormModal({
 
             {/* ═══════════════════════════════════════════════════════ */}
             {/* BESLENME & ALERJEN — Sprint 1 (Türkiye Yasal Uyum)       */}
+            {/* Collapsible — varsayılan kapalı, başlığa tıkla açılır    */}
             {/* ═══════════════════════════════════════════════════════ */}
-            <Field label="Beslenme & Alerjen Bilgisi">
+            <div>
+              <button
+                type="button"
+                onClick={() => setNutritionExpanded((v) => !v)}
+                className="w-full flex items-center justify-between py-2 px-3 rounded-[8px] transition-colors hover:bg-paper-2"
+                style={{ background: 'transparent' }}
+              >
+                <div className="flex items-center gap-2">
+                  <span
+                    className="text-xs font-semibold tracking-[0.04em]"
+                    style={{
+                      color: 'var(--ink-2)',
+                      fontFamily: 'var(--f-mono)',
+                    }}
+                  >
+                    🍎 BESLENME & ALERJEN BİLGİSİ
+                  </span>
+                  {((form.allergens?.length || 0) > 0 || form.calories) && (
+                    <span
+                      className="text-[10px] px-2 py-0.5 rounded-full"
+                      style={{
+                        background: 'rgba(122,142,92,0.15)',
+                        color: 'var(--ok, #6B8347)',
+                      }}
+                    >
+                      ✓ dolduruldu
+                    </span>
+                  )}
+                  {form.nutrition_ai_generated && (
+                    <span
+                      className="text-[10px] px-2 py-0.5 rounded-full"
+                      style={{
+                        background: 'rgba(196,85,58,0.1)',
+                        color: 'var(--accent)',
+                      }}
+                    >
+                      ✨ AI
+                    </span>
+                  )}
+                </div>
+                <span
+                  className="text-sm transition-transform"
+                  style={{
+                    color: 'var(--ink-2)',
+                    transform: nutritionExpanded ? 'rotate(180deg)' : 'none',
+                  }}
+                >
+                  ▼
+                </span>
+              </button>
+
+              {nutritionExpanded && (
               <div
-                className="rounded-[10px] p-4 space-y-4"
+                className="rounded-[10px] p-4 space-y-4 mt-2"
                 style={{
                   background: 'var(--paper-2)',
                   border: '1px solid var(--line)',
@@ -1905,15 +1962,16 @@ function ProductFormModal({
                     {form.ai_notes}
                   </div>
                 )}
+                <p
+                  className="text-[11px]"
+                  style={{ color: 'var(--ink-3)' }}
+                >
+                  Türkiye 1 Temmuz 2026 yönetmeliği — alerjen ve kalori bilgisi zorunlu.
+                  İstersen ürün adı + açıklama yazdıktan sonra AI ile otomatik doldurabilirsin.
+                </p>
               </div>
-              <p
-                className="mt-2 text-[11px]"
-                style={{ color: 'var(--ink-3)' }}
-              >
-                Türkiye 1 Temmuz 2026 yönetmeliği — alerjen ve kalori bilgisi zorunlu.
-                İstersen ürün adı + açıklama yazdıktan sonra AI ile otomatik doldurabilirsin.
-              </p>
-            </Field>
+              )}
+            </div>
           </div>
         </div>
 
