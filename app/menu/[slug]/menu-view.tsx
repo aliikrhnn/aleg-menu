@@ -94,6 +94,61 @@ type CartItem = {
   selections: SelectedOption[];
 };
 
+// ════════════════════════════════════════════════════════════════════
+// ALERJEN SABITLERI (Sprint 1B - Türkiye yasal uyum)
+// 14 ana alerjen (EU 1169/2011) — backend'le aynı
+// ════════════════════════════════════════════════════════════════════
+const ALLERGEN_EMOJI: Record<string, string> = {
+  gluten: '🌾',
+  milk: '🥛',
+  eggs: '🥚',
+  nuts: '🥜',
+  peanuts: '🥜',
+  sesame: '🌰',
+  soybeans: '🫘',
+  fish: '🐟',
+  crustaceans: '🦐',
+  molluscs: '🦑',
+  celery: '🥬',
+  mustard: '🟡',
+  sulphites: '🍷',
+  lupin: '🌱',
+};
+
+const ALLERGEN_LABELS_TR: Record<string, string> = {
+  gluten: 'Gluten',
+  milk: 'Süt',
+  eggs: 'Yumurta',
+  nuts: 'Kuruyemiş',
+  peanuts: 'Yer fıstığı',
+  sesame: 'Susam',
+  soybeans: 'Soya',
+  fish: 'Balık',
+  crustaceans: 'Kabuklu deniz ürünleri',
+  molluscs: 'Yumuşakça',
+  celery: 'Kereviz',
+  mustard: 'Hardal',
+  sulphites: 'Sülfit',
+  lupin: 'Acı bakla',
+};
+
+const ALLERGEN_LABELS_EN: Record<string, string> = {
+  gluten: 'Gluten',
+  milk: 'Milk',
+  eggs: 'Eggs',
+  nuts: 'Tree nuts',
+  peanuts: 'Peanuts',
+  sesame: 'Sesame',
+  soybeans: 'Soybeans',
+  fish: 'Fish',
+  crustaceans: 'Crustaceans',
+  molluscs: 'Molluscs',
+  celery: 'Celery',
+  mustard: 'Mustard',
+  sulphites: 'Sulphites',
+  lupin: 'Lupin',
+};
+
 interface Props {
   business: Business;
   categories: Category[];
@@ -339,6 +394,8 @@ export function MenuView({
 
   // Varyasyon seçim modal state
   const [optionModal, setOptionModal] = useState<Product | null>(null);
+  // Beslenme & detay modal (Sprint 1B - tıklanınca açılır)
+  const [detailModal, setDetailModal] = useState<Product | null>(null);
 
   // Unique cart key (selections'a göre)
   function cartKey(productId: string, selections: SelectedOption[]): string {
@@ -965,6 +1022,7 @@ export function MenuView({
                         flyToCart(el, p);
                         addToCart(p);
                       }}
+                      onShowDetail={() => setDetailModal(p)}
                       animationDelay={i * 25}
                     />
                   ))}
@@ -1067,6 +1125,7 @@ export function MenuView({
                   flyToCart(el, p);
                   addToCart(p);
                 }}
+                onShowDetail={() => setDetailModal(p)}
                 animationDelay={i * 25}
               />
             ))}
@@ -1741,6 +1800,25 @@ export function MenuView({
         />
       )}
 
+      {/* ============ ÜRÜN DETAY & BESLENME MODAL (Sprint 1B) ============ */}
+      {detailModal && (
+        <ProductDetailModal
+          product={detailModal}
+          lang={lang}
+          onClose={() => setDetailModal(null)}
+          onAdd={() => {
+            const p = detailModal;
+            setDetailModal(null);
+            // Varyasyonlu ürünse option modal'ı, değilse direkt sepete
+            if (p.presets && p.presets.length > 0) {
+              setOptionModal(p);
+            } else {
+              addToCart(p);
+            }
+          }}
+        />
+      )}
+
       <style jsx global>{`
         .scrollbar-hide::-webkit-scrollbar {
           display: none;
@@ -1811,17 +1889,24 @@ function ProductRow({
   product,
   lang,
   onAdd,
+  onShowDetail,
   animationDelay = 0,
 }: {
   product: Product;
   lang: Lang;
   onAdd: (el: HTMLElement) => void;
+  onShowDetail?: () => void;
   animationDelay?: number;
 }) {
   const isOut = product.status === 'soldout';
   const name = tt(product.name, lang);
   const description = tt(product.description, lang);
   const hasImage = !!product.hero_image_url;
+  // Beslenme bilgisi var mı (alerjen veya kalori)
+  const hasNutrition =
+    (product.allergens && product.allergens.length > 0) ||
+    !!product.calories ||
+    !!product.contains_alcohol;
 
   return (
     <div
@@ -1830,6 +1915,15 @@ function ProductRow({
         borderColor: 'var(--line)',
         animation: `menu-slide-up 380ms ease-out ${animationDelay}ms both`,
         boxShadow: '0 1px 2px rgba(42,31,24,0.04)',
+        cursor: onShowDetail && (description || hasNutrition) ? 'pointer' : 'default',
+      }}
+      onClick={(e) => {
+        // + butonuna tıklamayı yakalama (zaten kendi onClick'i var)
+        const target = e.target as HTMLElement;
+        if (target.closest('button')) return;
+        if (onShowDetail && (description || hasNutrition)) {
+          onShowDetail();
+        }
       }}
     >
       {/* Sol: hero (resim, ikon veya inisyal) */}
@@ -1964,6 +2058,86 @@ function ProductRow({
             }}
           >
             {description}
+          </div>
+        )}
+
+        {/* Mini alerjen rozetleri (Sprint 1B - Türkiye yasal uyum) */}
+        {hasNutrition && (
+          <div className="flex items-center gap-1 flex-wrap mb-1">
+            {/* Alerjen mini emoji'leri */}
+            {(product.allergens || []).slice(0, 5).map((a) => {
+              const emoji = ALLERGEN_EMOJI[a] || '⚠';
+              return (
+                <span
+                  key={a}
+                  title={ALLERGEN_LABELS_TR[a] || a}
+                  className="inline-flex items-center justify-center"
+                  style={{
+                    width: 18,
+                    height: 18,
+                    fontSize: 10,
+                    background: 'rgba(196,85,58,0.08)',
+                    borderRadius: 4,
+                  }}
+                >
+                  {emoji}
+                </span>
+              );
+            })}
+            {(product.allergens?.length || 0) > 5 && (
+              <span
+                style={{
+                  fontFamily: 'var(--f-mono)',
+                  fontSize: 9,
+                  color: 'var(--ink-3)',
+                }}
+              >
+                +{(product.allergens?.length || 0) - 5}
+              </span>
+            )}
+            {/* Alkol uyarısı */}
+            {product.contains_alcohol && (
+              <span
+                title={lang === 'tr' ? '18+ Alkol içerir' : '18+ Contains alcohol'}
+                className="inline-flex items-center px-1 rounded"
+                style={{
+                  fontSize: 8,
+                  fontWeight: 700,
+                  fontFamily: 'var(--f-mono)',
+                  background: 'rgba(196,85,58,0.15)',
+                  color: 'var(--accent)',
+                  letterSpacing: '0.05em',
+                  height: 18,
+                }}
+              >
+                18+
+              </span>
+            )}
+            {/* Kalori (varsa) */}
+            {product.calories && (
+              <span
+                style={{
+                  fontFamily: 'var(--f-mono)',
+                  fontSize: 9,
+                  color: 'var(--ink-3)',
+                  letterSpacing: '0.04em',
+                }}
+              >
+                · {product.calories} kcal
+              </span>
+            )}
+            {/* Detay link'i */}
+            <span
+              style={{
+                fontFamily: 'var(--f-mono)',
+                fontSize: 9,
+                color: 'var(--accent)',
+                letterSpacing: '0.04em',
+                marginLeft: 'auto',
+              }}
+            >
+              {lang === 'tr' ? 'detay →' : 'detail →'}
+            </span>
           </div>
         )}
 
@@ -2810,5 +2984,402 @@ function FeaturedHeroCard({
         </button>
       </div>
     </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════
+// PRODUCT DETAIL MODAL
+// Ürüne tıklayınca açılır — beslenme & alerjen detayı
+// Türkiye 1 Temmuz 2026 yönetmeliği uyumu
+// ════════════════════════════════════════════════════════════════════
+function ProductDetailModal({
+  product,
+  lang,
+  onClose,
+  onAdd,
+}: {
+  product: Product;
+  lang: Lang;
+  onClose: () => void;
+  onAdd: () => void;
+}) {
+  const name = tt(product.name, lang);
+  const description = tt(product.description, lang);
+  const isOut = product.status === 'soldout';
+  const allergens = product.allergens || [];
+  const ingredients =
+    lang === 'en'
+      ? product.ingredients?.en || product.ingredients?.tr
+      : product.ingredients?.tr;
+  const allergenLabels =
+    lang === 'en' ? ALLERGEN_LABELS_EN : ALLERGEN_LABELS_TR;
+  const dietaryTags = product.dietary_tags || [];
+
+  // ESC ile kapat
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  // markdown ** ** vurgusunu HTML'e çevir
+  const renderIngredients = (text: string) => {
+    const parts = text.split(/(\*\*[^*]+\*\*)/g);
+    return parts.map((part, i) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        const inner = part.slice(2, -2);
+        return (
+          <strong
+            key={i}
+            style={{
+              color: 'var(--accent)',
+              textDecoration: 'underline',
+              textDecorationStyle: 'wavy',
+              textUnderlineOffset: 2,
+              fontWeight: 700,
+            }}
+          >
+            {inner}
+          </strong>
+        );
+      }
+      return <span key={i}>{part}</span>;
+    });
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-[1100] flex items-end sm:items-center justify-center sm:p-5"
+      style={{ background: 'rgba(42,31,24,0.55)' }}
+      onClick={onClose}
+    >
+      <div
+        className="bg-paper w-full sm:max-w-[480px] sm:rounded-[22px] rounded-t-[22px] border border-line relative aleg-modal-content flex flex-col"
+        style={{ maxHeight: '88vh' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Kapat butonu */}
+        <button
+          onClick={onClose}
+          className="absolute top-3 right-3 w-9 h-9 rounded-full grid place-items-center transition-opacity hover:opacity-70 z-10"
+          style={{
+            background: 'var(--paper-2)',
+            color: 'var(--ink-2)',
+            border: '1px solid var(--line)',
+          }}
+          aria-label={lang === 'tr' ? 'Kapat' : 'Close'}
+        >
+          ✕
+        </button>
+
+        {/* Hero görseli (varsa) */}
+        {product.hero_image_url && (
+          <div
+            className="w-full overflow-hidden flex-shrink-0"
+            style={{
+              height: 220,
+              background: 'var(--paper-2)',
+              borderTopLeftRadius: 22,
+              borderTopRightRadius: 22,
+            }}
+          >
+            <img
+              src={product.hero_image_url}
+              alt={name}
+              className="w-full h-full object-cover"
+            />
+          </div>
+        )}
+
+        {/* İçerik (scroll'lu) */}
+        <div className="flex-1 overflow-y-auto p-6">
+          {/* Hero ikon (resim yoksa) */}
+          {!product.hero_image_url && product.hero_icon && (
+            <div className="text-center mb-3">
+              <span style={{ fontSize: 56 }}>{product.hero_icon}</span>
+            </div>
+          )}
+
+          {/* Ad */}
+          <h2
+            className="font-bold mb-2"
+            style={{
+              fontFamily: 'var(--f-serif)',
+              fontStyle: 'italic',
+              fontSize: 28,
+              color: 'var(--ink)',
+              lineHeight: 1.1,
+            }}
+          >
+            {name}
+          </h2>
+
+          {/* Diyet rozetleri (vegan/vejetaryen/glütensiz) */}
+          {dietaryTags.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {dietaryTags.includes('vegan') && (
+                <DietBadge emoji="🌱" label={lang === 'tr' ? 'Vegan' : 'Vegan'} />
+              )}
+              {dietaryTags.includes('vegetarian') && (
+                <DietBadge emoji="🥬" label={lang === 'tr' ? 'Vejetaryen' : 'Vegetarian'} />
+              )}
+              {dietaryTags.includes('gluten_free') && (
+                <DietBadge emoji="GF" label={lang === 'tr' ? 'Glütensiz' : 'Gluten-free'} />
+              )}
+              {dietaryTags.includes('lactose_free') && (
+                <DietBadge emoji="LF" label={lang === 'tr' ? 'Laktozsuz' : 'Lactose-free'} />
+              )}
+              {dietaryTags.includes('halal') && (
+                <DietBadge emoji="☪" label={lang === 'tr' ? 'Helal' : 'Halal'} />
+              )}
+              {dietaryTags.includes('organic') && (
+                <DietBadge emoji="✿" label={lang === 'tr' ? 'Organik' : 'Organic'} />
+              )}
+            </div>
+          )}
+
+          {/* Açıklama */}
+          {description && (
+            <p
+              className="text-sm mb-4"
+              style={{ color: 'var(--ink-2)', lineHeight: 1.5 }}
+            >
+              {description}
+            </p>
+          )}
+
+          {/* Fiyat + porsiyon (yan yana büyük) */}
+          <div className="flex items-baseline justify-between mb-5 pb-4 border-b" style={{ borderColor: 'var(--line)' }}>
+            <span
+              style={{
+                fontFamily: 'var(--f-serif)',
+                fontStyle: 'italic',
+                fontSize: 32,
+                fontWeight: 400,
+                color: 'var(--ink)',
+                letterSpacing: '-0.02em',
+              }}
+            >
+              {money(product.price, lang)}
+            </span>
+            {product.serving_size && (
+              <span
+                className="text-xs"
+                style={{
+                  fontFamily: 'var(--f-mono)',
+                  color: 'var(--ink-3)',
+                  letterSpacing: '0.04em',
+                }}
+              >
+                {product.serving_size}
+              </span>
+            )}
+          </div>
+
+          {/* Kalori (büyük) */}
+          {product.calories && (
+            <div
+              className="flex items-center gap-3 p-3 rounded-[12px] mb-4"
+              style={{
+                background: 'var(--paper-2)',
+                border: '1px solid var(--line)',
+              }}
+            >
+              <span style={{ fontSize: 24 }}>🔥</span>
+              <div className="flex-1">
+                <div
+                  className="text-[10px] tracking-[0.08em]"
+                  style={{
+                    fontFamily: 'var(--f-mono)',
+                    color: 'var(--ink-3)',
+                  }}
+                >
+                  {lang === 'tr' ? 'KALORİ' : 'CALORIES'}
+                </div>
+                <div
+                  className="font-bold"
+                  style={{
+                    fontFamily: 'var(--f-serif)',
+                    fontStyle: 'italic',
+                    fontSize: 22,
+                    color: 'var(--ink)',
+                    lineHeight: 1,
+                  }}
+                >
+                  {product.calories} kcal
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Alkol uyarısı (varsa, kırmızı + büyük) */}
+          {product.contains_alcohol && (
+            <div
+              className="flex items-center gap-3 p-3 rounded-[12px] mb-4"
+              style={{
+                background: 'rgba(196,85,58,0.08)',
+                border: '1.5px solid var(--accent)',
+              }}
+            >
+              <span
+                className="font-bold flex-shrink-0"
+                style={{
+                  fontFamily: 'var(--f-mono)',
+                  fontSize: 16,
+                  background: 'var(--accent)',
+                  color: '#FAF5EA',
+                  padding: '6px 10px',
+                  borderRadius: 6,
+                  letterSpacing: '0.08em',
+                }}
+              >
+                18+
+              </span>
+              <span
+                className="text-sm font-semibold"
+                style={{ color: 'var(--accent)' }}
+              >
+                {lang === 'tr'
+                  ? 'Bu ürün alkol içermektedir'
+                  : 'This product contains alcohol'}
+              </span>
+            </div>
+          )}
+
+          {/* Alerjenler (yasal vurgulama) */}
+          {allergens.length > 0 && (
+            <div className="mb-4">
+              <div
+                className="text-[10px] font-semibold tracking-[0.08em] mb-2 flex items-center gap-1.5"
+                style={{
+                  fontFamily: 'var(--f-mono)',
+                  color: 'var(--accent)',
+                }}
+              >
+                <span>⚠</span>
+                {lang === 'tr' ? 'ALERJEN UYARISI' : 'ALLERGEN WARNING'}
+              </div>
+              <div
+                className="rounded-[12px] p-3"
+                style={{
+                  background: 'rgba(196,85,58,0.05)',
+                  border: '1px solid color-mix(in srgb, var(--accent) 25%, transparent)',
+                }}
+              >
+                <div className="grid grid-cols-2 gap-2">
+                  {allergens.map((a) => (
+                    <div
+                      key={a}
+                      className="flex items-center gap-2 text-sm"
+                    >
+                      <span style={{ fontSize: 18 }}>
+                        {ALLERGEN_EMOJI[a] || '⚠'}
+                      </span>
+                      <span
+                        className="font-semibold"
+                        style={{
+                          color: 'var(--ink)',
+                          textDecoration: 'underline',
+                          textDecorationColor: 'var(--accent)',
+                          textDecorationThickness: 2,
+                          textUnderlineOffset: 3,
+                        }}
+                      >
+                        {allergenLabels[a] || a}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* İçerik listesi */}
+          {ingredients && (
+            <div className="mb-4">
+              <div
+                className="text-[10px] font-semibold tracking-[0.08em] mb-2"
+                style={{
+                  fontFamily: 'var(--f-mono)',
+                  color: 'var(--ink-3)',
+                }}
+              >
+                {lang === 'tr' ? 'İÇERİK' : 'INGREDIENTS'}
+              </div>
+              <p
+                className="text-sm"
+                style={{
+                  color: 'var(--ink-2)',
+                  lineHeight: 1.6,
+                }}
+              >
+                {renderIngredients(ingredients)}
+              </p>
+            </div>
+          )}
+
+          {/* Yasal uyarı footer */}
+          <div
+            className="text-[11px] mt-4 pt-4 border-t"
+            style={{
+              borderColor: 'var(--line)',
+              color: 'var(--ink-3)',
+              fontStyle: 'italic',
+              lineHeight: 1.5,
+            }}
+          >
+            {lang === 'tr'
+              ? 'Alerjeniz veya gıda hassasiyetiniz varsa lütfen siparişten önce personelimize bildirin. Mutfağımızda çapraz bulaşma ihtimali bulunmaktadır.'
+              : 'If you have allergies or food sensitivities, please inform our staff before ordering. Cross-contamination may occur in our kitchen.'}
+          </div>
+        </div>
+
+        {/* Footer — sepete ekle */}
+        <div
+          className="p-4 border-t flex-shrink-0"
+          style={{
+            borderColor: 'var(--line)',
+            background: 'var(--paper)',
+          }}
+        >
+          <button
+            onClick={onAdd}
+            disabled={isOut}
+            className="w-full h-12 rounded-[12px] font-bold text-sm transition-all active:scale-[0.98] disabled:opacity-40"
+            style={{
+              background: isOut ? 'var(--ink-3)' : 'var(--accent)',
+              color: '#FAF5EA',
+              fontFamily: 'var(--f-mono)',
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+            }}
+          >
+            {isOut
+              ? lang === 'tr' ? 'TÜKENDİ' : 'OUT OF STOCK'
+              : product.presets && product.presets.length > 0
+                ? lang === 'tr' ? 'SEÇENEKLERİ GÖR' : 'SEE OPTIONS'
+                : lang === 'tr' ? 'MASAYA EKLE' : 'ADD TO TABLE'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DietBadge({ emoji, label }: { emoji: string; label: string }) {
+  return (
+    <span
+      className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold"
+      style={{
+        background: 'color-mix(in srgb, var(--ok, #6B8347) 12%, transparent)',
+        color: 'var(--ok, #6B8347)',
+        border: '1px solid color-mix(in srgb, var(--ok, #6B8347) 25%, transparent)',
+      }}
+    >
+      <span>{emoji}</span>
+      {label}
+    </span>
   );
 }

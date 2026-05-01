@@ -1,36 +1,142 @@
-SPRINT 1A FIX — Beslenme Bölümü Collapsible
-=============================================
+SPRINT 1B — Müşteri Menüsü Beslenme & Alerjen UI
+==================================================
 
-SORUN
-------
-Yeni ürün eklerken modal çok uzun. Beslenme bölümü her zaman
-açık geliyordu, kullanıcı aşağı kaydırınca üstteki ürün adı,
-fiyat, kategori alanlarını kaybediyordu.
+Türkiye Tarım & Ticaret Bakanlığı 1 Temmuz 2026 yönetmeliği —
+müşteri tarafı görsel UI tamamlandı.
 
-ÇÖZÜM
-------
-Beslenme bölümü COLLAPSIBLE (katlanabilir):
-  • Yeni ürün eklerken: VARSAYILAN KAPALI
-    Önce ürün adı/açıklama yaz → sonra Beslenme'yi aç
-  • Mevcut ürün düzenlerken: bilgi varsa AÇIK başlar
-  • Başlığa tıklanınca açılır/kapanır
-  • Bilgi doldurulduysa "✓ dolduruldu" rozeti
-  • AI ile yapıldıysa "✨ AI" rozeti
 
-YENİ AKIŞ
-----------
-1. "+ Yeni Ürün"
-2. Ürün adı, kategori, fiyat yaz (görünür alanlar)
-3. Açıklama yaz (opsiyonel)
-4. "🍎 BESLENME & ALERJEN BİLGİSİ ▼" başlığına tıkla
-5. Açılır
-6. "✨ AI ile beslenme bilgisi üret"
-7. Kaydet
+YAPILAN
+========
 
-Sadece 1 dosya değişti:
-  app/panel/(shell)/menu/urunler/product-list.tsx
+[1] Mini alerjen rozetleri (ürün satırında)
+   • Ürünün allergens veya calories varsa rozetler görünür
+   • Ürün satırında, açıklamanın altında küçük chip'ler:
+     - 🌾 (gluten)  🥛 (süt)  🥚 (yumurta) ...
+     - Max 5 emoji + "+3 daha" şeklinde
+     - 18+ alkol rozeti (varsa, kırmızı)
+     - Kalori (varsa, "· 720 kcal")
+     - Sağa hizalı "detay →" link'i
 
-Push:
-  git add "app/panel/(shell)/menu/urunler/product-list.tsx"
-  git commit -m "fix: collapsible nutrition section in product form"
-  git push origin main
+[2] Ürün satırı tıklanabilir
+   • Açıklama veya beslenme bilgisi olan ürünler tıklanabilir
+   • Tıklanınca ProductDetailModal açılır
+   • + butonuna tıklamada modal açılmaz (event yakalama)
+
+[3] ProductDetailModal — yeni komponent
+   • Hero görseli (varsa, 220px)
+   • Ürün adı (italic serif, büyük)
+   • Diyet rozetleri (Vegan, Vejetaryen, Glütensiz vs)
+   • Açıklama
+   • Fiyat + porsiyon (yan yana)
+   • 🔥 Kalori kutusu (büyük, vurgulanmış)
+   • 🍷 Alkol uyarısı (kırmızı, 18+ rozeti)
+   • ⚠ Alerjen uyarısı (yasal vurgulama):
+     - Kalın + altı çizili (yasa böyle istiyor)
+     - Grid'de 2 sütun, emoji + isim
+   • İçerik listesi (markdown ** ** ile alerjen vurgulaması)
+   • Yasal footer uyarısı:
+     "Alerjeniz veya gıda hassasiyetiniz varsa lütfen
+      siparişten önce personelimize bildirin..."
+   • Alt buton: "MASAYA EKLE" (varyasyonluysa "SEÇENEKLERİ GÖR")
+   • ESC ile kapanır
+   • Backdrop'a tıklayınca kapanır
+
+[4] Markdown render
+   • İçerik listesinde **kalın** ifadeler vurgulanır:
+     - color: accent (turuncu)
+     - underline: wavy (dalgalı altı çizili)
+     - bold: 700
+
+[5] Sabit veriler (ALLERGEN_EMOJI, ALLERGEN_LABELS_TR/EN)
+   • 14 ana alerjen için emoji + TR + EN etiketleri
+   • Backend'le tutarlı (EU 1169/2011)
+
+
+KULLANICI AKIŞI
+================
+
+1. QR ile menüye gir (demo.alegstudio.com)
+2. Ürünleri gör — beslenme bilgisi olanlarda mini emoji'ler ✓
+3. İlgini çeken ürüne tıkla
+4. Detay modal'ı açılır:
+   - Kalori
+   - Alerjen uyarısı (vurgulanmış)
+   - İçerik (alerjenler dalgalı altı çizili)
+   - Yasal uyarı footer
+5. "MASAYA EKLE" → sepete ekler
+
+
+KURULUM
+========
+
+1 dosya değişti:
+   app/menu/[slug]/menu-view.tsx
+
+Migration GEREK YOK.
+
+
+PUSH
+=====
+
+   git add "app/menu/[slug]/menu-view.tsx"
+   git commit -m "feat: sprint 1b - allergen badges + nutrition modal (customer)"
+   git push origin main
+
+
+TEST
+=====
+
+[A] Mini rozetler:
+    1. demo.alegstudio.com aç
+    2. "Cafe Aleg Burger" satırını bul
+    3. ✅ Açıklamanın altında küçük emoji'ler:
+       🌾 🥛 🥚 ... · 720 kcal      detay →
+
+[B] Detay modal:
+    1. Burger satırına tıkla (+ butonu DEĞİL)
+    2. ✅ Modal aşağıdan açılır
+    3. Kontrol et:
+       - Ürün adı büyük italic
+       - Açıklama
+       - Fiyat ₺280, porsiyon "1 porsiyon (350gr)"
+       - 🔥 Kalori kutusu: 720 kcal
+       - ⚠ Alerjen Uyarısı: 🌾 Gluten, 🥛 Süt, 🥚 Yumurta
+         (Hepsi altı çizili, kalın)
+       - İçerik: "180gr dana eti, ekmek (BUĞDAY), peynir (SÜT)..."
+         (BUĞDAY ve SÜT dalgalı altı çizili turuncu)
+       - Yasal footer: "Alerjeniz veya gıda hassasiyetiniz..."
+       - "MASAYA EKLE" butonu
+    4. ESC bas → kapanır
+    5. Backdrop'a tıkla → kapanır
+
+[C] Alkol uyarısı:
+    • Şarap/bira ürün eklersen panel'den "Alkol" toggle aç
+    • Müşteride 18+ kırmızı rozet görünmeli
+
+[D] Diyet rozetleri:
+    • Vegan ürünler "🌱 Vegan" yeşil rozet
+    • Glütensiz "GF Glütensiz" rozet
+
+[E] EN dil testi:
+    1. Dili değiştir → English
+    2. ✅ Modal'da "ALLERGEN WARNING", "INGREDIENTS",
+       "ADD TO TABLE", İngilizce alerjen isimleri
+
+[F] Beslenme bilgisi olmayan ürünler:
+    • Henüz AI ile doldurulmamış ürünlerde:
+      - Mini rozet GÖRÜNMEZ
+      - Tıklamada modal AÇILIR (sadece ad + açıklama + fiyat)
+
+
+NOTLAR
+=======
+
+⚠ Yasal uyumun bel kemiği:
+   - 14 ana alerjen ✓
+   - Vurgulu gösterim (kalın + altı çizili) ✓
+   - QR menüde sunulabilir ✓
+   - Müşteri uyarısı footer ✓
+
+⚠ Cross-contamination uyarısı eklendi (yasal güvence)
+⚠ Alkol için 18+ rozeti (Türkiye yasası)
+⚠ Modal her cihazda çalışır (mobile-first responsive)
