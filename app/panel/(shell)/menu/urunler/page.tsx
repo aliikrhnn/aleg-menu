@@ -29,7 +29,7 @@ export default async function ProductsPage() {
   // Ürünler
   const { data: products } = await supabase
     .from('products')
-    .select('id, category_id, name, description, price, status, is_featured, is_chef_recommend, dietary_tags, spicy_level, print_station, station_id, hero_icon, hero_image_url, sort_order')
+    .select('id, category_id, name, description, price, status, is_featured, is_chef_recommend, dietary_tags, spicy_level, print_station, station_id, hero_icon, hero_image_url, sort_order, allergens, calories, serving_size, ingredients, contains_alcohol, nutrition_ai_generated, nutrition_verified_at, ai_notes')
     .eq('business_id', businessId || '')
     .order('sort_order', { ascending: true });
 

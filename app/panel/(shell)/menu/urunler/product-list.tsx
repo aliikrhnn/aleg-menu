@@ -15,7 +15,13 @@ import {
   bulkSetStatus,
   type ProductInput,
 } from '@/lib/actions/menu';
-import { aiGenerateProductDescription, aiTranslateText } from '@/lib/actions/ai';
+import {
+  aiGenerateProductDescription,
+  aiTranslateText,
+  aiGenerateProductNutrition,
+  aiGenerateNutritionForAllProducts,
+  updateProductNutrition,
+} from '@/lib/actions/ai';
 import type { LocalizedText } from '@/types/database';
 import { ProductImageCropModal } from '@/components/panel/product-image-crop-modal';
 import { toast } from '@/components/ui/toast';
@@ -44,6 +50,15 @@ type Product = {
   hero_image_url: string | null;
   sort_order: number;
   preset_count?: number;
+  // Beslenme & alerjen (Türkiye yasal uyum 1 Temmuz 2026)
+  allergens?: string[];
+  calories?: number | null;
+  serving_size?: string | null;
+  ingredients?: LocalizedText | null;
+  contains_alcohol?: boolean;
+  nutrition_ai_generated?: boolean;
+  nutrition_verified_at?: string | null;
+  ai_notes?: string | null;
 };
 
 type StationOption = {
@@ -66,6 +81,15 @@ export function ProductList({ products, categories, stations }: Props) {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  // Beslenme & alerjen modal (Sprint 1)
+  const [nutritionEditFor, setNutritionEditFor] = useState<Product | null>(null);
+  // Toplu AI doldur durumu
+  const [bulkAiRunning, setBulkAiRunning] = useState(false);
+  const [bulkAiResult, setBulkAiResult] = useState<{
+    processed: number;
+    failed: number;
+    skipped: number;
+  } | null>(null);
 
   // Filtreleme
   const [filterCategory, setFilterCategory] = useState<string>('all');
@@ -313,6 +337,85 @@ export function ProductList({ products, categories, stations }: Props) {
           <span style={{ fontFamily: 'var(--f-mono)' }}>+</span>
           Yeni Ürün
         </button>
+
+        {/* Toplu AI Beslenme Doldur — Sprint 1 yasal uyum */}
+        {(() => {
+          const missingCount = products.filter(
+            (p) =>
+              !p.calories &&
+              (!p.allergens || p.allergens.length === 0) &&
+              (!p.ingredients || (!p.ingredients.tr && !p.ingredients.en))
+          ).length;
+          if (missingCount === 0) return null;
+          return (
+            <button
+              onClick={async () => {
+                if (
+                  !confirm(
+                    `${missingCount} ürünün beslenme bilgisi yok. AI ile otomatik doldurulsun mu?\n\nBu işlem birkaç dakika sürebilir. Sonrasında her ürünü kontrol etmen önerilir.`
+                  )
+                )
+                  return;
+                setBulkAiRunning(true);
+                setBulkAiResult(null);
+                const r = await aiGenerateNutritionForAllProducts({
+                  mode: 'missing',
+                  maxProducts: 100,
+                });
+                setBulkAiRunning(false);
+                if (r.success) {
+                  setBulkAiResult({
+                    processed: r.processed,
+                    failed: r.failed,
+                    skipped: r.skipped,
+                  });
+                  startTransition(() => {
+                    router.refresh();
+                  });
+                } else {
+                  setError(r.errors?.[0] || 'AI hatası');
+                }
+              }}
+              disabled={bulkAiRunning}
+              className="h-10 px-4 rounded-[var(--r-sm)] text-sm font-semibold flex items-center gap-2 transition-opacity disabled:opacity-60"
+              style={{
+                background: 'transparent',
+                color: 'var(--accent)',
+                border: '1.5px solid var(--accent)',
+              }}
+              title={`${missingCount} ürün için AI ile beslenme bilgisi üret`}
+            >
+              {bulkAiRunning ? (
+                <>⏳ İşleniyor...</>
+              ) : (
+                <>
+                  ✨ Beslenme Bilgisi ({missingCount})
+                </>
+              )}
+            </button>
+          );
+        })()}
+
+        {bulkAiResult && (
+          <div
+            className="text-xs px-3 py-2 rounded-[var(--r-sm)]"
+            style={{
+              background: 'var(--paper-2)',
+              color: 'var(--ink-2)',
+              border: '1px solid var(--line)',
+            }}
+          >
+            ✓ {bulkAiResult.processed} işlendi
+            {bulkAiResult.failed > 0 && ` · ${bulkAiResult.failed} hata`}
+            {bulkAiResult.skipped > 0 && ` · ${bulkAiResult.skipped} atlandı`}
+            <button
+              onClick={() => setBulkAiResult(null)}
+              className="ml-2 text-[10px] opacity-60 hover:opacity-100"
+            >
+              ✕
+            </button>
+          </div>
+        )}
 
         <div className="flex-1 min-w-[200px]">
           <input
@@ -784,6 +887,25 @@ export function ProductList({ products, categories, stations }: Props) {
                         Düzenle
                       </button>
                       <button
+                        onClick={() => setNutritionEditFor(p)}
+                        disabled={isPending}
+                        className="h-8 px-2 rounded hover:bg-paper-2 text-xs font-medium disabled:opacity-50"
+                        title="Beslenme & Alerjen"
+                        style={{
+                          color:
+                            (p.calories || (p.allergens && p.allergens.length > 0))
+                              ? 'var(--accent)'
+                              : 'var(--ink-2)',
+                          opacity:
+                            (p.calories || (p.allergens && p.allergens.length > 0))
+                              ? 1
+                              : 0.5,
+                        }}
+                      >
+                        🍎 Beslenme
+                        {(p.calories || (p.allergens && p.allergens.length > 0)) ? '' : ' ⚠'}
+                      </button>
+                      <button
                         onClick={() => handleDelete(p.id, p.name.tr)}
                         disabled={isPending}
                         className="h-8 px-2 rounded text-danger hover:bg-danger/10 text-xs disabled:opacity-50"
@@ -809,6 +931,20 @@ export function ProductList({ products, categories, stations }: Props) {
           onSubmit={handleSubmit}
           onCancel={handleCancel}
           loading={isPending}
+        />
+      )}
+
+      {/* Beslenme & Alerjen Modal (Sprint 1 - Türkiye Yasal Uyum) */}
+      {nutritionEditFor && (
+        <NutritionEditModal
+          product={nutritionEditFor}
+          onClose={() => setNutritionEditFor(null)}
+          onSaved={() => {
+            setNutritionEditFor(null);
+            startTransition(() => {
+              router.refresh();
+            });
+          }}
         />
       )}
 
@@ -1605,5 +1741,427 @@ function FormStyles() {
         line-height: 1.5;
       }
     `}</style>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════
+// NUTRITION EDIT MODAL — Sprint 1 (Türkiye Yasal Uyum 1 Temmuz 2026)
+// Ürün başına alerjen, kalori, içerik bilgisi düzenleme + AI üretimi
+// ════════════════════════════════════════════════════════════════════
+
+const ALLERGEN_OPTIONS: { key: string; tr: string; emoji: string }[] = [
+  { key: 'gluten',      tr: 'Gluten',          emoji: '🌾' },
+  { key: 'milk',        tr: 'Süt',             emoji: '🥛' },
+  { key: 'eggs',        tr: 'Yumurta',         emoji: '🥚' },
+  { key: 'nuts',        tr: 'Kuruyemiş',       emoji: '🥜' },
+  { key: 'peanuts',     tr: 'Yer fıstığı',     emoji: '🥜' },
+  { key: 'sesame',      tr: 'Susam',           emoji: '🌰' },
+  { key: 'soybeans',    tr: 'Soya',            emoji: '🫘' },
+  { key: 'fish',        tr: 'Balık',           emoji: '🐟' },
+  { key: 'crustaceans', tr: 'Kabuklu',         emoji: '🦐' },
+  { key: 'molluscs',    tr: 'Yumuşakça',       emoji: '🦑' },
+  { key: 'celery',      tr: 'Kereviz',         emoji: '🥬' },
+  { key: 'mustard',     tr: 'Hardal',          emoji: '🟡' },
+  { key: 'sulphites',   tr: 'Sülfit',          emoji: '🍷' },
+  { key: 'lupin',       tr: 'Acı bakla',       emoji: '🌱' },
+];
+
+function NutritionEditModal({
+  product,
+  onClose,
+  onSaved,
+}: {
+  product: {
+    id: string;
+    name: { tr: string; en: string };
+    allergens?: string[];
+    calories?: number | null;
+    serving_size?: string | null;
+    ingredients?: { tr: string; en: string } | null;
+    contains_alcohol?: boolean;
+    nutrition_ai_generated?: boolean;
+    ai_notes?: string | null;
+  };
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [allergens, setAllergens] = useState<string[]>(product.allergens || []);
+  const [calories, setCalories] = useState<string>(
+    product.calories ? String(product.calories) : ''
+  );
+  const [servingSize, setServingSize] = useState<string>(
+    product.serving_size || ''
+  );
+  const [ingredientsTr, setIngredientsTr] = useState<string>(
+    product.ingredients?.tr || ''
+  );
+  const [ingredientsEn, setIngredientsEn] = useState<string>(
+    product.ingredients?.en || ''
+  );
+  const [containsAlcohol, setContainsAlcohol] = useState<boolean>(
+    product.contains_alcohol || false
+  );
+  const [aiNotes, setAiNotes] = useState<string>(product.ai_notes || '');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [saveLoading, setSaveLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const isAiGenerated = product.nutrition_ai_generated;
+
+  const toggleAllergen = (key: string) => {
+    setAllergens((prev) =>
+      prev.includes(key) ? prev.filter((a) => a !== key) : [...prev, key]
+    );
+  };
+
+  const handleAiGenerate = async () => {
+    setAiLoading(true);
+    setError(null);
+    const r = await aiGenerateProductNutrition({
+      productId: product.id,
+      overwriteExisting: true,
+    });
+    setAiLoading(false);
+    if (r.success && r.nutrition) {
+      // Form'u AI çıktısıyla doldur
+      setAllergens(r.nutrition.allergens);
+      setCalories(String(r.nutrition.calories));
+      setServingSize(r.nutrition.serving_size);
+      setIngredientsTr(r.nutrition.ingredients_tr);
+      setIngredientsEn(r.nutrition.ingredients_en);
+      setContainsAlcohol(r.nutrition.contains_alcohol);
+      setAiNotes(r.nutrition.ai_notes);
+    } else {
+      setError(r.error || 'AI üretemedi');
+    }
+  };
+
+  const handleSave = async () => {
+    setSaveLoading(true);
+    setError(null);
+    const r = await updateProductNutrition({
+      productId: product.id,
+      allergens,
+      calories: calories ? parseInt(calories, 10) : null,
+      serving_size: servingSize,
+      ingredients_tr: ingredientsTr,
+      ingredients_en: ingredientsEn,
+      contains_alcohol: containsAlcohol,
+      markAsVerified: true,
+    });
+    setSaveLoading(false);
+    if (r.success) {
+      toast.success('Beslenme bilgisi kaydedildi');
+      onSaved();
+    } else {
+      setError(r.error || 'Kaydedilemedi');
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-[150] grid place-items-center p-4 overflow-y-auto"
+      style={{ background: 'rgba(42,31,24,0.55)' }}
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-[640px] my-8 rounded-[16px] shadow-2xl"
+        style={{
+          background: 'var(--paper)',
+          border: '2px solid var(--ink)',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div
+          className="px-6 py-5 border-b flex items-center justify-between"
+          style={{ borderColor: 'var(--line)' }}
+        >
+          <div>
+            <div
+              className="text-[10px] font-semibold tracking-[0.12em] mb-1"
+              style={{
+                fontFamily: 'var(--f-mono)',
+                color: 'var(--accent)',
+              }}
+            >
+              BESLENME & ALERJEN BİLGİSİ
+            </div>
+            <div
+              className="text-xl font-bold"
+              style={{
+                fontFamily: 'var(--f-serif)',
+                color: 'var(--ink)',
+              }}
+            >
+              {product.name.tr}
+            </div>
+            {isAiGenerated && (
+              <div
+                className="inline-flex items-center gap-1 mt-1 text-[10px] px-2 py-0.5 rounded-full"
+                style={{
+                  background: 'rgba(196,85,58,0.1)',
+                  color: 'var(--accent)',
+                  fontFamily: 'var(--f-mono)',
+                  letterSpacing: '0.05em',
+                }}
+              >
+                ✨ AI tarafından üretildi
+              </div>
+            )}
+          </div>
+          <button
+            onClick={onClose}
+            className="text-2xl opacity-50 hover:opacity-100 transition-opacity"
+            style={{ color: 'var(--ink-2)' }}
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="p-6 space-y-6">
+          {/* AI BUTONU */}
+          <div
+            className="p-4 rounded-[12px]"
+            style={{
+              background: 'var(--paper-2)',
+              border: '1px solid var(--line)',
+            }}
+          >
+            <div className="flex items-start gap-3">
+              <div className="text-2xl">✨</div>
+              <div className="flex-1">
+                <div className="text-sm font-semibold mb-1">
+                  AI ile otomatik doldur
+                </div>
+                <div
+                  className="text-xs mb-3"
+                  style={{ color: 'var(--ink-2)' }}
+                >
+                  Ürün adı ve açıklamasından alerjen, kalori, içerik
+                  bilgilerini AI üretir. Sonra düzenleyebilirsin.
+                </div>
+                <button
+                  onClick={handleAiGenerate}
+                  disabled={aiLoading}
+                  className="h-9 px-4 rounded-[10px] text-xs font-semibold transition-all disabled:opacity-60"
+                  style={{
+                    background: 'var(--accent)',
+                    color: '#FAF5EA',
+                    fontFamily: 'var(--f-mono)',
+                    letterSpacing: '0.05em',
+                  }}
+                >
+                  {aiLoading
+                    ? '⏳ AI analiz ediyor...'
+                    : isAiGenerated
+                      ? '🔄 Tekrar üret'
+                      : '✨ AI ile doldur'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* ALERJENLER */}
+          <div>
+            <div
+              className="text-xs font-semibold tracking-[0.05em] mb-2"
+              style={{
+                fontFamily: 'var(--f-mono)',
+                color: 'var(--ink-2)',
+              }}
+            >
+              ALERJENLER {allergens.length > 0 && `(${allergens.length})`}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {ALLERGEN_OPTIONS.map((opt) => {
+                const selected = allergens.includes(opt.key);
+                return (
+                  <button
+                    key={opt.key}
+                    onClick={() => toggleAllergen(opt.key)}
+                    className="h-8 px-3 rounded-full text-xs font-semibold transition-all"
+                    style={{
+                      background: selected ? 'var(--accent)' : 'transparent',
+                      color: selected ? '#FAF5EA' : 'var(--ink-2)',
+                      border: `1px solid ${selected ? 'var(--accent)' : 'var(--line)'}`,
+                    }}
+                  >
+                    {opt.emoji} {opt.tr}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* KALORİ + PORSIYON */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <div
+                className="text-xs font-semibold tracking-[0.05em] mb-2"
+                style={{
+                  fontFamily: 'var(--f-mono)',
+                  color: 'var(--ink-2)',
+                }}
+              >
+                KALORİ (kcal)
+              </div>
+              <input
+                type="number"
+                value={calories}
+                onChange={(e) => setCalories(e.target.value)}
+                placeholder="örn. 720"
+                className="w-full h-10 px-3 rounded-[10px] bg-card border border-line text-sm focus:outline-none focus:border-accent"
+              />
+            </div>
+            <div>
+              <div
+                className="text-xs font-semibold tracking-[0.05em] mb-2"
+                style={{
+                  fontFamily: 'var(--f-mono)',
+                  color: 'var(--ink-2)',
+                }}
+              >
+                PORSIYON
+              </div>
+              <input
+                type="text"
+                value={servingSize}
+                onChange={(e) => setServingSize(e.target.value)}
+                placeholder="1 porsiyon (350gr)"
+                className="w-full h-10 px-3 rounded-[10px] bg-card border border-line text-sm focus:outline-none focus:border-accent"
+              />
+            </div>
+          </div>
+
+          {/* İÇERİK TR */}
+          <div>
+            <div
+              className="text-xs font-semibold tracking-[0.05em] mb-2"
+              style={{
+                fontFamily: 'var(--f-mono)',
+                color: 'var(--ink-2)',
+              }}
+            >
+              İÇERİK LİSTESİ (TR)
+            </div>
+            <textarea
+              value={ingredientsTr}
+              onChange={(e) => setIngredientsTr(e.target.value)}
+              rows={3}
+              placeholder="180gr dana eti, ekmek (**buğday**), peynir (**süt**)..."
+              className="w-full px-3 py-2 rounded-[10px] bg-card border border-line text-sm focus:outline-none focus:border-accent resize-none"
+            />
+            <div
+              className="text-[10px] mt-1"
+              style={{ color: 'var(--ink-2)' }}
+            >
+              Alerjenleri **kalın** olarak işaretle (markdown)
+            </div>
+          </div>
+
+          {/* İÇERİK EN */}
+          <div>
+            <div
+              className="text-xs font-semibold tracking-[0.05em] mb-2"
+              style={{
+                fontFamily: 'var(--f-mono)',
+                color: 'var(--ink-2)',
+              }}
+            >
+              İÇERİK LİSTESİ (EN)
+            </div>
+            <textarea
+              value={ingredientsEn}
+              onChange={(e) => setIngredientsEn(e.target.value)}
+              rows={3}
+              placeholder="180g beef, bun (**wheat**), cheese (**milk**)..."
+              className="w-full px-3 py-2 rounded-[10px] bg-card border border-line text-sm focus:outline-none focus:border-accent resize-none"
+            />
+          </div>
+
+          {/* ALKOL */}
+          <label
+            className="flex items-center gap-3 p-3 rounded-[10px] cursor-pointer"
+            style={{
+              background: 'var(--paper-2)',
+              border: '1px solid var(--line)',
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={containsAlcohol}
+              onChange={(e) => setContainsAlcohol(e.target.checked)}
+              className="w-4 h-4"
+            />
+            <span className="text-sm font-medium">
+              🍷 Alkol içeriyor (18+ uyarısı görünür)
+            </span>
+          </label>
+
+          {/* AI NOTU */}
+          {aiNotes && (
+            <div
+              className="p-3 rounded-[10px] text-xs"
+              style={{
+                background: 'rgba(196,85,58,0.05)',
+                border: '1px dashed var(--accent)',
+                color: 'var(--ink-2)',
+              }}
+            >
+              <strong style={{ color: 'var(--accent)' }}>AI Notu:</strong>{' '}
+              {aiNotes}
+            </div>
+          )}
+
+          {/* HATA */}
+          {error && (
+            <div
+              className="p-3 rounded-[10px] text-xs"
+              style={{
+                background: 'rgba(196,85,58,0.1)',
+                color: 'var(--accent)',
+                border: '1px solid var(--accent)',
+              }}
+            >
+              ⚠ {error}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div
+          className="px-6 py-4 border-t flex items-center justify-end gap-3"
+          style={{ borderColor: 'var(--line)' }}
+        >
+          <button
+            onClick={onClose}
+            className="h-10 px-4 rounded-[10px] text-sm font-semibold hover:opacity-70"
+            style={{
+              background: 'transparent',
+              color: 'var(--ink-2)',
+              border: '1px solid var(--line)',
+              fontFamily: 'var(--f-mono)',
+              letterSpacing: '0.05em',
+            }}
+          >
+            Vazgeç
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saveLoading}
+            className="h-10 px-5 rounded-[10px] text-sm font-semibold transition-opacity disabled:opacity-60"
+            style={{
+              background: 'var(--accent)',
+              color: '#FAF5EA',
+              fontFamily: 'var(--f-mono)',
+              letterSpacing: '0.05em',
+            }}
+          >
+            {saveLoading ? 'Kaydediliyor...' : 'Kaydet'}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

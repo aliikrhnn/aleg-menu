@@ -68,6 +68,13 @@ type Product = {
   hero_icon: string | null;
   hero_image_url: string | null;
   presets: OptionPreset[];
+  // Beslenme & alerjen (Sprint 1 — Türkiye yasal uyum)
+  allergens?: string[];
+  calories?: number | null;
+  serving_size?: string | null;
+  ingredients?: LocalizedText | null;
+  contains_alcohol?: boolean;
+  dietary_tags?: string[];
 };
 
 type SelectedOption = {

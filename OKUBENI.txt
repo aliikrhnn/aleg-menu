@@ -1,161 +1,169 @@
-ALEG TUR 17g — Partial İkram/İptal Modal Tabanlı (FIX)
-==========================================================
+ALEG SPRINT 1A — AI Destekli Beslenme & Alerjen (Panel Tarafı)
+================================================================
 
-SORUN
-=====
+Türkiye Tarım & Ticaret Bakanlığı 1 Temmuz 2026 yönetmeliğine
+uyumlu beslenme & alerjen sistemi.
 
-Tur 17fg'de partial ikram ve iptal için window.prompt() kullanılmıştı.
-Ama prompt() bazı tarayıcılarda (özellikle PWA modunda kasiyerin tablet'i
-veya Safari/iOS) ENGELLENİYOR veya görünmüyor.
-
-Sonuç: Kasiyer 2× kalemi seçip ★ İkram'a basınca prompt çıkmıyor,
-ve direkt "tüm seçili kalemler" akışına düşüyor → ikisi birden ikram!
-
-Aynı durum × İptal için de geçerli.
+  ⚠️ MIGRATION ZATEN UYGULANDI (Supabase MCP ile)
+  Yine de kod tarafında tutarlılık için migration_0039 SQL
+  dosyası eklendi.
 
 
-ÇÖZÜM — TASARIM TUTARLI MODAL
-================================
+YAPILAN
+========
 
-prompt() yerine güzel bir modal:
+[1] AI altyapısı
+    • lib/ai/claude.ts → generateNutritionInfo() eklendi
+      - Haiku 4.5 model (ucuz, alerjen sınıflandırma için yeter)
+      - 14 ana alerjen (EU 1169/2011 standardı)
+      - Konservatif yaklaşım (emin değilsen işaretle)
+      - JSON output, robust parse + validation
+      - TR + EN içerik listesi otomatik üretir
+      - Bonus: typo fix ("Turkish and Turkish" → "Turkish and English")
 
-  ┌─────────────────────────────────────┐
-  │  İKRAM ADEDİ SEÇ                    │
-  │  am suyu                            │
-  │  Toplam 2 adet var. Kaç adet ikram? │
-  │                                     │
-  │      [−]    1    [+]                │
-  │                                     │
-  │      [1]   [2]                      │ ← hızlı seçim
-  │                                     │
-  │  1 adet ikram edilecek,             │
-  │  1 adet normal kalır                │
-  │                                     │
-  │  [Vazgeç]    [★ İKRAM ET]           │
-  └─────────────────────────────────────┘
+    • lib/ai/rate-limit.ts → 'nutrition' feature eklendi
+      - Günde 200 ürün analizi (toplu doldur için)
 
-Avantajlar:
-  ✓ Her tarayıcıda çalışır (prompt'un PWA sorunu yok)
-  ✓ Görsel olarak ne yapıldığı net (1 ikram, 1 normal kalır)
-  ✓ Hızlı seçim chip'leri (1, 2, 3, ... totalQty)
-  ✓ +/- butonları (büyük dokunma alanı, tablet uyumlu)
-  ✓ Modal görünmüyorsa Tur 17g deploy edilmemiş demektir
-    → kullanıcı kolayca teşhis eder
+[2] Server actions (lib/actions/ai.ts)
+    • aiGenerateProductNutrition()
+      - Tek ürün için AI üretir + DB'ye yazar
+      - Mevcut bilgi varsa overwrite onayı ister
+      - nutrition_ai_generated=true flag set eder
+      - Verify ZORUNLU DEĞİL (kullanıcı tercihi — direkt görünür)
+
+    • aiGenerateNutritionForAllProducts()
+      - Toplu mod: 'missing' (sadece eksikler) veya 'all' (hepsi overwrite)
+      - Max 50 ürün (config 200'e kadar)
+      - Tek tek işler, 200ms throttle (API stress önler)
+      - Rate limit doluysa kalanları atlar
+
+    • updateProductNutrition()
+      - Manuel form düzenleme + kaydet
+      - markAsVerified=true → işletmeci doğruladı flag'i
+
+[3] Panel UI — Ürün listesi
+    • Her ürün satırına "🍎 Beslenme" butonu eklendi
+      - Bilgi yoksa ⚠ uyarısı
+      - Bilgi varsa accent renk
+    • Üstte "✨ Beslenme Bilgisi (X)" toplu doldur butonu
+      - X = eksik ürün sayısı
+      - 0 olursa buton gizlenir
+      - Sonuç banner'ı (X işlendi · Y hata · Z atlandı)
+
+[4] Panel UI — Beslenme modal'ı (NutritionEditModal)
+    • Header: ürün adı + AI rozeti
+    • [✨ AI ile doldur] büyük buton
+    • 14 alerjen chip seçici (emoji + TR ad)
+    • Kalori (kcal) + Porsiyon yan yana input
+    • İçerik TR + EN textarea (markdown ** desteği)
+    • Alkol toggle (18+)
+    • AI notu (varsa) gösterilir
+    • Kaydet / Vazgeç
 
 
-KOD DEĞİŞİKLİKLERİ
-==================
+YAPILMAYAN (SPRINT 1B'DE)
+==========================
 
-[1] app/kasa/table-detail-modal.tsx
+❌ Müşteri menüsünde alerjen rozetleri (kart üstünde)
+❌ Müşteri menüsünde ürün detay modal'ı (kalori, içerik gösterimi)
+❌ Müşteri menüsünde footer alerjen uyarısı
 
-  ▸ State eklendi:
-    const [partialQtyContext, setPartialQtyContext] = useState<{
-      mode: 'gift' | 'cancel';
-      orderId: string;
-      itemId: string;
-      productName: string;
-      totalQty: number;
-      qty: number;
-    } | null>(null);
-
-  ▸ ESC handler'a partialQtyContext eklendi.
-
-  ▸ ★ İkram butonu:
-    Önceki: window.prompt(...) → bazı tarayıcılarda çalışmıyor
-    Sonraki: setPartialQtyContext({ mode: 'gift', ... })
-             → React-render modal gösterir, garantili çalışır.
-
-  ▸ × İptal butonu: aynı şekilde modal'a yönlendirir.
-
-  ▸ Yeni component: PartialQtyPicker
-    - Renk teması: ikram → gold, iptal → kırmızı
-    - +/- butonları (1 ile totalQty arası)
-    - Hızlı seçim chip'leri
-    - "Tüm qty mi seçildi?" otomatik tespit:
-        - isFull = ctx.qty === ctx.totalQty
-        - isFull ise partialQty parametresi gönderilmez
-          (action eski full-qty akışına düşer, kalem bölünmez)
-    - Backdrop'a tıklayınca kapanır
-
-[2] lib/actions/tables-status.ts (değişmedi)
-   Tur 17fg'deki partialQty desteği zaten kalıyor.
+Bu kısım context dolduğu için sonraki turda eklenecek.
 
 
 KURULUM
-=======
+========
 
-Migration veya yeni paket gerekmez. 2 dosyayı üzerine yaz:
+  1. /lib/ai/claude.ts üzerine yaz
+  2. /lib/ai/rate-limit.ts üzerine yaz
+  3. /lib/actions/ai.ts üzerine yaz
+  4. /app/panel/(shell)/menu/urunler/page.tsx üzerine yaz
+  5. /app/panel/(shell)/menu/urunler/product-list.tsx üzerine yaz
+  6. /app/menu/[slug]/page.tsx üzerine yaz (sadece select genişlemesi)
+  7. /app/menu/[slug]/menu-view.tsx üzerine yaz (sadece type genişlemesi)
 
-  app/kasa/table-detail-modal.tsx
-  lib/actions/tables-status.ts
+  Migration GEREK YOK — zaten Supabase'e uygulandı.
 
 
 PUSH
-====
+=====
 
-  git add app/kasa/table-detail-modal.tsx lib/actions/tables-status.ts
-  git commit -m "fix: tur 17g - modal-based partial qty picker (replace prompt)"
+  git add lib/ai/ lib/actions/ai.ts \
+    "app/panel/(shell)/menu/urunler/" \
+    "app/menu/[slug]/page.tsx" \
+    "app/menu/[slug]/menu-view.tsx"
+  git commit -m "feat: sprint 1a - ai-powered nutrition & allergens (panel)"
   git push origin main
 
 
-TEST
-====
+TEST AKIŞI
+===========
 
-[A] PARTIAL İKRAM:
-    1. 2× am suyu olan masaya gir
-    2. Bu kalemi seç
-    3. ★ İkram butonuna bas
-    4. ✅ MODAL AÇILIR (gold renkli)
-       "İKRAM ADEDİ SEÇ"
-       "am suyu"
-       "Toplam 2 adet var. Kaç adet ikram et?"
-       [−] 1 [+]   [1] [2]
-       "1 adet ikram edilecek, 1 adet normal kalır"
-       [Vazgeç] [★ İKRAM ET]
-    5. + butonu kapalı (zaten 1 minimum)
-    6. "[2]" chip'ine tıkla → qty=2, "Tüm 2 adet ikram edilecek"
-    7. "[1]" chip'ine geri dön → qty=1
-    8. ★ İKRAM ET → modal kapanır
-    9. ✅ Toast: "1 adet am suyu ikram edildi"
-    10. Liste:
-        • 1× am suyu ★ İKRAM (üstü çizili)
-        • 1× am suyu ₺250 (normal)
+[A] Panel — tek ürün için AI ile doldur
+    1. panel.alegstudio.com/menu/urunler
+    2. demo kafe ürünleri görünür
+    3. Bir ürünün satırında "🍎 Beslenme ⚠" butonuna tıkla
+    4. Modal açılır: "BESLENME & ALERJEN BİLGİSİ"
+    5. "✨ AI ile doldur" tıkla
+    6. AI 5-15 saniyede analiz eder
+    7. Form otomatik dolar:
+       - Alerjen chip'leri seçili
+       - Kalori, porsiyon dolu
+       - İçerik TR + EN dolu
+       - AI notu görünür
+    8. Düzenle (gerekirse), "Kaydet"
+    9. Toast: "Beslenme bilgisi kaydedildi"
+    10. Liste yenilenir, ürün satırında ⚠ kaybolur, 🍎 yeşil
 
-[B] PARTIAL İPTAL:
-    1. 3× horoz yumurtası seç → × İptal
-    2. ✅ MODAL AÇILIR (kırmızı renkli)
-       "İPTAL ADEDİ SEÇ"
-    3. [+] [+] basıp 2'ye getir
-    4. "2 adet iptal edilecek, 1 adet normal kalır"
-    5. × İPTAL ET
-    6. ✅ Toast: "2 adet horoz yumurtası iptal edildi"
+[B] Panel — Toplu AI doldur
+    1. Demo kafe için 35 ürün bilgisi yok
+    2. Üstte "✨ Beslenme Bilgisi (35)" butonu görünür
+    3. Tıkla → confirm: "35 ürünün... onaylar mısın?"
+    4. ⏳ İşleniyor...
+    5. Birkaç dakika sonra: "✓ 35 işlendi" banner
+    6. Sayfa yenilenir, tüm ürünlerin 🍎 yeşil
+    7. Buton kaybolur (eksik kalmadı)
 
-[C] FULL qty (modal yine açılır ama hepsi seçilebilir):
-    1. 2× am suyu seç → ★ İkram
-    2. Modal açılır → [2] chip'ine bas
-    3. "Tüm 2 adet ikram edilecek"
-    4. ★ İKRAM ET → tek satır kalır (kalem bölünmez)
-
-[D] qty = 1 (modal AÇILMAZ):
-    1. 1× horoz yumurtası seç → ★ İkram
-    2. ✅ Eski akış: direkt confirmDialog çıkar, hepsi ikram
-
-[E] Çoklu kalem seç (modal AÇILMAZ):
-    1. am suyu + haşgerya seç → ★ İkram
-    2. ✅ Eski akış: direkt confirmDialog, hepsi ikram
-
-[F] Vazgeç testi:
-    1. Modal açıkken Vazgeç → modal kapanır
-    2. Modal açıkken backdrop'a tıkla → modal kapanır
-    3. Hiçbir değişiklik olmaz
+[C] AI rate limit testi (opsiyonel)
+    • Günde 200 ürün analizi limit
+    • Limit dolarsa: "Günlük AI limiti doldu" hatası
+    • 24 saat sonra sıfırlanır
 
 
-DEPLOY DOĞRULAMA
-================
+SPRINT 1B - SONRAKI ADIMLAR (müşteri tarafı)
+==============================================
 
-Modal görünüyorsa Tur 17g doğru deploy edilmiş.
-Modal görünmüyorsa:
-  ▸ git log → "tur 17g" commit'i var mı?
-  ▸ Vercel dashboard → son build başarılı mı?
-  ▸ Tarayıcıda Hard Refresh (Ctrl+Shift+R) — eski cache olabilir
-  ▸ PWA varsa → Settings'ten cache temizle, yeniden install
+1. Müşteri menüsü kart üstünde alerjen rozetleri
+   • Ürün kartında küçük emoji'ler: 🌾 🥛 🥚
+   • "Bu ürün gluten içeriyor" gibi tooltip
+
+2. Müşteri ürün detay modal'ı
+   • Tıklayınca açılır
+   • Büyük kalori + porsiyon
+   • Vurgulanmış alerjen ikonları (yasal: kalın/altı çizili)
+   • İçerik listesi (markdown render)
+   • Alkol uyarısı varsa kırmızı 18+ rozeti
+
+3. Müşteri menüsü footer
+   • "Alerjeniz varsa siparişten önce personelimize bildirin..."
+
+4. Yasal uyum metni
+   • Müşteri menü en altında AI bilgilendirme uyarısı
+
+
+NOTLAR
+========
+
+⚠ AI çıktısı PRODUCTION'DA çalışır mı?
+   • ANTHROPIC_API_KEY env variable'ı Vercel'de tanımlı OLMALI
+   • Yoksa: "ANTHROPIC_API_KEY eksik" hatası
+
+⚠ Maliyet
+   • Haiku 4.5 ucuz (~0.001 USD/ürün)
+   • 35 ürünlü kafe = ~0.04 USD bir kerelik
+   • 3 kafe x 50 ürün = ~0.15 USD toplam (bir defa)
+
+⚠ Yasal sorumluluk
+   • AI yanlış işaretlerse kafe sahibi hâlâ sorumlu
+   • Footer'da uyarı eklenecek (Sprint 1B)
+   • İşletmeci doğrulayabilir (verify=true) ama zorunlu değil

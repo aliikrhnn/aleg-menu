@@ -92,7 +92,7 @@ export default async function CustomerMenuPage({ params, searchParams }: Props) 
   // 3. Aktif/tükendi ürünleri çek (taslakları gösterme)
   const { data: products } = await supabase
     .from('products')
-    .select('id, category_id, name, description, price, status, is_featured, hero_icon, hero_image_url, sort_order')
+    .select('id, category_id, name, description, price, status, is_featured, hero_icon, hero_image_url, sort_order, allergens, calories, serving_size, ingredients, contains_alcohol, dietary_tags')
     .eq('business_id', business.id)
     .in('status', ['active', 'soldout'])
     .order('sort_order', { ascending: true });

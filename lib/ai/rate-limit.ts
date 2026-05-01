@@ -4,7 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 // AI Rate Limit - günlük kullanım takibi
 // ============================================================
 
-export type AiFeature = 'slogan' | 'monogram' | 'chat' | 'variation' | 'insights';
+export type AiFeature = 'slogan' | 'monogram' | 'chat' | 'variation' | 'insights' | 'nutrition';
 
 // Trial plan limitleri (pilot için)
 export const AI_LIMITS: Record<AiFeature, number> = {
@@ -13,6 +13,7 @@ export const AI_LIMITS: Record<AiFeature, number> = {
   chat: 15, // günde 15 chat mesajı
   variation: 5, // günde 5 varyasyon üretimi
   insights: 3, // günde 3 rapor içgörüsü
+  nutrition: 200, // günde 200 ürün analizi (toplu doldur için yüksek)
 };
 
 // Son 24 saat içinde kullanım sayısı
