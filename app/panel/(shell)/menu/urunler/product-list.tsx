@@ -1773,11 +1773,11 @@ function NutritionEditModal({
 }: {
   product: {
     id: string;
-    name: { tr: string; en: string };
+    name: { tr: string; en?: string };
     allergens?: string[];
     calories?: number | null;
     serving_size?: string | null;
-    ingredients?: { tr: string; en: string } | null;
+    ingredients?: { tr: string; en?: string } | null;
     contains_alcohol?: boolean;
     nutrition_ai_generated?: boolean;
     ai_notes?: string | null;

@@ -1,11 +1,21 @@
-SPRINT 1A FIX — ESLint prefer-const
+SPRINT 1A FIX 2 — TypeScript tip hatası
 
-ai.ts:282 → `let query` → `const query`
+Sorun:
+  NutritionEditModal'ın `product` prop tipinde
+  `name: { tr: string; en: string }` zorunlu yazmıştım.
+  Ama gerçek tip LocalizedText: `{ tr: string; en?: string }`.
+  TypeScript strict mod uyumsuzluğu verdi.
 
-Sadece 1 satır değişti. Üzerine yaz:
-  lib/actions/ai.ts
+Düzeltme:
+  Modal prop tipinde `en` ve `ingredients.en` optional yapıldı.
+
+  name: { tr: string; en?: string }
+  ingredients?: { tr: string; en?: string } | null
+
+Sadece 2 satır değişti, sadece 1 dosya:
+  app/panel/(shell)/menu/urunler/product-list.tsx
 
 Push:
-  git add lib/actions/ai.ts
-  git commit -m "fix: prefer-const for query variable"
+  git add "app/panel/(shell)/menu/urunler/product-list.tsx"
+  git commit -m "fix: optional en field in nutrition modal types"
   git push origin main
