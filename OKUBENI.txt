@@ -1,59 +1,173 @@
-SPRINT 1B GERÇEK FIX — formattedProducts mapping
-==================================================
+ALEG SPRINT 3 PAKET 2/4 — Service Worker + Web Push Backend
+==============================================================
 
-KESİN KÖK SEBEP BULUNDU!
-=========================
+⚠ BU PAKET MEVCUT SİSTEMİ BOZMAZ ⚠
+⚠ TEST EDEBİLİR HALDE — sendTestPush() ile bildirim gelir ⚠
 
-page.tsx'te 3 aşama var:
-  1. DB'den products SELECT et (allergens, calories, ingredients hepsi geliyor) ✓
-  2. formattedProducts MAPPING (eski alanlar kopyalanıyor, NUTRITION DROP) ✗
-  3. MenuView'a geçir
+Push notification ALTYAPISI kuruluyor. Bu paket sonrası:
+  • Service worker yüklenir (sw.js)
+  • web-push paketi npm'den çekilir
+  • Server'dan push gönderme helper'ları hazır
+  • DB'ye subscribe kaydetme action'ı hazır
 
-2. ADIMDA NUTRITION KOLONLARI KAYBOLUYORDU!
+UI tarafında "izin ver" pop-up'ı YOK (Paket 3'te).
+Otomatik tetikleyiciler YOK (Paket 4'te).
 
-Sprint 1A'da SELECT kısmına allergens, calories ekledim
-ama 14 satır aşağıdaki .map() içine ekleme yapmamışım.
-DB'den geliyor ama React'a ulaşmıyor.
-
-Bu yüzden DB'de Burger=720 kcal, 2 alerjen, içerik dolu OLSA da
-müşteri modal'ında görünmüyordu.
+Test için manuel sendTestPush() çağrılabilir (script ile).
 
 
-DÜZELTME
-=========
+YAPILAN
+========
 
-formattedProducts mapping'ine 6 yeni alan eklendi:
+[1] package.json + package-lock.json
+   • web-push@^3.6.7 dependencies'e eklendi
+   • @types/web-push@^3.6.4 devDependencies'e eklendi
+   • npm install çalıştırıldı, lockfile güncellendi
 
-  allergens, calories, serving_size, ingredients,
-  contains_alcohol, dietary_tags
+[2] lib/security/web-push.ts (YENİ)
+   • Server-side push gönderme helper
+   • VAPID env variable'larını okur
+   • sendPushToBusiness(businessId, role, payload)
+     → Bir işletmenin tüm garsonlarına/kasiyerlerine bildirim
+   • sendPushToCashier(cashierId, payload)
+     → Belirli bir cashier'in tüm cihazlarına bildirim
+   • Otomatik expired subscription temizliği (410/404 alınca)
+   • last_used_at güncellemesi (background)
+   • getVapidPublicKey() — client'a public key vermek için
+
+[3] lib/actions/push-notifications.ts (YENİ)
+   • getPushPublicKey() — VAPID public key client'a verir
+   • savePushSubscription({endpoint, p256dh, auth})
+     → Kullanıcı izin verdikten sonra subscription'ı DB'ye kaydeder
+     → Cashier session zorunlu
+     → Aynı endpoint için upsert (token rotation desteği)
+   • deletePushSubscription(endpoint)
+     → Çıkış yapınca subscription siler
+   • sendTestPush() — kendi cihazına test bildirimi
+     → Subscribe akışını test etmek için kullanılır
+
+[4] public/sw.js (YENİ)
+   • Service worker — client tarafında çalışır
+   • install/activate lifecycle
+   • push event handler — bildirim göster
+   • notificationclick — tıklayınca uygulamayı aç (veya odakla)
+   • pushsubscriptionchange — token yenileme
+   • Logging için SW_VERSION = 'v1.0.0'
+
+[5] BONUS — app/api/manifest/garson/route.ts + kasa
+   • Cache-Control: max-age=300 → max-age=60, must-revalidate
+   • Logo değişiklikleri 60 saniyede yansır (5dk yerine)
 
 
 KURULUM
 ========
 
-1 dosya:
-  app/menu/[slug]/page.tsx
+7 dosya:
+  package.json                          (üzerine — web-push deps)
+  package-lock.json                     (üzerine — install lockfile)
+  lib/security/web-push.ts              (YENİ)
+  lib/actions/push-notifications.ts     (YENİ)
+  public/sw.js                          (YENİ)
+  app/api/manifest/garson/route.ts      (üzerine — cache fix)
+  app/api/manifest/kasa/route.ts        (üzerine — cache fix)
 
-Üzerine yaz.
+DB Migration: HAZIR (Paket 1'de push_subscriptions tablosu oluştu).
+
+
+⚠ ÖNCE VAPID KEY'LERİNİ VERCEL'E EKLEMEYİ UNUTMA ⚠
+=====================================================
+
+Vercel Dashboard → Settings → Environment Variables:
+
+  NEXT_PUBLIC_VAPID_PUBLIC_KEY=BDzY9BfQGrwR5AEL3N7zJxViFBY_ADbj9gBfmTadV4gAJ75rB3Xw-CNytl7FetBeIaU6NDrfImohXv7ayUMTMT0
+  
+  VAPID_PRIVATE_KEY=m8iMy_NZdcJA4pwJ5juBnGUZverXr8n7lVVn8UiZW_Q
+  
+  VAPID_SUBJECT=mailto:destek@alegstudio.com
+
+Production + Preview + Development olarak 3 environment'a da ekle.
+Sonra deploy redeploy gerekir (build'de env okunuyor).
 
 
 PUSH
 =====
 
-  git add "app/menu/[slug]/page.tsx"
-  git commit -m "fix: pass nutrition fields through formattedProducts mapping"
+  git add package.json package-lock.json \
+    lib/security/web-push.ts \
+    lib/actions/push-notifications.ts \
+    public/sw.js \
+    app/api/manifest/garson/route.ts \
+    app/api/manifest/kasa/route.ts
+  git commit -m "feat: web push backend + service worker (sprint 3 paket 2)"
   git push origin main
 
 
 TEST
 =====
 
-Vercel deploy bekle (~30 sn), sonra demo.alegstudio.com aç:
+[A] REGRESSION:
+    1. demo.alegstudio.com/garson → ✅ aynen çalışmalı
+    2. demo.alegstudio.com/kasa → ✅ aynen
+    3. panel.alegstudio.com → ✅ aynen
+    4. Mevcut hiçbir akış değişmedi
 
-✓ Ürün satırında mini emoji'ler: 🌾 🥛 🥚 ... · 720 kcal     detay →
-✓ Burger'a tıkla → modal açılır:
-  - 🔥 720 kcal kutusu
-  - ⚠ ALERJEN UYARISI: 🌾 Gluten, 🥛 Süt
-  - İçerik: alerjenler dalgalı altı çizili turuncu
+[B] Service Worker yüklendi mi:
+    1. demo.alegstudio.com/garson aç (ZIP push edildikten sonra)
+    2. F12 → Application → Service Workers
+    3. Şu anlık SW görünmeyebilir — paket 3'te register kodu eklenecek
+    4. Manuel test için Console'da:
+         navigator.serviceWorker.register('/sw.js')
+       sonra Application → Service Workers'da "[Aleg SW] v1.0.0 yüklendi"
 
-KESİNLİKLE ÇALIŞACAK!
+[C] Manifest cache fix:
+    1. demo.alegstudio.com/garson aç
+    2. F12 → Application → Manifest → Update tıkla
+    3. ✅ Yeni manifest 60 saniyede gelmeli (eskiden 5dk)
+    4. Eski cache uyarıları temizlenmeli
+
+[D] DB tablosu kontrolü (Supabase Dashboard):
+    1. Tables → push_subscriptions
+    2. ✅ Tablo görünmeli (içi boş)
+
+[E] Web-push paketi build'de hata vermedi mi:
+    1. Vercel deployment loglarına bak
+    2. ✅ "web-push installed" görünmeli
+    3. ✅ Build başarılı
+
+
+GERİ ALMA
+==========
+
+  git revert HEAD --no-edit
+  git push origin main
+
+
+SONRAKI PAKET 3/4
+==================
+
+Garson/Kasa UI'sına subscribe akışı:
+  • Service worker register
+  • İlk PIN giriş sonrası "Bildirimleri etkinleştir" prompt
+  • İzin verilirse subscribe + DB'ye kaydet
+  • Settings menüsünde aç/kapa toggle
+  • "Test bildirimi gönder" butonu
+
+
+SONRAKI PAKET 4/4
+==================
+
+Otomatik push tetikleyicileri:
+  • Müşteri çağrı butonu basınca → tüm garsonlara push
+  • Yeni QR sipariş geldiğinde → tüm garsonlara push
+  • Sipariş hazır olduğunda → garson(lar)a push
+
+
+🔒 GÜVENLİK
+============
+
+  • VAPID PRIVATE_KEY sadece server tarafında, env variable
+  • Subscribe için cashier session zorunlu
+  • Subscription'lar cashier_id ile tagli, kovulan garson silince
+    cascade ile temizlenir
+  • Cross-tenant: business_id filter ile diğer kafelerin
+    garsonlarına push gönderilemez
