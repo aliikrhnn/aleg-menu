@@ -1,25 +1,81 @@
 'use client';
 
 /**
+ * ════════════════════════════════════════════════════════════════════
+ * PAYLAŞILAN AUDIO CONTEXT (autoplay policy fix)
+ * ════════════════════════════════════════════════════════════════════
+ *
+ * Modern tarayıcılar (Chrome, Edge, Safari) AudioContext'in kullanıcı
+ * etkileşimi olmadan ses çalmasını engeller. Yeni context her zaman
+ * 'suspended' state'te başlar.
+ *
+ * Çözüm:
+ *   1. TEK bir paylaşılan context yarat (her ses çağrısında yeni değil)
+ *   2. İlk kullanıcı tıklamasında context'i resume() et
+ *   3. Sonraki tüm sesler bu context'i kullansın
+ *
+ * Bu modül load olduğunda document'a 'click' / 'touchstart' / 'keydown'
+ * listener'ı eklenir (passive). İlk etkileşimde context resume edilir
+ * ve listener'lar kaldırılır.
+ * ════════════════════════════════════════════════════════════════════
+ */
+
+let sharedCtx: AudioContext | null = null;
+let unlockAttempted = false;
+
+function getAudioCtx(): AudioContext | null {
+  if (typeof window === 'undefined') return null;
+
+  if (!sharedCtx) {
+    try {
+      const AudioCtx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext })
+          .webkitAudioContext;
+      if (!AudioCtx) return null;
+      sharedCtx = new AudioCtx();
+    } catch {
+      return null;
+    }
+  }
+
+  // Suspended ise resume dene (kullanıcı zaten etkileşime girdiyse başarılı olur)
+  if (sharedCtx.state === 'suspended') {
+    sharedCtx.resume().catch(() => {
+      /* sessizce başarısız - tarayıcı henüz izin vermiyor */
+    });
+  }
+
+  return sharedCtx;
+}
+
+// Sayfa yüklenince ilk kullanıcı etkileşimini bekle, context'i unlock et
+if (typeof window !== 'undefined' && !unlockAttempted) {
+  unlockAttempted = true;
+  const unlock = () => {
+    const ctx = getAudioCtx();
+    if (ctx && ctx.state === 'suspended') {
+      ctx.resume().catch(() => { /* ignore */ });
+    }
+    // Tek seferlik unlock yeter
+    document.removeEventListener('click', unlock);
+    document.removeEventListener('touchstart', unlock);
+    document.removeEventListener('keydown', unlock);
+  };
+  document.addEventListener('click', unlock, { passive: true });
+  document.addEventListener('touchstart', unlock, { passive: true });
+  document.addEventListener('keydown', unlock, { passive: true });
+}
+
+/**
  * Yeni sipariş/ödeme için dikkat çeken kısa bir "ding" sesi çalar.
  * WebAudio API kullanır - harici dosya gerekmez.
- * Tarayıcı autoplay politikaları: kullanıcı bir kez etkileşime girmeden
- * ses çalmayabilir. İlk tıklamadan sonra çalmaya başlar.
  */
 export function playDing(volume = 0.3) {
-  if (typeof window === 'undefined') return;
+  const ctx = getAudioCtx();
+  if (!ctx) return;
 
   try {
-    // Bazı eski tarayıcılar için fallback
-    const AudioCtx =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext })
-        .webkitAudioContext;
-
-    if (!AudioCtx) return;
-
-    const ctx = new AudioCtx();
-
     // İki nota ile kısa bir "ding-dong" - hoş, dikkat çekici ama rahatsız değil
     const notes = [
       { freq: 880, start: 0, duration: 0.15 },   // A5
@@ -46,12 +102,7 @@ export function playDing(volume = 0.3) {
       osc.stop(t0 + duration + 0.05);
     });
 
-    // Context'i temizle
-    setTimeout(() => {
-      ctx.close().catch(() => {
-        /* ignore */
-      });
-    }, 1000);
+    // NOT: Paylaşılan context, close() ETMİYORUZ. Reuse edilir.
   } catch {
     // Ses çalamazsa sessiz geç
   }
@@ -61,16 +112,9 @@ export function playDing(volume = 0.3) {
  * Başarılı ödeme için kısa "cha-ching" benzeri ses
  */
 export function playSuccess(volume = 0.25) {
-  if (typeof window === 'undefined') return;
-
   try {
-    const AudioCtx =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext })
-        .webkitAudioContext;
-    if (!AudioCtx) return;
-
-    const ctx = new AudioCtx();
+    const ctx = getAudioCtx();
+    if (!ctx) return;
 
     // Yükselen üçlü arpej - başarı hissi
     const notes = [
@@ -98,11 +142,6 @@ export function playSuccess(volume = 0.25) {
       osc.stop(t0 + duration + 0.05);
     });
 
-    setTimeout(() => {
-      ctx.close().catch(() => {
-        /* ignore */
-      });
-    }, 1500);
   } catch {
     // Sessiz geç
   }
@@ -113,16 +152,9 @@ export function playSuccess(volume = 0.25) {
  * Müşteri ihtiyacı olduğunda çalar.
  */
 export function playCall(volume = 0.35) {
-  if (typeof window === 'undefined') return;
-
   try {
-    const AudioCtx =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext })
-        .webkitAudioContext;
-    if (!AudioCtx) return;
-
-    const ctx = new AudioCtx();
+    const ctx = getAudioCtx();
+    if (!ctx) return;
 
     // 3 ding - tiz ve hızlı, müşteri ihtiyacı için dikkat çekici
     const notes = [
@@ -150,11 +182,6 @@ export function playCall(volume = 0.35) {
       osc.stop(t0 + duration + 0.05);
     });
 
-    setTimeout(() => {
-      ctx.close().catch(() => {
-        /* ignore */
-      });
-    }, 1500);
   } catch {
     // Sessiz geç
   }
@@ -165,16 +192,9 @@ export function playCall(volume = 0.35) {
  * Çağrı sesinden farklı, daha tatlı/davetkar.
  */
 export function playOrderDing(volume = 0.32) {
-  if (typeof window === 'undefined') return;
-
   try {
-    const AudioCtx =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext })
-        .webkitAudioContext;
-    if (!AudioCtx) return;
-
-    const ctx = new AudioCtx();
+    const ctx = getAudioCtx();
+    if (!ctx) return;
 
     // E6 → A6 yumuşak iniş (yeni sipariş, bilgi verici)
     const notes = [
@@ -201,11 +221,6 @@ export function playOrderDing(volume = 0.32) {
       osc.stop(t0 + duration + 0.05);
     });
 
-    setTimeout(() => {
-      ctx.close().catch(() => {
-        /* ignore */
-      });
-    }, 1500);
   } catch {
     // Sessiz geç
   }
@@ -258,14 +273,9 @@ export const SOUND_OPTIONS: Array<{
  * Pulse - 4'lü hızlı atım, alarm hissi
  */
 export function playPulse(volume = 0.32) {
-  if (typeof window === 'undefined') return;
   try {
-    const AudioCtx =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext })
-        .webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
+    const ctx = getAudioCtx();
+    if (!ctx) return;
 
     [0, 0.1, 0.2, 0.3].forEach((start) => {
       const osc = ctx.createOscillator();
@@ -282,7 +292,6 @@ export function playPulse(volume = 0.32) {
       osc.stop(t0 + 0.08);
     });
 
-    setTimeout(() => ctx.close().catch(() => {}), 800);
   } catch {
     // sessiz
   }
@@ -292,14 +301,9 @@ export function playPulse(volume = 0.32) {
  * Soft - tek yumuşak nota, fade
  */
 export function playSoft(volume = 0.3) {
-  if (typeof window === 'undefined') return;
   try {
-    const AudioCtx =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext })
-        .webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
+    const ctx = getAudioCtx();
+    if (!ctx) return;
 
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
@@ -315,7 +319,6 @@ export function playSoft(volume = 0.3) {
     osc.start(t0);
     osc.stop(t0 + 0.65);
 
-    setTimeout(() => ctx.close().catch(() => {}), 1200);
   } catch {
     // sessiz
   }
@@ -325,14 +328,9 @@ export function playSoft(volume = 0.3) {
  * Marimba - C-E-G akor, ahşap sıcak
  */
 export function playMarimba(volume = 0.3) {
-  if (typeof window === 'undefined') return;
   try {
-    const AudioCtx =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext })
-        .webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
+    const ctx = getAudioCtx();
+    if (!ctx) return;
 
     // C5 (523.25), E5 (659.25), G5 (783.99) - majör akor
     const notes = [
@@ -356,7 +354,6 @@ export function playMarimba(volume = 0.3) {
       osc.stop(t0 + 0.55);
     });
 
-    setTimeout(() => ctx.close().catch(() => {}), 1200);
   } catch {
     // sessiz
   }
@@ -366,14 +363,9 @@ export function playMarimba(volume = 0.3) {
  * Classic - tek geleneksel ding (otel reception zili)
  */
 export function playClassic(volume = 0.35) {
-  if (typeof window === 'undefined') return;
   try {
-    const AudioCtx =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext })
-        .webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
+    const ctx = getAudioCtx();
+    if (!ctx) return;
 
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
@@ -388,7 +380,6 @@ export function playClassic(volume = 0.35) {
     osc.start(t0);
     osc.stop(t0 + 0.75);
 
-    setTimeout(() => ctx.close().catch(() => {}), 1200);
   } catch {
     // sessiz
   }
