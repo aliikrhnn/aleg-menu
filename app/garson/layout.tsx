@@ -4,6 +4,7 @@ import { CashierSessionProvider } from '@/lib/cashier-session';
 export const metadata: Metadata = {
   title: 'Aleg Garson',
   description: 'Aleg garson uygulaması',
+  manifest: '/api/manifest/garson',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',

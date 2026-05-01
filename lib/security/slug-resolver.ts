@@ -53,6 +53,7 @@ export type ResolvedBusiness = {
   slug: string;
   name: string;
   subscriptionStatus: string | null;
+  logoUrl: string | null;
 };
 
 type CacheEntry = {
@@ -154,7 +155,7 @@ export async function resolveSlugToBusiness(
     const admin = createAdminClient();
     const { data: business, error } = await admin
       .from('businesses')
-      .select('id, slug, name, subscription_status')
+      .select('id, slug, name, subscription_status, logo_url')
       .eq('slug', slug)
       .maybeSingle();
 
@@ -180,6 +181,7 @@ export async function resolveSlugToBusiness(
       slug: business.slug,
       name: business.name,
       subscriptionStatus: business.subscription_status,
+      logoUrl: (business.logo_url as string | null) || null,
     };
 
     // Positive cache

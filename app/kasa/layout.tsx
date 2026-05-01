@@ -4,7 +4,7 @@ import { CashierSessionProvider } from '@/lib/cashier-session';
 export const metadata: Metadata = {
   title: 'Aleg Kasa',
   description: 'Aleg kasa uygulaması',
-  manifest: '/kasa-manifest.webmanifest',
+  manifest: '/api/manifest/kasa',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
