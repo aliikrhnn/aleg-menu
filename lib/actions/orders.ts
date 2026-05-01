@@ -58,6 +58,56 @@ export async function submitOrder(input: SubmitOrderInput): Promise<SubmitOrderR
       return { success: false, error: 'Geçersiz sipariş türü' };
     }
 
+    // ──────────────────────────────────────────────────────────────
+    // GÜVENLİK: İşletme online sipariş kabul ediyor mu?
+    // Bazı işletmeler "sadece menü görüntüleme" modunu seçebilir.
+    // UI gizli olsa bile birinin direkt API çağırabileceği için
+    // server tarafında da kontrol şart.
+    // ──────────────────────────────────────────────────────────────
+    const { data: bizConfig } = await supabase
+      .from('businesses')
+      .select('order_config')
+      .eq('id', input.business_id)
+      .maybeSingle();
+
+    if (bizConfig?.order_config) {
+      const config = bizConfig.order_config as {
+        online_enabled?: boolean;
+        modes?: { dinein?: boolean; pickup?: boolean; delivery?: boolean };
+      };
+
+      // online_enabled false ise tümden engellenir
+      if (config.online_enabled === false) {
+        return {
+          success: false,
+          error: 'Bu işletme şu anda online sipariş almıyor. Lütfen garsona haber verin.',
+        };
+      }
+
+      // Belirli mod kapalıysa sadece o mod engellenir
+      if (config.modes) {
+        const modeKey =
+          input.order_type === 'dine_in'
+            ? 'dinein'
+            : input.order_type === 'pickup'
+              ? 'pickup'
+              : 'delivery';
+
+        if (config.modes[modeKey] === false) {
+          const modeName =
+            modeKey === 'dinein'
+              ? 'Masada sipariş'
+              : modeKey === 'pickup'
+                ? 'Gel-al sipariş'
+                : 'Adrese teslim';
+          return {
+            success: false,
+            error: `${modeName} şu anda kapalı. Lütfen başka bir sipariş türü seçin.`,
+          };
+        }
+      }
+    }
+
     // Ürünleri doğrula — fiyat değiştiyse yakala (güvenlik)
     const productIds = input.items.map((i) => i.product_id);
     const { data: products, error: productsError } = await supabase

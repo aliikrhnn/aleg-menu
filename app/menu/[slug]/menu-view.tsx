@@ -160,6 +160,7 @@ interface Props {
       pickup: boolean;
       delivery: boolean;
     };
+    online_enabled?: boolean;
   };
   callButtons?: CallButton[];
 }
@@ -208,6 +209,10 @@ export function MenuView({
       delivery: !!m.delivery,
     };
   }, [orderConfig]);
+
+  // Online sipariş açık mı? (kapalıysa "sadece menü" modu — sipariş butonları gizlenir)
+  // Default: true (geriye dönük uyumluluk — eski kayıtlarda undefined olabilir)
+  const orderingEnabled = orderConfig?.online_enabled !== false;
 
   // Hizmet (çağrı) sheet
   const [serviceSheetOpen, setServiceSheetOpen] = useState(false);
@@ -407,6 +412,8 @@ export function MenuView({
   }
 
   const addToCart = (p: Product) => {
+    // Online sipariş kapalıysa hiçbir şey ekleme (sadece menü görüntüleme modu)
+    if (!orderingEnabled) return;
     if (p.status === 'soldout') return;
     // Preset varsa modal aç
     if (p.presets && p.presets.length > 0) {
@@ -528,6 +535,8 @@ export function MenuView({
     p: Product,
     selections: SelectedOption[]
   ) => {
+    // Online sipariş kapalıysa hiçbir şey ekleme
+    if (!orderingEnabled) return;
     const unitPrice =
       p.price + selections.reduce((sum, s) => sum + s.price_delta, 0);
     const key = cartKey(p.id, selections);
@@ -617,6 +626,28 @@ export function MenuView({
 
   return (
     <div data-theme="warm" className="min-h-screen bg-paper text-ink pb-24 relative overflow-x-hidden">
+      {/* ============ "SADECE MENÜ" BANNER (online sipariş kapalıyken) ============ */}
+      {!orderingEnabled && (
+        <div
+          className="sticky top-0 z-40 px-4 py-2.5 flex items-center justify-center gap-2 text-center"
+          style={{
+            background: 'color-mix(in srgb, var(--accent) 12%, var(--paper))',
+            borderBottom: '1px solid color-mix(in srgb, var(--accent) 25%, var(--line))',
+            color: 'var(--ink-2)',
+            fontFamily: 'var(--f-mono)',
+            fontSize: 11,
+            fontWeight: 600,
+            letterSpacing: '0.06em',
+          }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+            <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+          </svg>
+          <span>{lang === 'tr' ? 'SADECE MENÜ — Sipariş için lütfen garsona haber verin' : 'MENU ONLY — Please call a waiter to order'}</span>
+        </div>
+      )}
+
       {/* ============ HERO ARKA PLAN GRADIENT ============ */}
       <div
         className="absolute inset-x-0 top-0 pointer-events-none"

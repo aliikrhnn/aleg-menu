@@ -268,6 +268,7 @@ export default async function CustomerMenuPage({ params, searchParams }: Props) 
             orderConfig={
               business.order_config || {
                 modes: { dinein: true, pickup: true, delivery: false },
+                online_enabled: true,
               }
             }
             callButtons={callButtons}
