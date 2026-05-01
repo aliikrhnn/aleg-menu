@@ -371,23 +371,7 @@ export function KitchenBoard({
             )}
           </button>
 
-          {/* Paneli gör */}
-          <a
-            href="/panel/pos"
-            className="hidden md:flex items-center gap-1.5 px-3.5 h-10 rounded-full text-xs font-semibold transition-opacity hover:opacity-80"
-            style={{
-              background: 'var(--paper-2)',
-              border: '1px solid var(--line)',
-              color: 'var(--ink-2)',
-              fontFamily: 'var(--f-mono)',
-              letterSpacing: '0.08em',
-            }}
-          >
-            PANELE DÖN
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-              <path d="M5 12h14M13 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </a>
+          {/* PANELE DÖN butonu kaldırıldı — KDS bağımsız ekran olarak kalır */}
         </div>
       </header>
 
