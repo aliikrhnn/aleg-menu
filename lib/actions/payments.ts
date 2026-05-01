@@ -690,7 +690,7 @@ export async function refundPayment(
 
     const { data: order } = await admin
       .from('orders')
-      .select('id, business_id, payment_method, total, cash_session_id')
+      .select('id, business_id, payment_method, total, cash_session_id, payment_status')
       .eq('id', orderId)
       .maybeSingle();
 
@@ -698,7 +698,70 @@ export async function refundPayment(
       return { success: false, error: 'Sipariş bulunamadı' };
     }
 
-    // orders'ı güncelle
+    // Idempotency: Zaten iade edilmişse iki kez iade etme
+    if (order.payment_status === 'refunded') {
+      return { success: false, error: 'Bu sipariş zaten iade edilmiş' };
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // GERÇEK ALINAN ÖDEMELERİ payment_logs'tan çek
+    //
+    // Eski mantık: amount = -order.total tek satır iade.
+    // SORUN: Eğer indirim varsa orders.total indirim ÖNCESİ tutar.
+    // SORUN: Bölünmüş ödenen siparişlerde nakit/kart parçaları kayıp.
+    //
+    // Yeni mantık: orijinal payment & partial_payment log'larını oku,
+    // her birinin ters kaydını refund olarak yaz.
+    // → İndirim sonrası gerçek tutar iade edilir
+    // → Bölünmüş ödeme: her partial kendi method'unda iade
+    // → byMethod (Paket 1) iadeyi doğru düşer
+    // ──────────────────────────────────────────────────────────────
+    const { data: originalPayments, error: paymentsError } = await admin
+      .from('payment_logs')
+      .select('id, payment_method, amount, cash_session_id, split_group')
+      .eq('order_id', orderId)
+      .in('action', ['payment', 'partial_payment']);
+
+    if (paymentsError) {
+      return { success: false, error: paymentsError.message };
+    }
+
+    // Hiç ödeme bulunamazsa fallback: orders.total kullan (eski davranış)
+    // Bu sadece veri tutarsızlığı durumunda devreye girer (normalde olmamalı)
+    const refundLogs =
+      originalPayments && originalPayments.length > 0
+        ? originalPayments.map((p) => ({
+            business_id: businessId,
+            order_id: orderId,
+            cash_session_id: p.cash_session_id, // orijinal oturum tercih
+            action: 'refund' as const,
+            payment_method: p.payment_method,
+            amount: -Number(p.amount),
+            amount_paid: -Number(p.amount),
+            change_given: 0,
+            note: reason,
+            performed_by: memberId,
+            performed_at: new Date().toISOString(),
+            split_group: p.split_group, // bölünmüşse aynı grup
+          }))
+        : [
+            {
+              business_id: businessId,
+              order_id: orderId,
+              cash_session_id: order.cash_session_id,
+              action: 'refund' as const,
+              payment_method: order.payment_method,
+              amount: -Number(order.total),
+              amount_paid: -Number(order.total),
+              change_given: 0,
+              note: `${reason} (uyarı: orijinal ödeme bulunamadı, brüt tutar iade edildi)`,
+              performed_by: memberId,
+              performed_at: new Date().toISOString(),
+            },
+          ];
+
+    // Önce orders'ı güncelle, sonra log'ları yaz
+    // (sıra önemli: log yazılınca status değişimini hemen görmemiz gerek)
     const { error: uErr } = await admin
       .from('orders')
       .update({
@@ -711,22 +774,21 @@ export async function refundPayment(
       return { success: false, error: uErr.message };
     }
 
-    // payment_logs: negatif tutar ile refund kaydı
-    await admin.from('payment_logs').insert({
-      business_id: businessId,
-      order_id: orderId,
-      cash_session_id: order.cash_session_id,
-      action: 'refund',
-      payment_method: order.payment_method,
-      amount: -Number(order.total),
-      amount_paid: -Number(order.total),
-      change_given: 0,
-      note: reason,
-      performed_by: memberId,
-      performed_at: new Date().toISOString(),
-    });
+    const { error: logsError } = await admin
+      .from('payment_logs')
+      .insert(refundLogs);
+
+    if (logsError) {
+      // Log yazılamadıysa orders.payment_status'u geri al (best effort)
+      await admin
+        .from('orders')
+        .update({ payment_status: order.payment_status, payment_note: null })
+        .eq('id', orderId);
+      return { success: false, error: logsError.message };
+    }
 
     revalidatePath('/panel/pos');
+    revalidatePath('/kasa');
     return { success: true };
   } catch (err) {
     return {
