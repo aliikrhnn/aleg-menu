@@ -16,9 +16,10 @@ interface Props {
   };
 }
 
-// Cache: 60 saniye - menü sürekli aynı, değişiklik olunca sahip refresh tetikler
-// ?t= parametresi cache'i bozar, her QR için ayrı render olur
-export const revalidate = 60;
+// Beslenme/alerjen güncellemeleri anında yansısın - dinamik render
+// Performans için ileride revalidate=30-60 yapılabilir, ama şimdilik 0
+export const revalidate = 0;
+export const dynamic = 'force-dynamic';
 
 export default async function CustomerMenuPage({ params, searchParams }: Props) {
   // Admin client - anonim müşteri için RLS bypass (sadece menüye okuma)

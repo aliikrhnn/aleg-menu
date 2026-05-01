@@ -1,79 +1,74 @@
-SPRINT 1B FIX — Çapraz bulaşma sil + page.tsx kesin güncel
-============================================================
+SPRINT 1B FIX 2 — CACHE SORUNU (KESİN ÇÖZÜM!)
+================================================
 
-İKİ SORUN
-==========
+KÖK SEBEP BULUNDU
+==================
 
-[1] Çapraz bulaşma cümlesi
-   • Yasal footer'dan "Mutfağımızda çapraz bulaşma..." kısmı kaldırıldı
-   • Sadece kalıyor: "Alerjeniz varsa siparişten önce personelimize bildirin"
-   • EN versiyonu da kısaltıldı
+DB'de tüm bilgiler dolu (Serpme Kahvaltı: 650 kcal, 3 alerjen,
+içerik var). Ama müşteri modal'ında gözükmüyordu.
 
-[2] Modal'da kalori/alerjen GÖZÜKMÜYOR sorunu
-   • DB tamamen dolu (kontrol edildi: Burger calories=720, alerjen=2,
-     içerik var, AI üretildi)
-   • Ama müşteri modal'ında çıkmıyor
-   • SEBEP: Sprint 1A push'unda belki page.tsx güncellenmedi
-     (sadece menu-view.tsx push'lanmış olabilir)
-   • page.tsx server-side select, nutrition kolonlarını çekmezse
-     veriler undefined olarak modal'a gider, koşullu render
-     bunları gizler — boş modal!
+SEBEP: app/menu/[slug]/page.tsx'te
+   export const revalidate = 60;
+yazıyordu. Next.js sayfayı 60 saniye STATİK CACHE'liyor.
+
+Sprint 1A'da nutrition kolonları DB'ye yazıldıktan sonra
+sayfa cache'lenmiş halde serve ediliyordu — eski versiyonu.
+
+Vercel Edge cache çoğu zaman 60 sn'den daha uzun tutar bu yüzden
+bazen birkaç dakika sonra bile yansımıyordu.
 
 
-YAPILAN
-========
+ÇÖZÜM
+======
 
-[1] menu-view.tsx
-   • Çapraz bulaşma cümlesi silindi (TR + EN)
+   export const revalidate = 0;
+   export const dynamic = 'force-dynamic';
 
-[2] page.tsx
-   • SERVER-SIDE SELECT garantili güncel
-   • allergens, calories, serving_size, ingredients,
-     contains_alcohol, dietary_tags kolonları hepsi çekiliyor
+Bu sayede:
+   • Her sayfa isteği SUNUCUDAN render olur (cache yok)
+   • DB'deki güncel veriler ANINDA görünür
+   • Beslenme bilgisi, fiyat değişikliği, durum güncellemeleri
+     hepsi anında yansır
+
+PERFORMANS NOTU
+================
+
+Şu an dinamik render = her istekte DB sorgusu.
+Pilot dönem (3 kafe) için bu sorun değil.
+İleride gerekirse:
+   • revalidate=30 (30 saniyelik cache)
+   • Üst buton: "Anlık güncelle" trigger'ı
+gibi optimizasyonlar yapılabilir.
 
 
 KURULUM
 ========
 
-İki dosyayı üzerine yaz:
-
-   app/menu/[slug]/menu-view.tsx
+1 dosya:
    app/menu/[slug]/page.tsx
 
-Önemli: page.tsx'i kesinlikle üzerine yaz!
+Üzerine yaz.
 
 
 PUSH
 =====
 
-   git add "app/menu/[slug]/menu-view.tsx" "app/menu/[slug]/page.tsx"
-   git commit -m "fix: nutrition data fetching + remove cross-contamination notice"
+   git add "app/menu/[slug]/page.tsx"
+   git commit -m "fix: disable cache on customer menu for instant nutrition updates"
    git push origin main
 
 
-NASIL TEST EDİLİR
-==================
+TEST
+=====
 
-Push sonrası Vercel deploy'u bekle (~30 sn), sonra:
+Vercel deploy'u bekle (~30 sn), sonra:
 
-1. Bilgisayarda Chrome → gizli pencere (Ctrl+Shift+N)
-2. demo.alegstudio.com aç
-3. Cafe Aleg Burger'a tıkla
-4. Modal'da görmeli:
-   - 🔥 720 kcal kutusu
-   - ⚠ ALERJEN UYARISI: 🌾 Gluten, 🥛 Süt
-   - İçerik: "180gr dana eti, ekmek (BUĞDAY)..."
-     (BUĞDAY ve SÜT dalgalı altı çizili turuncu)
-   - Footer: "Alerjeniz varsa siparişten önce personelimize bildirin"
-     (çapraz bulaşma kısmı YOK)
-
-
-GIT KONTROL (OPSIYONEL)
-========================
-
-Önceki push'larda page.tsx git'e gitmiş mi öğrenmek için:
-
-   git log --oneline app/menu/[slug]/page.tsx
-
-E�er son commit'lerde görünmüyorsa, page.tsx ilk Sprint 1A'da
-güncellenmemiş demektir. Bu push ile garantili düzelir.
+1. Telefonda demo.alegstudio.com'u aç (cache temizlemeye gerek YOK)
+2. Serpme Kahvaltı'ya tıkla
+3. ✅ MODAL'DA ARTIK GÖRÜNÜR:
+    - 🔥 650 kcal kutusu
+    - 🌱 Vejetaryen rozet (yeşil)
+    - ⚠ ALERJEN UYARISI: 🥛 Süt, 🥚 Yumurta, 🌾 Gluten
+    - İçerik: "Peynir çeşitleri (SÜT), zeytin, bal, kaymak..."
+      (alerjenler dalgalı altı çizili turuncu)
+    - Footer: "Alerjeniz varsa..." (çapraz bulaşma yok)
