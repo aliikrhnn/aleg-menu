@@ -138,7 +138,7 @@ export async function aiGenerateProductNutrition(params: {
   rateLimited?: boolean;
 }> {
   try {
-    const { businessId } = await requireBusinessAccess();
+    const { businessId, user } = await requireBusinessAccess();
     const admin = createAdminClient();
 
     // Rate limit
@@ -243,7 +243,7 @@ export async function aiGenerateProductNutrition(params: {
     }
 
     // Kullanım kaydı
-    await recordUsage(businessId, 'nutrition');
+    await recordUsage(businessId, user.id, 'nutrition');
 
     revalidatePath('/panel/menu');
 

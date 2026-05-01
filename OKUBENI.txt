@@ -1,21 +1,17 @@
-SPRINT 1A FIX 2 — TypeScript tip hatası
+SPRINT 1A FIX 3 — recordUsage signature uyumu
 
 Sorun:
-  NutritionEditModal'ın `product` prop tipinde
-  `name: { tr: string; en: string }` zorunlu yazmıştım.
-  Ama gerçek tip LocalizedText: `{ tr: string; en?: string }`.
-  TypeScript strict mod uyumsuzluğu verdi.
+  recordUsage(businessId, feature) çağırmıştım.
+  Mevcut signature: recordUsage(businessId, userId, feature, tokensUsed?)
 
 Düzeltme:
-  Modal prop tipinde `en` ve `ingredients.en` optional yapıldı.
+  - requireBusinessAccess()'ten user'ı destructure ettim
+  - recordUsage(businessId, user.id, 'nutrition')
 
-  name: { tr: string; en?: string }
-  ingredients?: { tr: string; en?: string } | null
-
-Sadece 2 satır değişti, sadece 1 dosya:
-  app/panel/(shell)/menu/urunler/product-list.tsx
+Sadece 1 dosya:
+  lib/actions/ai.ts
 
 Push:
-  git add "app/panel/(shell)/menu/urunler/product-list.tsx"
-  git commit -m "fix: optional en field in nutrition modal types"
+  git add lib/actions/ai.ts
+  git commit -m "fix: recordUsage signature with userId"
   git push origin main
