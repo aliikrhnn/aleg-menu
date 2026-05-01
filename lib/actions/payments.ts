@@ -1123,9 +1123,11 @@ export async function closeCashSession(input: {
     const admin = createAdminClient();
 
     // Active session'ı DIRECT query ile al (nested server action yerine)
+    // NOT: cash_refunds_total ve expected_cash kolonları DB'de yok —
+    // hesabı payment_logs'tan yapıyoruz.
     const { data: activeSess, error: sessErr } = await admin
       .from('cash_drawer_sessions')
-      .select('id, opening_amount, expected_cash, cash_refunds_total')
+      .select('id, opening_amount')
       .eq('business_id', businessId)
       .is('closed_at', null)
       .maybeSingle();
@@ -1137,7 +1139,30 @@ export async function closeCashSession(input: {
       return { success: false, error: 'Açık kasa oturumu yok' };
     }
 
-    const expected = Number(activeSess.expected_cash ?? 0);
+    // Beklenen nakit = açılış + nakit ödemeler + nakit bahşiş - nakit iadeler
+    // Sadece BU kasa oturumuna ait payment_logs
+    const { data: sessionLogs } = await admin
+      .from('payment_logs')
+      .select('action, payment_method, amount')
+      .eq('cash_session_id', activeSess.id);
+
+    let cashIn = 0;
+    let cashRefunds = 0;
+    (sessionLogs || []).forEach((log) => {
+      if (log.payment_method !== 'cash') return;
+      if (
+        log.action === 'payment' ||
+        log.action === 'partial_payment' ||
+        log.action === 'tip'
+      ) {
+        cashIn += Number(log.amount);
+      } else if (log.action === 'refund') {
+        cashRefunds += Math.abs(Number(log.amount));
+      }
+    });
+
+    const opening = Number(activeSess.opening_amount || 0);
+    const expected = opening + cashIn - cashRefunds;
     const counted = input.countedAmount;
     const difference = counted - expected;
 
@@ -2189,10 +2214,11 @@ export async function getZReport(
     const netSales = totalRevenue - totalComplimentary - totalDiscount;
 
     // Aktif kasa oturumunu bul (gün içindeki)
+    // NOT: cash_refunds_total kolonu DB'de YOK — payment_logs'tan hesaplıyoruz
     const { data: sess } = await admin
       .from('cash_drawer_sessions')
       .select(
-        'id, opening_amount, cash_refunds_total, closed_at, declared_cash, declared_card, cash_variance, card_variance'
+        'id, opening_amount, closed_at, declared_cash, declared_card, cash_variance, card_variance'
       )
       .eq('business_id', businessId)
       .gte('opened_at', start.toISOString())
@@ -2204,11 +2230,31 @@ export async function getZReport(
     const openingAmount = sess
       ? Number((sess as { opening_amount: number }).opening_amount)
       : null;
-    const cashRefunds = sess
-      ? Number((sess as { cash_refunds_total: number }).cash_refunds_total || 0)
-      : 0;
+
+    // İade toplamı (sadece NAKİT iade — kart iadesi POS'tan gider, kasayı etkilemez)
+    // payment_logs'tan türetiyoruz (allKasaLogs zaten yüklü, ekstra sorgu yok)
+    const cashRefunds = (allKasaLogs || [])
+      .filter(
+        (log) => log.action === 'refund' && log.payment_method === 'cash'
+      )
+      .reduce((sum, log) => sum + Math.abs(Number(log.amount)), 0);
+
+    // expectedCash: açılış + nakit tahsilat - nakit iade
+    // cashTotal byMethod.cash.amount'tan geliyor, refund zaten orada negatif olarak
+    // dahil — bunu çıkarmak çift düşürme olur. cashTotal'ın brüt karşılığını
+    // kullanmamız gerek. cashPayments = cashTotal + cashRefunds (refund'u geri ekle)
+    const cashPaymentsGross = (allKasaLogs || [])
+      .filter(
+        (log) =>
+          (log.action === 'payment' || log.action === 'partial_payment' || log.action === 'tip') &&
+          log.payment_method === 'cash'
+      )
+      .reduce((sum, log) => sum + Number(log.amount), 0);
+
     const expectedCash =
-      openingAmount !== null ? openingAmount + cashTotal - cashRefunds : null;
+      openingAmount !== null
+        ? openingAmount + cashPaymentsGross - cashRefunds
+        : null;
 
     const declaredCash = sess
       ? (sess as { declared_cash: number | null }).declared_cash
