@@ -1440,52 +1440,68 @@ export async function getZReport(
         o.payment_status !== 'refunded'
     );
 
-    const byMethod: Record<string, { count: number; amount: number }> = {};
-    paid.forEach((o) => {
-      const method = o.payment_method || 'other';
-      if (!byMethod[method]) byMethod[method] = { count: 0, amount: 0 };
-      byMethod[method].count++;
-      byMethod[method].amount += Number(o.total);
-    });
+    // ============================================================
+    // ÖDEME YÖNTEMİ DAĞILIMI — payment_logs'tan türetilir
+    // ============================================================
+    // ESKİ MANTIK YANLIŞTI: paid.forEach ile orders.total topluyordu.
+    //   - İndirimi yansıtmıyordu (orders.total indirim ÖNCESİ tutar)
+    //   - Bölünmüş ödemenin nakit/kart parçalarını kaybediyordu
+    //     (split sipariş orders.payment_method='split' yazılır)
+    //   - İade alındığında düşmüyordu
+    //   - Bahşiş kasaya yansımıyordu
+    //
+    // YENİ MANTIK: payment_logs'taki gerçek kasa hareketleri
+    //   - action='payment'         → tam ödeme
+    //   - action='partial_payment' → bölünmüş ödeme parçası (kendi method'unda)
+    //   - action='tip'             → bahşiş (kasaya FİZİKEN girer)
+    //   - action='refund'          → iade (amount zaten negatif)
+    //   - action='discount'        → kasa hareketi DEĞİL, yoksay
+    //   - action='adjustment'      → kasa hareketi DEĞİL, yoksay
+    //
+    // Bu mantık getActiveCashSession ile tutarlı (zaten doğru çalışan).
+    // Cari ödemeler (order_id=null) doğal olarak bu sorguya dahil olur.
+    // ============================================================
+    const KASA_ACTIONS = ['payment', 'partial_payment', 'tip', 'refund'];
 
-    // ============================================================
-    // CARİ KASA HAREKETLERİ — payment_logs'tan order_id=null kayıtlar
-    // (manuel borç hariç method='other' dışındakiler kasaya yansır)
-    // ============================================================
-    const { data: cariPaymentLogs } = await admin
+    const { data: allKasaLogs } = await admin
       .from('payment_logs')
-      .select('id, amount, payment_method, performed_at, cashier_id')
+      .select('id, order_id, amount, payment_method, action, performed_at, cashier_id')
       .eq('business_id', businessId)
-      .is('order_id', null)
-      .neq('payment_method', 'other') // 'other' = manuel borç işareti, kasaya yansımaz
+      .in('action', KASA_ACTIONS)
       .gte('performed_at', start.toISOString())
       .lte('performed_at', end.toISOString());
 
-    // byMethod'a ekle (Nakit/Kart/Havale toplamlarına dahil olsun)
-    (cariPaymentLogs || []).forEach((p) => {
-      const method = (p.payment_method as string) || 'other';
+    const byMethod: Record<string, { count: number; amount: number }> = {};
+    (allKasaLogs || []).forEach((log) => {
+      const method = (log.payment_method as string | null) || 'other';
       if (!byMethod[method]) byMethod[method] = { count: 0, amount: 0 };
-      byMethod[method].count++;
-      byMethod[method].amount += Number(p.amount);
+      // count: sadece pozitif kasa girişi sayar (refund'u sayma)
+      // amount: tüm hareketler dahil (refund negatif olduğu için doğal düşer)
+      if (log.action !== 'refund') {
+        byMethod[method].count++;
+      }
+      byMethod[method].amount += Number(log.amount);
     });
 
-    // Saat bazlı
+    // Cari ödemeler (order_id=null) — sadece liste/raporlama için ayrı tut
+    // (byMethod'a zaten allKasaLogs içinden dahil oldular)
+    const cariPaymentLogs = (allKasaLogs || []).filter(
+      (log) =>
+        log.order_id === null &&
+        log.action === 'payment' &&
+        log.payment_method !== 'other' // manuel borç işareti
+    );
+
+    // Saat bazlı — payment_logs üzerinden (raporla tutarlı, indirim sonrası)
     const hourMap = new Map<number, { count: number; amount: number }>();
-    paid.forEach((o) => {
-      const h = new Date(o.paid_at || o.created_at).getHours();
+    (allKasaLogs || []).forEach((log) => {
+      // Refund'u saat bazlıdan da düş ama negatif olarak count etme
+      if (log.action === 'refund') return; // saat bazlı dağılımı kirletmesin
+      const h = new Date(log.performed_at).getHours();
       const existing = hourMap.get(h) || { count: 0, amount: 0 };
       hourMap.set(h, {
         count: existing.count + 1,
-        amount: existing.amount + Number(o.total),
-      });
-    });
-    // Cari ödemeleri saat bazlı'ya ekle
-    (cariPaymentLogs || []).forEach((p) => {
-      const h = new Date(p.performed_at).getHours();
-      const existing = hourMap.get(h) || { count: 0, amount: 0 };
-      hourMap.set(h, {
-        count: existing.count + 1,
-        amount: existing.amount + Number(p.amount),
+        amount: existing.amount + Number(log.amount),
       });
     });
     const byHour = Array.from(hourMap.entries())

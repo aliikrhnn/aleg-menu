@@ -1,50 +1,108 @@
-ALEG — Tema Önizleme 404 Fix
-==============================
+ALEG — KASA RAPORU PAKET 1/4: byMethod payment_logs'tan
+=========================================================
 
-SORUN
-======
-Panel → Ayarlar → Tema → Önizleme:
-  "404 Burada bir şey yok"
+KRİTİK DURUM: KASA RAPORU YANLIŞ
+==================================
 
-SEBEP
-======
-Subdomain refactor sonrası /menu/[slug] rotası
-panel.alegstudio.com'da yok. Müşteri menüsü artık sadece
-[slug].alegstudio.com'dan erişilebilir.
+Yapılan analiz sonucu:
+  - getZReport içindeki byMethod hesabı orders.total topluyordu
+  - Bu YANLIŞTI çünkü:
+    * İndirim YANSIMIYORDU (orders.total indirim öncesi)
+    * Bölünmüş ödeme parçaları KAYBOLUYORDU (split olarak yazılır)
+    * İade DÜŞMÜYORDU (refund payment_logs'ta var ama byMethod'a gelmiyor)
+    * Bahşiş kasaya yansımıyordu
 
-Theme preview iframe'i hâlâ eski path-based URL kullanıyordu:
-  /menu/${slug}?preview_theme=...
-  → 404
+  Demo cafe somut örnek (1 May 2026):
+    Eski hesap:    Nakit 3.490,00  Kart 3.360,00 (orders.total bazlı)
+    Gerçek/Yeni:   Nakit 2.403,20  Kart 3.102,00 (payment_logs bazlı, 904.80 indirim)
+
+  KASIYER MUTABAKATTA EKSİK PARA SAYIYOR ZANNEDİYOR! FATAL!
 
 
 YAPILAN
 ========
 
-app/panel/(shell)/ayarlar/tabs/theme-preview.tsx
-  • previewUrl artık subdomain URL kullanır:
-    https://${slug}.${rootDomain}/?preview_theme=...
-  • Iframe subdomain'leri sorunsuz açar (modern CORS değil)
+lib/actions/payments.ts → getZReport fonksiyonu
+  • byMethod artık payment_logs'tan türetiliyor
+  • action IN ('payment','partial_payment','tip','refund') filtresi
+  • Refund (negatif amount) doğal olarak düşer
+  • Tip kasaya girer (cash/card method'ları ile)
+  • Cari ödemeler (order_id=null) doğal dahil olur (allKasaLogs aynı sorgu)
+  
+  Saat bazlı (byHour) da payment_logs'a göre yeniden hesaplandı
+  (raporla tutarlı, indirim sonrası rakamlar)
+
+  Brüt ciro / kasiyer / kanal dağılımı / sepet ortalaması:
+  → DEĞİŞMEDİ (orders.total bazlı, brüt mantığı doğru)
+
+  expectedCash hesabı:
+  → cashTotal = byMethod.cash.amount artık doğru → expectedCash de doğru
+  → cashRefunds_total kolonu yok (bug); bunu Paket 4'te temizleyeceğim
+
+
+TEST DOĞRULAMASI
+==================
+
+Yeni mantık DB üzerinden simüle edildi (Supabase MCP):
+  Demo cafe bugün → Nakit 2.403,20 (4 işlem) / Kart 3.102 (3 işlem) ✓
+  Kasa açılış ekranındaki "NAKİT (4)" değeri ile birebir uyumlu
+
+
+PAKET DEĞİŞMİYOR (npm install GEREKMEZ)
+
+
+KURULUM
+========
+
+1 dosya:
+  lib/actions/payments.ts
 
 
 PUSH
 =====
 
-  git add app/panel/\(shell\)/ayarlar/tabs/theme-preview.tsx
-  git commit -m "fix: tema önizleme subdomain URL kullansın (404 fix)"
+  git add lib/actions/payments.ts
+  git commit -m "fix: kasa raporu byMethod payment_logs'tan turetilsin (paket 1/4)"
   git push origin main
 
 
 TEST
 =====
 
-  1. Panel → Ayarlar → Tema → Önizleme
-  2. ✅ Müşteri menüsü iframe'de görünür
-  3. Tema değiştir → ✅ iframe yeniden yüklenir, tema değişir
+[A] DEMO CAFE — kasa sayfası:
+    1. demo.alegstudio.com/kasa aç
+    2. Z-Raporu / kasa özet kısmına bak
+    3. ✅ Nakit tahsilat: 2.403,20 (önceden 3.490 görüyordun)
+    4. ✅ Kart tahsilat: 3.102,00 (önceden 3.360 veya 0 görüyordun)
+    5. ✅ Brüt: 6.850 aynı (değişmedi)
+    6. ✅ Sepet ortalama: 978,57 aynı
+
+[B] KAPSAMLI:
+    1. Yeni bir sipariş oluştur
+    2. %10 indirim uygulayıp tam nakit öde
+    3. Z raporunu refresh et
+    4. ✅ Nakit tahsilat = (sipariş - indirim) tutarı kadar artmalı
+    
+    5. Başka sipariş, böl: 60₺ nakit + 40₺ kart
+    6. Z raporu
+    7. ✅ Nakit +60, Kart +40 (split olarak değil!)
+
+[C] AKTIF KASA SESSION (mevcut "AÇILIŞ/NAKİT/İADE/BEKLENEN"):
+    Bu zaten doğruydu, dokunulmadı. Aynı çalışmalı.
 
 
-/yardim 404 NOTU
+GERİ ALMA
+==========
+
+  git revert HEAD --no-edit
+  git push origin main
+
+
+SONRAKI PAKETLER
 ==================
-Console'da bir başka 404 daha var: /yardim?_rsc=...
-Bu şu an düzeltilmedi. Panelde "Yardım merkezi" linki muhtemelen
-/yardim'a gidiyor ama o sayfa müşteri menüsü altında. Sonradan
-bakılabilir.
+
+Paket 2: refundPayment düzeltmesi (iade gerçek tutarla, split detaylı)
+Paket 3: cash_drawer_sessions kolon temizliği (cash_refunds_total)
+Paket 4: Kapsamlı edge case testleri
+
+Önce PAKET 1'i push'la, sonuçları söyle. Doğru çalışıyorsa Paket 2'ye geçeriz.
