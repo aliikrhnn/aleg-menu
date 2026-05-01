@@ -93,7 +93,9 @@ export async function checkPinRateLimit(params: {
   }
 
   // Hangi aşamadayız?
-  let activeStage = STAGES[0];
+  // STAGES tuple'ının eleman tipini literal'den çıkar (mutable bir tip)
+  type Stage = { wrongCount: number; lockSeconds: number };
+  let activeStage: Stage = STAGES[0];
   for (const stage of STAGES) {
     if (wrongCount >= stage.wrongCount) {
       activeStage = stage;
