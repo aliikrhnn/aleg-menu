@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Nav } from '@/components/landing/nav';
 import { Hero } from '@/components/landing/hero';
+import { ComplianceBar } from '@/components/landing/compliance-bar';
 import { Problems } from '@/components/landing/problems';
 import { OrderFlow } from '@/components/landing/orderflow';
 import { Features } from '@/components/landing/features';
@@ -10,6 +11,7 @@ import { Steps } from '@/components/landing/steps';
 import { Showcase } from '@/components/landing/showcase';
 import { Modules } from '@/components/landing/modules';
 import { ModuleDeepDive } from '@/components/landing/module-deep-dive';
+import { AIComplianceSection } from '@/components/landing/ai-compliance-section';
 import { MapSection } from '@/components/landing/map-section';
 import { Pricing } from '@/components/landing/pricing';
 import { Early } from '@/components/landing/early';
@@ -30,6 +32,7 @@ export default function HomePage() {
     <main data-theme="swiss" className="min-h-screen bg-paper text-ink overflow-x-hidden">
       <Nav onDemo={openDemo} />
       <Hero onDemo={openDemo} />
+      <ComplianceBar />
       <Problems />
       <OrderFlow />
       <Features />
@@ -37,6 +40,7 @@ export default function HomePage() {
       <Showcase />
       <Modules />
       <ModuleDeepDive />
+      <AIComplianceSection />
       <MapSection />
       <Pricing onDemo={openDemo} />
       <Early onDemo={openDemo} />
