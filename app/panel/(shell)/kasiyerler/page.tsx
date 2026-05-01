@@ -1,5 +1,6 @@
 import { listCashiers } from '@/lib/actions/cashiers';
 import { CashierManager } from './cashier-manager';
+import { PinAttemptsPanel } from './pin-attempts-panel';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,6 +13,7 @@ export default async function CashiersPage() {
         initialCashiers={result.success ? result.cashiers || [] : []}
         error={result.success ? null : result.error || null}
       />
+      <PinAttemptsPanel />
     </div>
   );
 }

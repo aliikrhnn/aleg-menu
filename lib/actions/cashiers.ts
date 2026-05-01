@@ -192,8 +192,10 @@ export async function createCashier(input: {
     const name = input.displayName.trim();
     if (name.length < 2) return { success: false, error: 'İsim en az 2 harf olmalı' };
     if (name.length > 40) return { success: false, error: 'İsim en fazla 40 harf' };
-    if (!/^\d{4,6}$/.test(input.pin)) {
-      return { success: false, error: 'PIN 4-6 haneli sayı olmalı' };
+    // GÜVENLİK: Yeni PIN'ler 6 haneli olmak zorunda (brute force daha zor)
+    // Mevcut 4 haneli PIN'ler verifyCashierPin'de hâlâ kabul edilir.
+    if (!/^\d{6}$/.test(input.pin)) {
+      return { success: false, error: 'PIN 6 haneli sayı olmalı' };
     }
     const role: CashierRole = input.role || 'cashier';
     if (!['cashier', 'waiter', 'both'].includes(role)) {
@@ -315,8 +317,8 @@ export async function changePin(
     const { businessId } = await requireBusinessAccess();
     const admin = createAdminClient();
 
-    if (!/^\d{4,6}$/.test(newPin)) {
-      return { success: false, error: 'PIN 4-6 haneli sayı olmalı' };
+    if (!/^\d{6}$/.test(newPin)) {
+      return { success: false, error: 'PIN 6 haneli sayı olmalı' };
     }
 
     const { data: existing } = await admin
@@ -516,6 +518,114 @@ export async function verifyCashierPin(
         can_refund: cashier.can_refund,
         role: cashierRole,
       },
+    };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Hata' };
+  }
+}
+
+// ============================================================
+// PIN deneme geçmişi (panel'de görüntülenir)
+// Son N saatteki tüm denemeleri listeler
+// ============================================================
+export async function listPinAttempts(params?: {
+  hoursBack?: number; // varsayılan 24
+  limit?: number; // varsayılan 100
+  onlyFailures?: boolean; // sadece başarısızlar
+}): Promise<{
+  success: boolean;
+  attempts?: Array<{
+    id: string;
+    cashier_id: string | null;
+    cashier_name: string | null; // Joined from cashier_accounts
+    ip_address: string | null;
+    user_agent: string | null;
+    result: string;
+    expected_role: string | null;
+    created_at: string;
+  }>;
+  // Aggregate sayılar (banner için faydalı)
+  stats?: {
+    success: number;
+    wrong_pin: number;
+    locked: number;
+    not_found: number;
+    wrong_role: number;
+  };
+  error?: string;
+}> {
+  try {
+    const { businessId } = await requireBusinessAccess();
+    const admin = createAdminClient();
+
+    const hoursBack = params?.hoursBack || 24;
+    const limit = Math.min(params?.limit || 100, 500);
+    const since = new Date(
+      Date.now() - hoursBack * 60 * 60 * 1000
+    ).toISOString();
+
+    // Ana sorgu: son N saatteki denemeler
+    let query = admin
+      .from('pin_attempts')
+      .select('id, cashier_id, ip_address, user_agent, result, expected_role, created_at')
+      .eq('business_id', businessId)
+      .gte('created_at', since)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (params?.onlyFailures) {
+      query = query.in('result', ['wrong_pin', 'locked', 'not_found', 'wrong_role']);
+    }
+
+    const { data: attempts, error } = await query;
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    // Cashier isimlerini ayrı sorgu ile al (LEFT JOIN supabase-js'te zor)
+    const cashierIds = Array.from(
+      new Set((attempts || []).map((a) => a.cashier_id).filter(Boolean))
+    ) as string[];
+
+    const cashierNameMap = new Map<string, string>();
+    if (cashierIds.length > 0) {
+      const { data: cashiers } = await admin
+        .from('cashier_accounts')
+        .select('id, display_name')
+        .in('id', cashierIds);
+      (cashiers || []).forEach((c) => {
+        cashierNameMap.set(c.id, c.display_name);
+      });
+    }
+
+    // İstatistikler
+    const stats = {
+      success: 0,
+      wrong_pin: 0,
+      locked: 0,
+      not_found: 0,
+      wrong_role: 0,
+    };
+    (attempts || []).forEach((a) => {
+      if (a.result in stats) {
+        stats[a.result as keyof typeof stats]++;
+      }
+    });
+
+    return {
+      success: true,
+      attempts: (attempts || []).map((a) => ({
+        id: a.id,
+        cashier_id: a.cashier_id,
+        cashier_name: a.cashier_id ? cashierNameMap.get(a.cashier_id) || null : null,
+        ip_address: a.ip_address ? String(a.ip_address) : null,
+        user_agent: a.user_agent,
+        result: a.result,
+        expected_role: a.expected_role,
+        created_at: a.created_at,
+      })),
+      stats,
     };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : 'Hata' };

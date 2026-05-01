@@ -557,8 +557,8 @@ function CashierFormModal({
         setError('PIN\'ler eşleşmiyor');
         return;
       }
-      if (!/^\d{4,6}$/.test(pin)) {
-        setError('PIN 4-6 haneli sayı olmalı');
+      if (!/^\d{6}$/.test(pin)) {
+        setError('PIN 6 haneli sayı olmalı');
         return;
       }
     }
@@ -750,7 +750,7 @@ function CashierFormModal({
         {/* PIN (sadece create) */}
         {mode === 'create' && (
           <>
-            <FormField label="PIN (4-6 HANE)" required>
+            <FormField label="PIN (6 HANE)" required>
               <input
                 type="password"
                 inputMode="numeric"
@@ -880,8 +880,8 @@ function ChangePinModal({
       setError('PIN\'ler eşleşmiyor');
       return;
     }
-    if (!/^\d{4,6}$/.test(pin)) {
-      setError('PIN 4-6 haneli sayı olmalı');
+    if (!/^\d{6}$/.test(pin)) {
+      setError('PIN 6 haneli sayı olmalı');
       return;
     }
     setError(null);
@@ -898,7 +898,7 @@ function ChangePinModal({
   return (
     <ModalShell onClose={onClose} title={`PIN değiştir · ${cashier.display_name}`}>
       <div className="px-6 py-5 space-y-4">
-        <FormField label="YENİ PIN (4-6 HANE)" required>
+        <FormField label="YENİ PIN (6 HANE)" required>
           <input
             type="password"
             inputMode="numeric"
