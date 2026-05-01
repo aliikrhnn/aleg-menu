@@ -13,7 +13,18 @@ async function requireBusinessAccess() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) throw new Error('Giriş yapmamışsınız');
+  // Panel oturumu yoksa cashier cookie + subdomain dene (yeni subdomain rotaları için)
+  if (!user) {
+    const { tryCashierFallback } = await import('@/lib/security/auth-context');
+    const fallback = await tryCashierFallback();
+    if (fallback) {
+      return {
+        user: null as unknown as Awaited<ReturnType<typeof supabase.auth.getUser>>['data']['user'],
+        businessId: fallback.businessId,
+      };
+    }
+    throw new Error('Giriş yapmamışsınız');
+  }
 
   const { data: membership } = await supabase
     .from('business_members')
