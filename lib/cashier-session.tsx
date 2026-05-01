@@ -176,6 +176,13 @@ export function CashierSessionProvider({
       .catch(() => {
         /* ignore */
       });
+    // Push notification subscription'ı da temizle (cihaz başkasıyla bağlanırsa
+    // o kişiye yanlış bildirim gitmesin)
+    import('@/lib/push-client')
+      .then((m) => m.disableNotifications())
+      .catch(() => {
+        /* ignore */
+      });
   }, [STORAGE_KEY, ACTIVITY_KEY]);
 
   const lock = useCallback(() => {

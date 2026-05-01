@@ -28,6 +28,7 @@ import { getKasaSoundSettings } from '@/lib/actions/sound-settings';
 import { type SoundSettings, DEFAULT_SOUND_SETTINGS } from '@/lib/sound-types';
 import { playSound, type SoundId } from '@/lib/sounds';
 import { createClient } from '@/lib/supabase/client';
+import { NotificationBell } from '@/components/notifications/notification-bell';
 
 type WaiterTab = 'calls' | 'orders' | 'active' | 'tables';
 
@@ -448,6 +449,9 @@ export function WaiterBoard({ businessId }: Props) {
         </div>
 
         <div className="flex items-center gap-1.5 flex-shrink-0">
+          {/* Bildirim - push notification toggle */}
+          <NotificationBell />
+
           {/* Mute */}
           <button
             onClick={() => setMuted((m) => !m)}
