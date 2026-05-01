@@ -26,31 +26,47 @@ type Body = {
 
 export async function POST(req: NextRequest) {
   try {
-    // 1. Auth
+    // 1. Auth — panel session ya da kasiyer (subdomain) cookie
     const supabase = createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
-    if (!user) {
-      return NextResponse.json(
-        { success: false, error: 'Giriş yapmamışsınız' },
-        { status: 401 }
-      );
-    }
+    let businessId: string | null = null;
+    let memberId: string | null = null;
 
-    const { data: membership } = await supabase
-      .from('business_members')
-      .select('id, business_id')
-      .eq('user_id', user.id)
-      .eq('status', 'active')
-      .maybeSingle();
+    if (user) {
+      // Panel oturumu
+      const { data: membership } = await supabase
+        .from('business_members')
+        .select('id, business_id')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .maybeSingle();
 
-    if (!membership) {
-      return NextResponse.json(
-        { success: false, error: 'İşletme üyeliği bulunamadı' },
-        { status: 403 }
+      if (!membership) {
+        return NextResponse.json(
+          { success: false, error: 'İşletme üyeliği bulunamadı' },
+          { status: 403 }
+        );
+      }
+
+      businessId = membership.business_id;
+      memberId = membership.id;
+    } else {
+      // Subdomain (kasiyer cookie) fallback
+      const { tryCashierFallback } = await import(
+        '@/lib/security/auth-context'
       );
+      const fallback = await tryCashierFallback();
+      if (!fallback) {
+        return NextResponse.json(
+          { success: false, error: 'Giriş yapmamışsınız' },
+          { status: 401 }
+        );
+      }
+      businessId = fallback.businessId;
+      // memberId = null kalır, performed_by için null kullanılır
     }
 
     // 2. Body parse
@@ -63,7 +79,7 @@ export async function POST(req: NextRequest) {
     const { data: activeSess, error: sessErr } = await admin
       .from('cash_drawer_sessions')
       .select('id')
-      .eq('business_id', membership.business_id)
+      .eq('business_id', businessId)
       .is('closed_at', null)
       .maybeSingle();
 
@@ -90,7 +106,7 @@ export async function POST(req: NextRequest) {
       .update({
         // Close fields
         closed_at: new Date().toISOString(),
-        closed_by: membership.id,
+        closed_by: memberId, // kasiyer fallback'inde null kalır (kolon nullable)
         counted_amount: counted,
         expected_amount: expected,
         difference,

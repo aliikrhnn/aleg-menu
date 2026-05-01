@@ -1003,7 +1003,14 @@ export async function getActiveCashSession(): Promise<{
     let cardPayments = 0;
     let count = 0;
     (logs || []).forEach((log) => {
-      if (log.action === 'payment') {
+      // payment / partial_payment / tip → kasaya nakit/kart girişi
+      // (Eski kod sadece 'payment' bakıyordu — partial_payment ve tip atlanıyordu,
+      // bölme ödenen siparişlerin nakit parçaları görünmüyordu)
+      if (
+        log.action === 'payment' ||
+        log.action === 'partial_payment' ||
+        log.action === 'tip'
+      ) {
         if (log.payment_method === 'cash') {
           cashPayments += Number(log.amount);
           count++;
