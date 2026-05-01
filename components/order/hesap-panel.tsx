@@ -39,6 +39,15 @@ import { CustomerPicker } from './customer-picker';
 
 const fmt = (n: number) => `₺${Math.round(n).toLocaleString('tr-TR')}`;
 
+// Kuruşlu format — indirim, parçalı ödeme gibi hassasiyet gerektiren yerler için
+// 90 × 0,05 = 4,50 → "₺4,50" (yuvarlamadan)
+// Tam sayıysa kuruş gösterilmez: 5 → "₺5" değil "₺5,00" (tutarlı)
+const fmtMoney = (n: number) =>
+  `₺${n.toLocaleString('tr-TR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+
 type LocalPaymentMethod = 'cash' | 'card' | 'on_account';
 
 type FlatItem = {
@@ -1595,7 +1604,7 @@ function DiscountModal({
               color: 'var(--ink)',
             }}
           >
-            {fmt(baseAmount)} üzerinden
+            {fmtMoney(baseAmount)} üzerinden
           </div>
         </div>
 
@@ -1752,7 +1761,7 @@ function DiscountModal({
               >
                 İndirim:{' '}
                 <span style={{ fontFamily: 'var(--f-mono)', fontWeight: 700 }}>
-                  −{fmt(calc)}
+                  −{fmtMoney(calc)}
                 </span>
               </div>
               <div
@@ -1763,7 +1772,7 @@ function DiscountModal({
                   color: 'var(--ink)',
                 }}
               >
-                Yeni Toplam: {fmt(baseAmount - calc)}
+                Yeni Toplam: {fmtMoney(baseAmount - calc)}
               </div>
             </div>
           )}
