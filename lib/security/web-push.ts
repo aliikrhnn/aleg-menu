@@ -116,7 +116,9 @@ async function sendToSubscription(
   try {
     await webpush.sendNotification(subscription, data, {
       TTL: 60, // 60 sn içinde teslim edilemezse iptal
-      urgency: 'high',
+      urgency: 'high', // APNs apns-priority: 10 (iOS kilit ekranı için kritik)
+      // topic: aynı topic'li bildirimler birleşir (tag yerine)
+      // Tag client tarafında handle edilir (showNotification options)
     });
     return { success: true };
   } catch (err: unknown) {

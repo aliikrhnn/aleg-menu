@@ -344,41 +344,47 @@ export async function submitWaiterCall(input: {
 
     // ──────────────────────────────────────────────────────────
     // PUSH NOTIFICATION — tüm garsonlara bildirim
-    // (background, hata olsa bile çağrı kayıt edildi sayılır)
+    //
+    // ÖNEMLİ: Bu blok await edilmeli (fire-and-forget DEĞİL).
+    // Vercel serverless function return ettikten sonra background
+    // task'lar terminate olur — push henüz teslim edilmemiş olabilir.
+    // Push hatası çağrıyı etkilemesin diye try-catch içinde.
     // ──────────────────────────────────────────────────────────
-    (async () => {
-      try {
-        // Masa adını çek (bildirim metni için)
-        let tableName = 'Bilinmeyen';
-        if (input.tableId) {
-          const { data: table } = await admin
-            .from('tables')
-            .select('name')
-            .eq('id', input.tableId)
-            .maybeSingle();
-          if (table?.name) tableName = table.name;
-        }
-
-        const { sendPushToBusiness } = await import(
-          '@/lib/security/web-push'
-        );
-
-        const emoji = button.emoji || '🔔';
-        const callName = button.name || 'Çağrı';
-
-        await sendPushToBusiness(input.businessId, 'waiter', {
-          title: `${emoji} ${tableName}`,
-          body: callName,
-          url: '/garson',
-          tag: `call-${input.tableId || 'general'}`, // aynı masadan üst üste çağrılar tek bildirim olur
-          requireInteraction: true, // garson dokunana kadar dursun
-          vibrate: [200, 100, 200, 100, 200],
-        });
-      } catch (pushErr) {
-        console.error('[submitWaiterCall] Push gönderme hatası:', pushErr);
-        // Push hatası çağrı kaydını etkilemez
+    try {
+      // Masa adını çek (bildirim metni için)
+      let tableName = 'Bilinmeyen';
+      if (input.tableId) {
+        const { data: table } = await admin
+          .from('tables')
+          .select('name')
+          .eq('id', input.tableId)
+          .maybeSingle();
+        if (table?.name) tableName = table.name;
       }
-    })();
+
+      const { sendPushToBusiness } = await import(
+        '@/lib/security/web-push'
+      );
+
+      const emoji = button.emoji || '🔔';
+      const callName = button.name || 'Çağrı';
+
+      const pushResult = await sendPushToBusiness(input.businessId, 'waiter', {
+        title: `${emoji} ${tableName}`,
+        body: callName,
+        url: '/garson',
+        tag: `call-${input.tableId || 'general'}`, // aynı masadan üst üste çağrılar tek bildirim olur
+        requireInteraction: true, // garson dokunana kadar dursun
+        vibrate: [200, 100, 200, 100, 200],
+      });
+
+      console.log(
+        `[submitWaiterCall] Push sonuç: sent=${pushResult.sent}, failed=${pushResult.failed}, expired=${pushResult.expired}`
+      );
+    } catch (pushErr) {
+      console.error('[submitWaiterCall] Push gönderme hatası:', pushErr);
+      // Push hatası çağrı kaydını etkilemez — kullanıcıya success döneriz
+    }
 
     return { success: true, callId: data.id };
   } catch (err) {
