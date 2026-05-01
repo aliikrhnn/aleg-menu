@@ -20,12 +20,12 @@ export function ThemePreview({
   const [loading, setLoading] = useState(true);
   const [reloadKey, setReloadKey] = useState(0);
 
-  // Preview URL — query parameter ile tema önizlenir
+  // Preview URL — subdomain üzerinden müşteri menüsü
+  // (subdomain refactor sonrası /menu/[slug] rotası panel'den erişilebilir değil)
   const accentParam = accentOverride
     ? accentOverride.replace('#', '')
     : 'default';
-  // Path-based URL kullan — iframe'in subdomain CORS'a takılmaması için
-  const previewUrl = `/menu/${slug}?preview_theme=${preset}&preview_accent=${accentParam}&_=${reloadKey}`;
+  const previewUrl = `https://${slug}.${rootDomain}/?preview_theme=${preset}&preview_accent=${accentParam}&_=${reloadKey}`;
 
   // Tema değişince iframe yeniden yüklensin
   useEffect(() => {
