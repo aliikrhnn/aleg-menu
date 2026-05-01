@@ -10,6 +10,7 @@ import {
   recordPinAttempt,
   extractIpFromHeaders,
 } from '@/lib/security/pin-rate-limit';
+import { createCashierSession } from '@/lib/security/cashier-session';
 
 // ============================================================
 // İzin kontrolü
@@ -498,6 +499,24 @@ export async function verifyCashierPin(
       expectedRole,
     });
 
+    // ╔══════════════════════════════════════════════════════════════╗
+    // ║ DB-BACKED COOKIE SESSION (subdomain rotaları için)           ║
+    // ║ Eski localStorage sistemi paralel çalışıyor — bozulmaz.      ║
+    // ║ Yeni subdomain rotaları bu cookie'yi kullanacak (Paket 4-5). ║
+    // ║ Hata olursa login bozulmasın — sadece log'la, devam et.      ║
+    // ╚══════════════════════════════════════════════════════════════╝
+    try {
+      await createCashierSession({
+        businessId,
+        cashierId,
+        role: cashierRole,
+      });
+    } catch (e) {
+      // Cookie set edilemese bile login akışını bozma
+      // Eski localStorage sistemi devreye girer
+      console.error('[verifyCashierPin] cookie session error:', e);
+    }
+
     // last_used_at güncelle (arka planda, hata olsa sorun değil)
     admin
       .from('cashier_accounts')
@@ -629,5 +648,22 @@ export async function listPinAttempts(params?: {
     };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : 'Hata' };
+  }
+}
+
+// ============================================================
+// Cashier sign out (server-side)
+// Cookie session'ı temizler. Client-side localStorage temizlemesi
+// useCashierSession hook'unda zaten var.
+// ============================================================
+export async function signOutCashierSession(): Promise<{ success: boolean }> {
+  try {
+    const { clearCashierSession } = await import('@/lib/security/cashier-session');
+    await clearCashierSession();
+    return { success: true };
+  } catch (e) {
+    console.error('[signOutCashierSession] error:', e);
+    // Hata olsa bile başarılı dön — client tarafta zaten localStorage temizleniyor
+    return { success: true };
   }
 }

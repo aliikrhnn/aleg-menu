@@ -169,6 +169,13 @@ export function CashierSessionProvider({
     } catch {
       /* ignore */
     }
+    // Server-side cookie session de temizle (subdomain rotaları için)
+    // Hata olsa bile UI bozulmasın — paralel akış
+    import('@/lib/actions/cashiers')
+      .then((m) => m.signOutCashierSession())
+      .catch(() => {
+        /* ignore */
+      });
   }, [STORAGE_KEY, ACTIVITY_KEY]);
 
   const lock = useCallback(() => {
