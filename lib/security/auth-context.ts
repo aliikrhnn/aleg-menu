@@ -200,3 +200,58 @@ export async function requireCashierOnlyContext(): Promise<BusinessContext> {
   }
   return cashier;
 }
+
+// ════════════════════════════════════════════════════════════════════
+// LEGACY HELPER — Mevcut requireBusinessAccess() fonksiyonları için
+//
+// Mevcut 22 action dosyasındaki kendi requireBusinessAccess()
+// fonksiyonlarına minimal ekleme yapmak için kullanılır.
+//
+// Pattern (her dosya bunu kendi fonksiyonunda yapsın):
+//
+//   async function requireBusinessAccess() {
+//     const supabase = createClient();
+//     const { data: { user } } = await supabase.auth.getUser();
+//
+//     if (!user) {
+//       // YENİ: cashier session fallback
+//       const fallback = await tryCashierFallback();
+//       if (fallback) {
+//         return {
+//           user: null,            // panel oturumu yok
+//           businessId: fallback.businessId,
+//           memberId: null,        // panel member değil, cashier
+//           // Eğer dosya 'supabase' return ediyorsa: supabase: null
+//         };
+//       }
+//       throw new Error('Giriş yapmamışsınız');
+//     }
+//
+//     // ... mevcut panel akışı aynen devam
+//   }
+//
+// Sonra dosya içindeki user kullanımları null check'lenmeli.
+// ════════════════════════════════════════════════════════════════════
+
+export type CashierFallback = {
+  businessId: string;
+  cashierId: string;
+  cashierRole: CashierRole;
+};
+
+/**
+ * Cashier cookie + subdomain check yapar, başarılıysa businessId döner.
+ * requireBusinessAccess fonksiyonlarının içinde panel auth fail olunca çağrılır.
+ *
+ * Subdomain spoofing korumalı: cookie session.business_id !== subdomain.business_id
+ * ise null döner.
+ */
+export async function tryCashierFallback(): Promise<CashierFallback | null> {
+  const result = await tryCashierAuth();
+  if (!result) return null;
+  return {
+    businessId: result.businessId,
+    cashierId: result.cashierId!,
+    cashierRole: result.cashierRole!,
+  };
+}

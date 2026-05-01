@@ -115,6 +115,14 @@ export async function listCashiers(): Promise<{
 
 // ============================================================
 // Aktif kasiyerler (kasa giriş ekranı için - PIN hash DAHİL değil)
+//
+// AUTH STRATEJİSİ:
+//   1. Önce panel oturumu (mevcut akış, eski sayfalar için)
+//   2. Yoksa subdomain'den slug → business_id (yeni subdomain rotaları için)
+//
+// Subdomain'den geliyorsa cashier listesi PUBLIC bilgi olarak döner
+// (sadece display_name + emoji + color + role; PIN hash, IP vs. yok).
+// Bu güvenli çünkü liste zaten PIN ekranında müşterinin önünde duruyor.
 // ============================================================
 export async function listActiveCashiers(filterRole?: 'cashier' | 'waiter'): Promise<{
   success: boolean;
@@ -129,7 +137,42 @@ export async function listActiveCashiers(filterRole?: 'cashier' | 'waiter'): Pro
   error?: string;
 }> {
   try {
-    const { businessId } = await requireBusinessAccess();
+    let businessId: string | null = null;
+
+    // 1. Panel oturumu var mı? (mevcut akış)
+    try {
+      const ctx = await requireBusinessAccess();
+      businessId = ctx.businessId;
+    } catch {
+      // Panel oturumu yok — subdomain dene
+    }
+
+    // 2. Subdomain'den slug çöz (yeni akış)
+    if (!businessId) {
+      const { headers: getHeaders } = await import('next/headers');
+      const { extractSlugFromHost, resolveSlugToBusiness } = await import(
+        '@/lib/security/slug-resolver'
+      );
+
+      const host = getHeaders().get('host');
+      const slug = extractSlugFromHost(host);
+
+      if (slug) {
+        const business = await resolveSlugToBusiness(slug);
+        if (
+          business &&
+          business.subscriptionStatus !== 'suspended' &&
+          business.subscriptionStatus !== 'cancelled'
+        ) {
+          businessId = business.id;
+        }
+      }
+    }
+
+    if (!businessId) {
+      return { success: false, error: 'Giriş yapmamışsınız' };
+    }
+
     const admin = createAdminClient();
 
     let cashierQuery = admin
@@ -377,7 +420,41 @@ export async function verifyCashierPin(
   error?: string;
 }> {
   try {
-    const { businessId } = await requireBusinessAccess();
+    // ╔══════════════════════════════════════════════════════════════╗
+    // ║ BUSINESS ID ÇÖZÜMÜ                                           ║
+    // ║ 1. Önce panel oturumu (eski sayfalar için)                   ║
+    // ║ 2. Yoksa subdomain'den slug → business_id (yeni rotalar)     ║
+    // ╚══════════════════════════════════════════════════════════════╝
+    let businessId: string | null = null;
+    try {
+      const ctx = await requireBusinessAccess();
+      businessId = ctx.businessId;
+    } catch {
+      // Panel oturumu yok — subdomain dene
+    }
+
+    if (!businessId) {
+      const { extractSlugFromHost, resolveSlugToBusiness } = await import(
+        '@/lib/security/slug-resolver'
+      );
+      const host = headers().get('host');
+      const slug = extractSlugFromHost(host);
+      if (slug) {
+        const business = await resolveSlugToBusiness(slug);
+        if (
+          business &&
+          business.subscriptionStatus !== 'suspended' &&
+          business.subscriptionStatus !== 'cancelled'
+        ) {
+          businessId = business.id;
+        }
+      }
+    }
+
+    if (!businessId) {
+      return { success: false, error: 'Giriş yapmamışsınız' };
+    }
+
     const admin = createAdminClient();
 
     if (!/^\d{4,6}$/.test(pin)) {

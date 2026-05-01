@@ -52,7 +52,28 @@ export async function middleware(request: NextRequest) {
     }
     // /kasa, /garson ise rewrittenPath = url.pathname (değiştirilmedi)
   } else {
-    if (!url.pathname.startsWith('/menu')) {
+    // Kafe subdomain'i (örn. cafe-demo.alegstudio.com)
+    //
+    // Üç route tipi var:
+    //   /kasa   → kasa uygulaması (PIN ile, slug-aware)
+    //   /garson → garson tableti (PIN ile, slug-aware)
+    //   /*      → müşteri menüsü (mevcut /menu/[slug] altına rewrite)
+    //
+    // /kasa ve /garson için path DEĞİŞTİRİLMEZ — mevcut /app/kasa ve
+    // /app/garson route'ları kullanılır. Sayfa içinden host header'ından
+    // slug çözülüp business_id alınır (auth-context).
+    //
+    // Müşteri menüsü için /menu/[slug] altına rewrite yapılır (mevcut akış).
+    const isCashierRoute =
+      url.pathname === '/kasa' ||
+      url.pathname.startsWith('/kasa/') ||
+      url.pathname === '/garson' ||
+      url.pathname.startsWith('/garson/');
+
+    if (isCashierRoute) {
+      // Path değişmez, /app/kasa veya /app/garson çalışır
+      // Slug bilgisi host header'ından çözülür
+    } else if (!url.pathname.startsWith('/menu')) {
       rewrittenPath = `/menu/${currentHost}${url.pathname}`;
     }
   }

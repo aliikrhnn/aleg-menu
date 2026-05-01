@@ -74,7 +74,38 @@ export async function getActiveOrders(): Promise<{
   error?: string;
 }> {
   try {
-    const { businessId } = await requireBusinessAccess();
+    // BusinessId çözümü: önce panel oturumu, yoksa subdomain'den slug
+    let businessId: string | null = null;
+    try {
+      const ctx = await requireBusinessAccess();
+      businessId = ctx.businessId;
+    } catch {
+      // Panel oturumu yok — subdomain dene
+    }
+
+    if (!businessId) {
+      const { headers: getHeaders } = await import('next/headers');
+      const { extractSlugFromHost, resolveSlugToBusiness } = await import(
+        '@/lib/security/slug-resolver'
+      );
+      const host = getHeaders().get('host');
+      const slug = extractSlugFromHost(host);
+      if (slug) {
+        const business = await resolveSlugToBusiness(slug);
+        if (
+          business &&
+          business.subscriptionStatus !== 'suspended' &&
+          business.subscriptionStatus !== 'cancelled'
+        ) {
+          businessId = business.id;
+        }
+      }
+    }
+
+    if (!businessId) {
+      return { success: false, error: 'Giriş yapmamışsınız' };
+    }
+
     const admin = createAdminClient();
 
     // Son 24 saat + tamamlanmamış siparişler
