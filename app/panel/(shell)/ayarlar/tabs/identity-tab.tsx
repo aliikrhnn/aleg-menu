@@ -527,9 +527,9 @@ export function IdentityTab({
                 color: 'var(--ink-3)',
               }}
             >
-              💡 Müşteri menüsünde "WiFi" kartı görünür. Tıklayınca şifre +
-              QR kod açılır. iPhone/Android kamerası QR'ı tarayınca otomatik
-              bağlanır.
+              💡 Müşteri menüsünde &quot;WiFi&quot; kartı görünür. Tıklayınca
+              şifre + QR kod açılır. iPhone/Android kamerası QR&apos;ı
+              tarayınca otomatik bağlanır.
             </div>
           )}
         </div>

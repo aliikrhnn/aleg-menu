@@ -626,7 +626,6 @@ export function HesapPanel({
     [
       isPartialMode,
       hasPartialRollup,
-      selectedFlatItems,
       itemRollups,
       unpaidOrders,
       tableId,
@@ -760,7 +759,6 @@ export function HesapPanel({
     [
       isPartialMode,
       hasPartialRollup,
-      selectedFlatItems,
       itemRollups,
       unpaidOrders,
       payableAmount,
