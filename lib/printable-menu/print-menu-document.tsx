@@ -117,6 +117,7 @@ export const PrintMenuDocument = forwardRef<HTMLDivElement, Props>(
           scale={scale}
           widthPx={widthPx}
           heightPx={heightPx}
+          socialQrs={socialQrs}
         />
       );
     }
@@ -145,6 +146,7 @@ export const PrintMenuDocument = forwardRef<HTMLDivElement, Props>(
           scale={scale}
           widthPx={widthPx}
           heightPx={heightPx}
+          socialQrs={socialQrs}
         />
       );
     }
@@ -173,6 +175,7 @@ export const PrintMenuDocument = forwardRef<HTMLDivElement, Props>(
           scale={scale}
           widthPx={widthPx}
           heightPx={heightPx}
+          socialQrs={socialQrs}
         />
       );
     }
@@ -1553,6 +1556,7 @@ type LayoutVariantProps = {
   scale?: number;
   widthPx: number;
   heightPx: number;
+  socialQrs?: SocialQr[];
 };
 
 // ============================================================
@@ -1582,6 +1586,7 @@ const PhotoHeroLayout = forwardRef<HTMLDivElement, LayoutVariantProps>(
       scale = 1,
       widthPx,
       heightPx,
+      socialQrs,
     },
     ref
   ) {
@@ -1965,6 +1970,7 @@ const BoldBadgeLayout = forwardRef<HTMLDivElement, LayoutVariantProps>(
       scale = 1,
       widthPx,
       heightPx,
+      socialQrs,
     },
     ref
   ) {
@@ -2359,6 +2365,7 @@ const EditorialLayout = forwardRef<HTMLDivElement, LayoutVariantProps>(
       scale = 1,
       widthPx,
       heightPx,
+      socialQrs,
     },
     ref
   ) {
