@@ -56,6 +56,11 @@ type FlatItem = {
   orderStatus: string;
   orderPaymentStatus: string;
   item: TableOrderDetail['items'][number];
+  /** Virtual expansion için: aynı kalem'in qty=N ise 0..N-1 alt-satır indeksi */
+  subIndex: number;
+  /** Bu kalem'in toplam qty'si (parent kalem için). Virtual satırda hep gösterilir. */
+  parentQuantity: number;
+  /** Bu sanal satırın tutarı (1 adetlik = unit_price) */
   lineTotal: number;
 };
 
@@ -147,21 +152,29 @@ export function HesapPanel({
     return () => window.removeEventListener('resize', check);
   }, []);
 
-  // Flat items
+  // Flat items - quantity > 1 olan kalemler virtual olarak ayrı satırlara
+  // bölünür ki kullanıcı her birini ayrı seçip ikram/iptal edebilsin.
   const flatItems: FlatItem[] = useMemo(() => {
     const result: FlatItem[] = [];
     orders.forEach((o) => {
       const isPaid =
         o.payment_status === 'paid' || o.payment_status === 'refunded';
       o.items.forEach((it) => {
-        result.push({
-          orderId: o.id,
-          orderNo: o.order_no,
-          orderStatus: o.status,
-          orderPaymentStatus: isPaid ? 'paid' : 'unpaid',
-          item: it,
-          lineTotal: it.is_complimentary ? 0 : it.unit_price * it.quantity,
-        });
+        const qty = Math.max(1, it.quantity || 1);
+        // Her kalem için qty adet sanal alt-satır oluştur
+        for (let i = 0; i < qty; i++) {
+          result.push({
+            orderId: o.id,
+            orderNo: o.order_no,
+            orderStatus: o.status,
+            orderPaymentStatus: isPaid ? 'paid' : 'unpaid',
+            item: it,
+            subIndex: i,
+            parentQuantity: qty,
+            // Sanal satır tutarı: hep 1 adetlik (lineTotal = unit_price)
+            lineTotal: it.is_complimentary ? 0 : Number(it.unit_price),
+          });
+        }
       });
     });
     return result;
@@ -172,11 +185,13 @@ export function HesapPanel({
     [flatItems]
   );
 
+  // Virtual selection key: orderId__itemId__subIndex
+  // Aynı kalemden birden fazla qty varsa her sanal satır kendi key'iyle seçilir.
+  const flatItemKey = (fi: FlatItem) =>
+    `${fi.orderId}__${fi.item.id}__${fi.subIndex}`;
+
   const selectedFlatItems = useMemo(
-    () =>
-      selectableItems.filter((fi) =>
-        selectedItems.has(`${fi.orderId}__${fi.item.id}`)
-      ),
+    () => selectableItems.filter((fi) => selectedItems.has(flatItemKey(fi))),
     [selectableItems, selectedItems]
   );
 
@@ -209,10 +224,50 @@ export function HesapPanel({
 
   const isPartialMode = selectedItems.size > 0;
 
+  // ============================================================
+  // ROLLUP: virtual seçimi parent kalem'lere göre grupla
+  // Her parent kalem için: kaç sanal satır seçildi, toplam qty ne kadar
+  // ============================================================
+  type ItemRollup = {
+    orderId: string;
+    itemId: string;
+    selectedQty: number;     // bu parent'tan kaç sanal satır seçildi
+    totalQty: number;        // parent kalem'in tam qty'si
+    isPartial: boolean;      // selectedQty < totalQty mi
+    flatItem: FlatItem;      // herhangi bir sanal satırın referansı
+  };
+  const itemRollups: ItemRollup[] = useMemo(() => {
+    const map = new Map<string, ItemRollup>();
+    selectedFlatItems.forEach((fi) => {
+      const k = `${fi.orderId}__${fi.item.id}`;
+      const existing = map.get(k);
+      if (existing) {
+        existing.selectedQty += 1;
+      } else {
+        map.set(k, {
+          orderId: fi.orderId,
+          itemId: fi.item.id,
+          selectedQty: 1,
+          totalQty: fi.parentQuantity,
+          isPartial: false, // hesap aşağıda
+          flatItem: fi,
+        });
+      }
+    });
+    // isPartial flag set
+    map.forEach((r) => {
+      r.isPartial = r.selectedQty < r.totalQty;
+    });
+    return Array.from(map.values());
+  }, [selectedFlatItems]);
+
+  // Herhangi bir parent kalem'den kısmi seçim varsa ödeme akışları engellenir
+  // (server takePartialPayment qty bölme desteklemiyor — para tutarsızlığı olmasın)
+  const hasPartialRollup = itemRollups.some((r) => r.isPartial);
+
   // Selection helpers
-  const toggleItem = (orderId: string, itemId: string) => {
+  const toggleItem = (key: string) => {
     setSelectedItems((prev) => {
-      const key = `${orderId}__${itemId}`;
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
@@ -223,9 +278,7 @@ export function HesapPanel({
     if (selectedItems.size === selectableItems.length) {
       setSelectedItems(new Set());
     } else {
-      setSelectedItems(
-        new Set(selectableItems.map((fi) => `${fi.orderId}__${fi.item.id}`))
-      );
+      setSelectedItems(new Set(selectableItems.map(flatItemKey)));
     }
   };
   const clearSelection = () => setSelectedItems(new Set());
@@ -310,6 +363,14 @@ export function HesapPanel({
   const handlePaySelected = useCallback(async () => {
     if (selectedFlatItems.length === 0) return;
 
+    // Kısmi parent seçimi varsa → ödeme yapma (server qty bölme desteklemiyor)
+    if (hasPartialRollup) {
+      toast.error(
+        'Aynı kalemden tüm adetleri seç (ya da önce ikram/iptal ile ayır)'
+      );
+      return;
+    }
+
     if (paymentMethod === 'on_account') {
       setOnAccountModalOpen(true);
       return;
@@ -317,7 +378,7 @@ export function HesapPanel({
 
     const ok = await confirmDialog({
       title: 'Seçili kalemleri öde?',
-      body: `${fmt(payableAmount)} tutarında ${selectedFlatItems.length} kalem. Yöntem: ${methodLabel(paymentMethod)}.${discount ? ` İndirim: ${fmt(discountAmount)}` : ''}`,
+      body: `${fmt(payableAmount)} tutarında ${itemRollups.length} kalem. Yöntem: ${methodLabel(paymentMethod)}.${discount ? ` İndirim: ${fmt(discountAmount)}` : ''}`,
       confirmLabel: 'Ayır ve Öde',
       cancelLabel: 'Vazgeç',
     });
@@ -325,7 +386,8 @@ export function HesapPanel({
 
     setSubmitting(true);
 
-    const itemIds = selectedFlatItems.map((fi) => fi.item.id);
+    // Virtual seçimi parent kalem id'lerine rollup et (her itemId tek kez)
+    const itemIds = itemRollups.map((r) => r.itemId);
     const splitR = await splitItemsFromMultipleOrders({
       itemIds,
       targetTableId: quickSale ? null : tableId,
@@ -358,6 +420,8 @@ export function HesapPanel({
     onChanged();
   }, [
     selectedFlatItems,
+    itemRollups,
+    hasPartialRollup,
     payableAmount,
     discountAmount,
     discount,
@@ -373,38 +437,67 @@ export function HesapPanel({
   // ============================================================
   const handleGiftSelected = useCallback(async () => {
     if (selectedFlatItems.length === 0) return;
+    if (itemRollups.length === 0) return;
+
+    // Kalem sayısı = rollup sayısı (her parent 1 satır olarak sayılır)
+    const totalLineCount = itemRollups.length;
+    const totalGiftQty = itemRollups.reduce((s, r) => s + r.selectedQty, 0);
+
     const ok = await confirmDialog({
       title: 'Seçili kalemleri ikram?',
-      body: `${selectedFlatItems.length} kalem ikram edilecek.`,
+      body:
+        totalGiftQty === totalLineCount
+          ? `${totalLineCount} kalem ikram edilecek.`
+          : `${totalGiftQty} adet ikram edilecek (${totalLineCount} kalemden).`,
       confirmLabel: 'İkram Et',
       cancelLabel: 'Vazgeç',
     });
     if (!ok) return;
 
-    const grouped = new Map<string, string[]>();
-    selectedFlatItems.forEach((fi) => {
-      if (!grouped.has(fi.orderId)) grouped.set(fi.orderId, []);
-      grouped.get(fi.orderId)!.push(fi.item.id);
-    });
-
     let allOk = true;
-    for (const [oid, ids] of grouped.entries()) {
-      const r = await makeItemsComplimentary({
-        orderId: oid,
-        itemIds: ids,
-        reason: 'Toplu ikram',
-      });
-      if (!r.success) {
-        allOk = false;
-        toast.error(r.error || 'İkram hatası');
+    let processedQty = 0;
+
+    for (const rollup of itemRollups) {
+      if (rollup.isPartial) {
+        // Kısmi: server'a partialQty ile çağır → otomatik bölme
+        const r = await makeItemsComplimentary({
+          orderId: rollup.orderId,
+          itemIds: [rollup.itemId],
+          reason: 'Toplu ikram',
+          partialQty: rollup.selectedQty,
+        });
+        if (!r.success) {
+          allOk = false;
+          toast.error(r.error || 'İkram hatası');
+        } else {
+          processedQty += rollup.selectedQty;
+        }
+      } else {
+        // Tüm qty seçili: normal akış (partialQty yok)
+        const r = await makeItemsComplimentary({
+          orderId: rollup.orderId,
+          itemIds: [rollup.itemId],
+          reason: 'Toplu ikram',
+        });
+        if (!r.success) {
+          allOk = false;
+          toast.error(r.error || 'İkram hatası');
+        } else {
+          processedQty += rollup.selectedQty;
+        }
       }
     }
+
     if (allOk) {
-      toast.success(`${selectedFlatItems.length} kalem ikram edildi`);
+      toast.success(
+        processedQty === totalLineCount
+          ? `${totalLineCount} kalem ikram edildi`
+          : `${processedQty} adet ikram edildi`
+      );
     }
     clearSelection();
     onChanged();
-  }, [selectedFlatItems, onChanged]);
+  }, [selectedFlatItems, itemRollups, onChanged]);
 
   // ============================================================
   // İPTAL
@@ -412,20 +505,51 @@ export function HesapPanel({
   const handleCancelSelected = useCallback(
     async (reason: string) => {
       if (selectedFlatItems.length === 0) return;
+      if (itemRollups.length === 0) return;
       setSubmitting(true);
-      const itemIds = selectedFlatItems.map((fi) => fi.item.id);
-      const r = await cancelOrderItems({ itemIds, reason });
+
+      let allOk = true;
+      let cancelledQtyTotal = 0;
+
+      for (const rollup of itemRollups) {
+        if (rollup.isPartial) {
+          // Kısmi: server'a partialQty ile çağır → otomatik bölme
+          const r = await cancelOrderItems({
+            itemIds: [rollup.itemId],
+            reason,
+            partialQty: rollup.selectedQty,
+          });
+          if (!r.success) {
+            allOk = false;
+            toast.error(r.error || 'İptal başarısız');
+          } else {
+            cancelledQtyTotal += r.cancelledCount || rollup.selectedQty;
+          }
+        } else {
+          // Tüm qty seçili: normal akış
+          const r = await cancelOrderItems({
+            itemIds: [rollup.itemId],
+            reason,
+          });
+          if (!r.success) {
+            allOk = false;
+            toast.error(r.error || 'İptal başarısız');
+          } else {
+            cancelledQtyTotal += r.cancelledCount || rollup.selectedQty;
+          }
+        }
+      }
+
       setSubmitting(false);
       setCancelModalOpen(false);
-      if (!r.success) {
-        toast.error(r.error || 'İptal başarısız');
-        return;
+
+      if (allOk) {
+        toast.success(`${cancelledQtyTotal} kalem iptal edildi`);
       }
-      toast.success(`${r.cancelledCount} kalem iptal edildi`);
       clearSelection();
       onChanged();
     },
-    [selectedFlatItems, onChanged]
+    [selectedFlatItems, itemRollups, onChanged]
   );
 
   // ============================================================
@@ -433,14 +557,21 @@ export function HesapPanel({
   // ============================================================
   const handleOnAccount = useCallback(
     async (customer: { id: string; name: string }, note: string) => {
+      // Kısmi parent seçimi varsa engel
+      if (isPartialMode && hasPartialRollup) {
+        toast.error(
+          'Aynı kalemden tüm adetleri seç (ya da önce ikram/iptal ile ayır)'
+        );
+        return;
+      }
       setSubmitting(true);
       let allOk = true;
       const failures: string[] = [];
 
       // Tüm masa veya seçili kısım?
       if (isPartialMode) {
-        // Önce kalemleri ayır
-        const itemIds = selectedFlatItems.map((fi) => fi.item.id);
+        // Virtual seçimi parent kalem id'lerine rollup et
+        const itemIds = itemRollups.map((r) => r.itemId);
         const splitR = await splitItemsFromMultipleOrders({
           itemIds,
           targetTableId: quickSale ? null : tableId,
@@ -494,7 +625,9 @@ export function HesapPanel({
     },
     [
       isPartialMode,
+      hasPartialRollup,
       selectedFlatItems,
+      itemRollups,
       unpaidOrders,
       tableId,
       cashierId,
@@ -510,6 +643,15 @@ export function HesapPanel({
   const handlePartialPayment = useCallback(
     async (entries: PartialEntry[]) => {
       if (entries.length === 0) return;
+
+      // Kısmi parent seçimi varsa engel — para tutarsızlığı olmasın
+      if (isPartialMode && hasPartialRollup) {
+        toast.error(
+          'Aynı kalemden tüm adetleri seç (ya da önce ikram/iptal ile ayır)'
+        );
+        return;
+      }
+
       const totalEntered = entries.reduce((s, e) => s + e.amount, 0);
       if (Math.abs(totalEntered - payableAmount) > 0.01) {
         toast.error(
@@ -525,8 +667,8 @@ export function HesapPanel({
       // Önce ödeme yapılacak siparişi belirle
       let targetOrderId: string;
       if (isPartialMode) {
-        // Önce kalemleri ayır
-        const itemIds = selectedFlatItems.map((fi) => fi.item.id);
+        // Virtual seçimi parent kalem id'lerine rollup et
+        const itemIds = itemRollups.map((r) => r.itemId);
         const splitR = await splitItemsFromMultipleOrders({
           itemIds,
           targetTableId: quickSale ? null : tableId,
@@ -617,7 +759,9 @@ export function HesapPanel({
     },
     [
       isPartialMode,
+      hasPartialRollup,
       selectedFlatItems,
+      itemRollups,
       unpaidOrders,
       payableAmount,
       discountAmount,
@@ -836,9 +980,28 @@ export function HesapPanel({
                     }
                   />
                   {selectedItems.size === 0
-                    ? `${selectableItems.length} kalem`
-                    : `${selectedItems.size} seçili`}
+                    ? `${selectableItems.length} adet`
+                    : `${selectedItems.size}/${selectableItems.length} seçili`}
                 </button>
+                {hasPartialRollup && (
+                  <span
+                    className="uppercase"
+                    style={{
+                      fontFamily: 'var(--f-mono)',
+                      fontSize: 9,
+                      fontWeight: 700,
+                      letterSpacing: '0.12em',
+                      color: 'var(--gold)',
+                      padding: '2px 6px',
+                      borderRadius: 3,
+                      background:
+                        'color-mix(in srgb, var(--gold) 14%, transparent)',
+                    }}
+                    title="Aynı kalemden kısmi seçim — ödeme akışları kapalı, sadece ikram/iptal yapılabilir"
+                  >
+                    ⚠ KISMİ SEÇİM
+                  </span>
+                )}
                 {selectedItems.size > 0 && (
                   <button
                     onClick={clearSelection}
@@ -880,7 +1043,7 @@ export function HesapPanel({
               ) : (
                 <div className="space-y-1.5">
                   {flatItems.map((fi) => {
-                    const key = `${fi.orderId}__${fi.item.id}`;
+                    const key = flatItemKey(fi);
                     const isSelected = selectedItems.has(key);
                     const isPaid = fi.orderPaymentStatus === 'paid';
                     return (
@@ -891,9 +1054,7 @@ export function HesapPanel({
                         isPaid={isPaid}
                         isComplimentary={fi.item.is_complimentary}
                         onToggle={
-                          isPaid
-                            ? undefined
-                            : () => toggleItem(fi.orderId, fi.item.id)
+                          isPaid ? undefined : () => toggleItem(key)
                         }
                       />
                     );
@@ -965,7 +1126,11 @@ export function HesapPanel({
                 }}
               >
                 {isPartialMode
-                  ? `SEÇİLİ ÖDEME · ${selectedFlatItems.length} KALEM`
+                  ? `SEÇİLİ ÖDEME · ${itemRollups.length} KALEM${
+                      selectedFlatItems.length !== itemRollups.length
+                        ? ` · ${selectedFlatItems.length} ADET`
+                        : ''
+                    }`
                   : 'TÜM MASA ÖDEMESİ'}
               </div>
 
@@ -1114,7 +1279,16 @@ export function HesapPanel({
                 </button>
                 <button
                   onClick={() => setPartialModalOpen(true)}
-                  disabled={submitting || paymentMethod === 'on_account'}
+                  disabled={
+                    submitting ||
+                    paymentMethod === 'on_account' ||
+                    (isPartialMode && hasPartialRollup)
+                  }
+                  title={
+                    isPartialMode && hasPartialRollup
+                      ? 'Aynı kalemden tüm adetleri seç (ya da önce ikram/iptal yap)'
+                      : undefined
+                  }
                   className="h-10 rounded-[8px] text-xs transition-all hover:opacity-90 active:scale-[0.97] disabled:opacity-40"
                   style={{
                     background: 'var(--paper)',
@@ -1397,7 +1571,21 @@ function FlatItemRow({
               textDecoration: isCancelled ? 'line-through' : 'none',
             }}
           >
-            {item.quantity}× {item.product_name}
+            1× {item.product_name}
+            {flatItem.parentQuantity > 1 && (
+              <span
+                style={{
+                  marginLeft: 6,
+                  fontSize: 10,
+                  fontFamily: 'var(--f-mono)',
+                  fontWeight: 700,
+                  color: 'var(--ink-3)',
+                  letterSpacing: '0.06em',
+                }}
+              >
+                #{flatItem.subIndex + 1}/{flatItem.parentQuantity}
+              </span>
+            )}
           </span>
           <span
             className="uppercase"
@@ -1471,7 +1659,7 @@ function FlatItemRow({
             opacity: isComplimentary || isCancelled ? 0.5 : 1,
           }}
         >
-          {fmt(item.unit_price * item.quantity)}
+          {fmt(Number(item.unit_price))}
         </span>
       </div>
     </div>

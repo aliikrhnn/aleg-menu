@@ -1,70 +1,146 @@
-═══════════════════════════════════════════════════════════
-  ALEG · KASA HESAP-PANEL TAM EKRAN
+═══════════════════════════════════════════════════════════════
+  ALEG · KASA HESAP-PANEL V2
+  TAM EKRAN + KALEM ADET BAZLI İKRAM/İPTAL
   2 Mayıs 2026
-═══════════════════════════════════════════════════════════
+═══════════════════════════════════════════════════════════════
 
-✱ NE DEĞİŞTİ
-─────────────
+⚠ ÖNEMLİ: BU PAKET 2 FEATURE BİRLİKTE İÇERİR
+─────────────────────────────────────────────
+  1. Hesap-panel TAM EKRAN modu (önceki paket)
+  2. 2x/3x kalemlerde her adet AYRI seçilip ikram/iptal (yeni)
+
+İki feature aynı dosyaya (hesap-panel.tsx) işlendiği için
+tek pakette geliyor. Önceki "aleg-hesap-tam-ekran" paketini
+push ettiysen de etmediysen de bunu pushlaman güvenli — her şey
+en son hâliyle gelecek.
+
+═══════════════════════════════════════════════════════════════
+
+✱ NE DEĞİŞTİ — FEATURE 1: TAM EKRAN
+────────────────────────────────────
 Kasada "Hesap Al" tıklanınca açılan modal artık TAM EKRAN.
-Sağ taraftaki menü (ürün ekle) paneli çok daha geniş.
-Geniş ekranda ürün gridi 3-4 sütuna çıkıyor (önceden hep 2 sabitti).
+Sağ menü (ürün ekle) çok daha geniş, geniş ekranda 3-4 sütun.
+
+✱ NE DEĞİŞTİ — FEATURE 2: ADET BAZLI İKRAM/İPTAL
+─────────────────────────────────────────────────
+Önceden "2× Ice Latte" tek satırdı, ikram/iptal hep tüm grubu
+işliyordu. Şimdi her adet ayrı satır olarak gözüküyor:
+
+    ☐ 1× Ice Latte #1/2          ₺95
+    ☐ 1× Ice Latte #2/2          ₺95
+
+Kullanıcı 1'ini seçip ikram, diğerini iptal edebilir.
+Veya 1'ini ikram, kalan 1'i normal ödeyebilir.
+
+⚠ Para tutarsızlığı olmaması için: aynı kalemden KISMİ seçim
+varken (ör. 2'den sadece 1) → "Seçili Öde" / "Parçalı" / "Açık
+Hesap" butonları kapalı kalıyor. Üstte "⚠ KISMİ SEÇİM" altın
+badge'i çıkıyor. Önce ikram/iptal ile ayır, sonra öde.
 
 ✱ DOSYALAR (2 adet)
 ───────────────────
   components/order/hesap-panel.tsx
   components/order/menu-picker.tsx
 
-✱ DEĞİŞİKLİK DETAYI
-───────────────────
-hesap-panel.tsx:
-  1. Modal wrapper: max-w-[1400px] → max-w-none + height calc(100vh - 0.5rem)
-  2. Outer padding: p-2/sm:p-4 → p-1/sm:p-2 (kenardan minimum)
-  3. Sol kalemler: flex-1 → lg:w-[480px] xl:w-[560px] (max sabit)
-  4. Sağ menü: lg:w-[380px] sabit → lg:flex-1 (kalan tüm alan)
+✱ DEĞİŞİKLİK ÖZETİ
+──────────────────
+hesap-panel.tsx — TAM EKRAN:
+  • Modal: max-w-[1400px] → max-w-none + height calc(100vh - 0.5rem)
+  • Outer padding: p-2 sm:p-4 → p-1 sm:p-2
+  • Sol kalemler: flex-1 → lg:w-[480px] xl:w-[560px]
+  • Sağ menü: lg:w-[380px] sabit → lg:flex-1
+
+hesap-panel.tsx — ADET BAZLI:
+  • FlatItem tipi: subIndex + parentQuantity alanları
+  • flatItems: her item quantity adet sanal alt-satıra bölünüyor
+  • Selection key: orderId__itemId__subIndex (sanal key)
+  • itemRollups helper: virtual seçim → parent kaleme rollup
+  • hasPartialRollup flag: kısmi seçim → ödeme akışları kapalı
+  • İkram (handleGiftSelected): rollup + partialQty server desteği
+  • İptal (handleCancelSelected): rollup + partialQty server desteği
+  • Ödeme (Seçili / Parçalı / Açık Hesap): kısmi seçim → toast uyarı
+  • UI: "2× Item" → "1× Item #1/2" gösterimi
+  • Header: "1/4 seçili" + kısmi seçim badge
 
 menu-picker.tsx:
-  5. Ürün gridi: grid-cols-2 → grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4
+  • Ürün gridi: grid-cols-2 → grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4
 
-NOT: Ödeme/sipariş mantığına HİÇ dokunulmadı — sadece layout/className.
-Bölme ödeme, indirim, parçalı, açık hesap akışları aynen çalışır.
+NOT: Server tarafına HİÇ DOKUNULMADI. makeItemsComplimentary ve
+cancelOrderItems action'ları zaten partialQty parametresini
+destekliyordu, sadece UI kullanmıyordu. Şimdi kullanıyor.
 
 ✱ NPM KURULUM
 ─────────────
 GEREKMİYOR. Yeni dependency yok, package.json değişmedi.
 
-✱ TEST AKIŞI (canlı push öncesi mutlaka)
+✱ TEST AKIŞI (canlı push öncesi MUTLAKA)
 ────────────────────────────────────────
 1. demo.alegstudio.com/kasa aç
-2. Aktif masa seç → "Hesap Al" tıkla
-3. ✓ Modal tam ekran açılmalı
-4. ✓ Sağ menü geniş olmalı, sol kalemler kompakt
-5. ✓ xl ekranda (≥1280px) → 3 sütun ürün
-6. ✓ 2xl ekranda (≥1536px) → 4 sütun ürün
-7. ✓ Mobile'da değişiklik olmamalı (alt tab bar aynı)
+2. Aktif masa seç, üzerinde 2x ya da 3x'li bir ürün varsa daha iyi
+   (ör. 2× Ice Latte = ₺190)
+3. "Hesap Al" tıkla
 
-Akış testleri (kritik):
-  ✓ Tüm masayı öde · nakit
-  ✓ Tüm masayı öde · kart
-  ✓ İndirim uygula → öde
-  ✓ Parçalı ödeme (split) — bölme bug fix ile
-  ✓ Açık hesap (cari)
-  ✓ Sağdan ürün ekle → masaya gitti mi
-  ✓ ESC ile modal kapanır mı
+GÖRSEL:
+  ✓ Modal tam ekran açılmalı
+  ✓ Sağ menü geniş (xl:3 sütun, 2xl:4 sütun)
+  ✓ Sol kalem listesi: 2× Ice Latte yerine 2 ayrı satır:
+      ☐ 1× Ice Latte #1/2  ₺95
+      ☐ 1× Ice Latte #2/2  ₺95
+
+ADET BAZLI İKRAM TESTİ:
+  4. 2x'lik kalemden SADECE 1 adet seç (1 satır)
+  5. Üstte "1/X seçili" + sağında "⚠ KISMİ SEÇİM" badge'i çıksın
+  6. ★ İKRAM tıkla → "1 adet ikram edilecek" diyalog
+  7. Onayla → server otomatik kalemi böler:
+      • 1 adet is_complimentary=true
+      • 1 adet normal kalır
+  8. Liste yenilenmeli, görünüm:
+      ☐ 1× Ice Latte (★ İKRAM rozeti, üstü çizik ₺95)
+      ☐ 1× Ice Latte                          ₺95
+
+ADET BAZLI İPTAL TESTİ:
+  9. Aynı şekilde 2x'lik kalemden 1 adet seç
+  10. ⊘ İPTAL → sebep gir → server kalemi 1+1'e böler, 1'i cancel
+  11. Liste:
+      • İPTAL rozetli, üstü çizik 1 satır
+      • Normal kalan 1 satır
+
+ÖDEME GUARDLARI:
+  12. 2x'lik kalemden 1 adet seç (kısmi)
+  13. SEÇİLİ ÖDE tıkla → toast: "Aynı kalemden tüm adetleri seç..."
+  14. Parçalı butonu DİSABLED (tooltip uyarısı)
+  15. Aynı kalemin 2 adetini de seç (toggleAll ile veya tek tek)
+  16. Kısmi badge kaybolmalı, ödeme butonları açılmalı
+
+REGRESYON (eski akışlar):
+  ✓ 1x'lik kalem ikram (parent qty=1, "ikram" → tüm kalem)
+  ✓ Tüm masayı öde (nakit/kart) — değişmedi
+  ✓ İndirim uygula — değişmedi
+  ✓ Bölme/parçalı ödeme (tüm adetler seçili) — çalışmalı
+  ✓ Mobile'da görünüm: tab bar aynı, kalemler aynı şekilde
+  ✓ Hızlı satış modu — virtual expansion da çalışmalı
 
 ✱ PUSH (Windows PowerShell)
 ───────────────────────────
-Daha kolay yol:
+Önerilen (en kolay):
 
   git add .
   git status
-  git commit -m "feat(kasa): hesap-panel tam ekran + sağ menü genişletildi"
+  git commit -m "feat(kasa): hesap-panel tam ekran + adet bazlı ikram/iptal"
   git push
 
-VEYA dosyaları tek tek:
+Veya tek tek:
 
   git add components/order/hesap-panel.tsx components/order/menu-picker.tsx
   git status
-  git commit -m "feat(kasa): hesap-panel tam ekran + sağ menü genişletildi"
+  git commit -m "feat(kasa): hesap-panel tam ekran + adet bazlı ikram/iptal"
   git push
 
-═══════════════════════════════════════════════════════════
+✱ ROLLBACK PLANI (gerekirse)
+────────────────────────────
+git revert HEAD
+git push
+
+İki feature aynı commit'te olduğu için tek revert yeter.
+
+═══════════════════════════════════════════════════════════════
