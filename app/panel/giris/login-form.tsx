@@ -41,10 +41,11 @@ export function LoginForm() {
     setError(null);
 
     const supabase = createClient();
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    const { data: signInData, error: signInError } =
+      await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
     if (signInError) {
       setError('E-posta veya şifre hatalı.');
@@ -61,11 +62,18 @@ export function LoginForm() {
       }
     }
 
+    // İlk login: geçici şifre değiştirme zorunlu
+    // (Middleware ve panel layout'ta da check var — bu en hızlı yol)
+    const mustChange =
+      signInData?.user?.user_metadata?.must_change_password === true;
+
     // Subdomain kontrolü
     const hostname = window.location.hostname;
     const isSubdomain = hostname.startsWith('panel.');
 
-    if (isSubdomain) {
+    if (mustChange) {
+      router.push(isSubdomain ? '/sifre-degistir' : '/panel/sifre-degistir');
+    } else if (isSubdomain) {
       router.push('/');
     } else {
       router.push('/panel');

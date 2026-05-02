@@ -1,69 +1,62 @@
 ═══════════════════════════════════════════════════════════════
-  ALEG · GEÇİCİ ŞİFRE KOPYALAMA-UYUMLU
-  + Önceki paketlerin push durumu kontrolü
+  ALEG · ZORLA ŞİFRE DEĞİŞTİRME REDIRECT FİX
+  3 katmanlı belt-and-braces koruma
   2 Mayıs 2026
 ═══════════════════════════════════════════════════════════════
 
-⚠ ÖNCE DURUM TESPİTİ
-────────────────────
-ramazan@aleg.com hesabı için DB'de must_change_password=true var
-ama panel girişinden sonra /sifre-degistir'e yönlendirme olmadı.
-Bu büyük olasılıkla:
-
-  → Önceki "aleg-sifre-degistir.zip" paketi henüz push edilmemiş.
-
-10 SANİYE TEST:
-  Tarayıcıda direkt aç → https://panel.alegstudio.com/sifre-degistir
-
-  ┌─────────────────────────────────────────────────────────┐
-  │ 404 hatası:    Sayfayı oluşturan paket push edilmemiş   │
-  │                → "aleg-sifre-degistir.zip" push'la       │
-  │                                                          │
-  │ Sayfa açıldı:  Sayfa var ama redirect çalışmıyor         │
-  │                → ekran görüntüsü atla, ben bakarım       │
-  └─────────────────────────────────────────────────────────┘
-
-═══════════════════════════════════════════════════════════════
-
-✱ BU PAKETİN ASIL İŞİ
-──────────────────────
-generateTempPassword fonksiyonu sadeleştirildi.
-
-ÖNCE:
-  12 karakter = 8 alfanumerik + 2 sembol (!@#$%) + 2 rakam
-  Karıştırılıyor.
-  PROBLEMLER:
-   - Türkçe klavyede @, #, $ AltGr gerektiriyor
-   - URL'de encode oluyor
-   - Bazı font'larda ! ↔ l, $ ↔ S karışıyor
-
-SONRA:
-  14 karakter, sadece alfanumerik (büyük + küçük + rakam)
-  Kafa karıştıran karakterler (0/O, 1/l/I) zaten yoktu, kaldı.
-  TÜM KARAKTERLER tek tuşla yazılır, kopyalama %100 sağlam.
-
-  Örnek: "K7mPxR3qJaS4nW"  — temiz, hatasız.
-
-  Güvenlik: 56^14 ≈ 7×10^24 kombinasyon. bcrypt hashing zaten var.
-  Mevcut sembollü 12 karakterden bir tık daha güvenli aslında.
-
-✱ DOSYA (1 adet)
+⚠ NEDEN BU PAKET
 ─────────────────
-  lib/actions/businesses.ts
+ramazan@aleg.com hesabıyla login olunca /sifre-degistir'e
+yönlendirme çalışmadı. Sayfa kendi başına açılıyor (push'lu)
+ama otomatik yönlendirme tetiklenmedi. Muhtemel sebepler:
 
-NOT: Bu dosya önceki üç paketin (sifre-degistir, isletme-sil,
-ve şimdi temppass) tüm değişikliklerini içeriyor:
-  ✓ must_change_password=true metadata (createBusiness)
-  ✓ deleteBusiness rewrite (preflight + audit + multi-tenant)
-  ✓ getDeleteBusinessPreflight + writeAuditLog helpers
-  ✓ generateTempPassword sadeleştirildi
+  • (shell)/layout.tsx push edilmemiş olabilir (PowerShell'de
+    'app/panel/(shell)/...' tırnak unutulduysa git add atlar)
+  • Cookie'deki user metadata güncel değil
+  • Server component cache
 
-Eğer sifre-degistir paketini ya da isletme-sil paketini hiç
-push etmediysen, bu dosya hepsini birden taşıyor.
+ÇÖZÜM: 3 katmanlı redirect — hangi katman push'lansa çalışır.
 
-ANCAK: o paketlerin DİĞER dosyaları (sifre-degistir page/form/
-layout, panel shell layout, business-detail-client) bu pakette
-YOK. Onlar için ilgili zip'leri ayrıca push'la.
+✱ 3 KATMAN
+───────────
+Katman 1 — Login form (client, en hızlı):
+  Login butonu basıldığında, supabase'den dönen user_metadata
+  kontrol edilir. must_change_password=true ise direkt
+  /sifre-degistir'e router.push olur. Kullanıcı /panel'i
+  hiç görmez.
+
+Katman 2 — Middleware (her request, EN GÜÇLÜ):
+  Her request'te supabase.auth.getUser() ile metadata kontrol.
+  Cookie'leri her seferinde tazeler, cache yok. Eğer kullanıcı
+  /sifre-degistir dışında bir yere gitmeye çalışırsa zorla
+  oraya yönlendirir.
+
+Katman 3 — Panel (shell) layout (server component, yedek):
+  Önceki paketten gelen kontrol. Layout zaten doğruydu, bu
+  pakete dahil ettim ki push'lanmamışsa burada da gelir.
+
+✱ DOSYALAR (3 adet)
+───────────────────
+  middleware.ts                            Katman 2 (yeni check)
+  app/panel/giris/login-form.tsx           Katman 1 (yeni redirect)
+  app/panel/(shell)/layout.tsx             Katman 3 (yedek olarak)
+
+✱ DEĞİŞİKLİK DETAYI
+───────────────────
+middleware.ts (PANEL AUTH CHECK bloğu, ~satır 156):
+  + getUser sonrası: must_change_password kontrolü
+  + true ise + /sifre-degistir dışındaysa → redirect
+
+app/panel/giris/login-form.tsx (handleSubmit):
+  + signInWithPassword'dan data dönüşü alındı
+  + signInData.user.user_metadata.must_change_password kontrol
+  + true ise router.push('/sifre-degistir' veya '/panel/sifre-degistir')
+  + false ise eski akış (/ veya /panel)
+
+app/panel/(shell)/layout.tsx:
+  Önceki "aleg-sifre-degistir" paketindeki must_change check
+  buradaydı zaten. Bu pakete dahil ettim ki PowerShell parantez
+  sorunu yüzünden push'lanmadıysa şimdi gelsin.
 
 ✱ NPM KURULUM
 ─────────────
@@ -72,34 +65,48 @@ GEREKMİYOR.
 ✱ TEST
 ──────
 1. Bu paketi push'la
-2. ramazan@aleg.com'u sil (admin panelden veya DB'den manuel)
-3. Yeni bir test kafe oluştur:
-   - admin.alegstudio.com → Yeni İşletme
-   - Ad: "Sade Şifre Test"
-   - vs.
-4. Success ekranında geçici şifre artık sadece harf+rakam
-   olmalı, sembol YOK.
-5. Şifreyi kopyala → panel'e yapıştır → giriş başarılı olmalı.
+2. ramazan@aleg.com hesabını sil (zaten şifresini değiştirmiş
+   olabilirsin — fark etmez, must_change_password=false zaten)
+3. Yeni test kafe oluştur: admin → Yeni İşletme
+4. Geçici şifreyi al, panel.alegstudio.com'a gir
+5. ✓ BEKLENEN: Login butonu basar basmaz /sifre-degistir'e
+   gitmeli (Katman 1 hemen tetiklenir)
+6. Adres çubuğuna /panel yaz, dene → middleware ZORLA
+   /sifre-degistir'e geri atmalı (Katman 2)
+7. Şifreyi belirle → /panel'e yönlendir
+8. Tekrar çıkış + yeni şifreyle giriş → /panel'e direkt gitmeli
+   (must_change artık false)
+
+REGRESYON:
+  ✓ Eski hesaplar (must_change yok) etkilenmez, normal akış
+  ✓ Süper admin paneli /admin etkilenmez (panel subdomain değil)
+  ✓ Müşteri menüsü cafem.alegstudio.com etkilenmez
 
 ✱ PUSH (Windows PowerShell)
 ───────────────────────────
-  git add lib/actions/businesses.ts
-  git status
-  git commit -m "feat: temp password sade alfanumerik (kopyalama-uyumlu)"
+ÖNEMLİ: Parantezli path'ler için TEK TIRNAK ZORUNLU.
+
+KOLAY YOL (önerilen):
+  git add .
+  git status               # 3 dosya değişiklik onay
+  git commit -m "fix(panel): zorla sifre degistir redirect (3 katman)"
   git push
+
+VEYA tek tek:
+  git add middleware.ts
+  git add app/panel/giris/login-form.tsx
+  git add 'app/panel/(shell)/layout.tsx'      # ← TEK TIRNAK ZORUNLU
+  git status
+  git commit -m "fix(panel): zorla sifre degistir redirect (3 katman)"
+  git push
+
+⚠ EĞER 'git add app/panel/(shell)/layout.tsx' ÇIPLAK YAZARSAN:
+PowerShell (shell) kısmını sub-expression olarak parse eder ve
+hata verir VEYA yanlış path eklenir. ALWAYS tek tırnak.
 
 ✱ ROLLBACK
 ──────────
 git revert HEAD
 git push
-
-═══════════════════════════════════════════════════════════════
-
-ÖZET — sıralama önerim:
-  1. https://panel.alegstudio.com/sifre-degistir aç → 404 mu kontrol
-  2. 404 ise: "aleg-sifre-degistir.zip" push'la
-  3. Sonra bu paketi push'la
-  4. Yeni kafe oluştur → sade şifre + zorla yönlendirme akışı
-     birlikte test et
 
 ═══════════════════════════════════════════════════════════════

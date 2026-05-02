@@ -162,6 +162,18 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(loginUrl);
     }
 
+    // İlk login: geçici şifre değiştirme zorunlu
+    // (createBusiness yeni kafe için must_change_password=true atıyor)
+    // Sifre-degistir sayfasının kendisi exclude edilir, çıkış yap için /api de.
+    if (
+      user.user_metadata?.must_change_password === true &&
+      !rewrittenPath.startsWith('/panel/sifre-degistir') &&
+      !url.pathname.startsWith('/sifre-degistir')
+    ) {
+      const url2 = new URL('/sifre-degistir', request.url);
+      return NextResponse.redirect(url2);
+    }
+
     // Business member mi kontrol et
     const { data: membership } = await supabase
       .from('business_members')
