@@ -1,46 +1,47 @@
-ALEG VARDİYA — BUILD HOTFIX
-==============================
-
-SORUN
-======
-Pre-push hook'ta build hatası:
-  "Server actions must be async functions"
-  
-SEBEP
-======
-'use server' dosyalarda SADECE async fonksiyonlar export edilebilir
-(Next.js kuralı). lib/actions/staff.ts içinde:
-  - export const ROLE_COLORS  ❌ (sabit, async değil)
-  - export function getRoleColor()  ❌ (senkron fonksiyon)
-
-TYPE export'ları sorun değil (compile'da silinir) ama runtime
-const/function export'u hata veriyor.
-
+ALEG SPRINT 4 — VARDİYA Paket 3/4 (Haftalık Vardiya Tablosu)
+================================================================
 
 YAPILDI
 ========
 
-[1] lib/staff-constants.ts (YENİ)
-   'use server' yok → her şey export edilebilir
-   • StaffRole, ShiftTemplateKey, ShiftCellValue tip'leri
-   • ROLE_COLORS, ROLE_LABELS, ROLE_KEYS sabitleri
-   • SHIFT_COLORS, SHIFT_LABELS sabitleri
-   • getRoleColor() helper
+[1] app/panel/(shell)/vardiya/page.tsx (üzerine)
+   • Server component artık staff + shift_templates ikisini birlikte çeker
+   • Promise.all ile paralel yükleme
+   • Sonuçları VardiyaManager'a geçirir
 
-[2] lib/actions/staff.ts (üzerine)
-   • Sabit ve helper KALDIRILDI
-   • lib/staff-constants'tan import edip type re-export
+[2] app/panel/(shell)/vardiya/vardiya-manager.tsx (YENİ)
+   Tab parent component:
+   • Header (eyebrow + büyük başlık + alt metin)
+   • "Yeni Personel" butonu (sadece Personeller tab'ında)
+   • Tab seçici: [Personeller (N)] [Haftalık Vardiya]
+   • Vardiya tab'ı LAZY yükler — ilk açılışta getWeeklyShifts çağrısı
+   • staff state parent'ta, alt componentlere prop olarak akıyor
 
-[3] lib/actions/shifts.ts (üzerine)
-   • Type'lar lib/staff-constants'tan re-export
-   • Sadece async fonksiyonlar kaldı (zaten öyleydi, temizlik için)
+[3] app/panel/(shell)/vardiya/staff-list.tsx (üzerine)
+   • Header BU dosyadan kaldırıldı (parent'ta artık)
+   • createOpen state parent'tan kontrol ediliyor (prop)
+   • onChange callback parent'ı bilgilendirir
 
-[4] app/panel/(shell)/vardiya/staff-list.tsx (üzerine)
-   • Import iki kaynaktan:
-     - lib/actions/staff: server actions (async)
-     - lib/staff-constants: getRoleColor + sabit'ler
-   • Component içindeki duplicate ROLE_LABELS/ROLES kaldırıldı,
-     constants'tan kullanıyor
+[4] app/panel/(shell)/vardiya/shifts-grid.tsx (YENİ)
+   Haftalık vardiya tablosu:
+   
+   • Hafta navigasyonu: ‹ Bu Hafta › butonları + tarih gösterici
+   • Vardiya saat template editör:
+     - Sabah / Öğle / Akşam başlangıç-bitiş input'ları
+     - Her template için anlık saat hesabı (örn. 6h)
+     - Sağda toplam haftalık saat (büyük italic, koyu kart)
+     - Blur olunca otomatik kaydet
+   
+   • 7 gün × N personel matriks:
+     - Her hücre tıklanabilir → off → morning → mid → evening döngü
+     - Optimistic update (anında UI değişir, arka planda kaydet)
+     - Hata olursa rollback + toast
+     - Hücrede vardiya etiketi + saat aralığı
+     - Personel başına haftalık toplam (sağ sütun)
+     - Renk kodlu (sabah:sarı, öğle:kırmızı, akşam:yeşil, izin:gri)
+   
+   • Renk açıklaması altta
+   • Boş durum: "Önce personel ekle" CTA
 
 
 PAKET DEĞİŞMİYOR (npm install GEREKMEZ)
@@ -49,28 +50,62 @@ PAKET DEĞİŞMİYOR (npm install GEREKMEZ)
 KURULUM
 ========
 
-4 dosya (1 yeni + 3 üzerine):
-  lib/staff-constants.ts                      (YENİ)
-  lib/actions/staff.ts                        (üzerine)
-  lib/actions/shifts.ts                       (üzerine)
-  app/panel/(shell)/vardiya/staff-list.tsx    (üzerine)
+4 dosya (3 yeni, 1 üzerine):
+  app/panel/(shell)/vardiya/page.tsx              (üzerine)
+  app/panel/(shell)/vardiya/vardiya-manager.tsx   (YENİ)
+  app/panel/(shell)/vardiya/staff-list.tsx        (üzerine)
+  app/panel/(shell)/vardiya/shifts-grid.tsx       (YENİ)
 
 
 PUSH (PowerShell)
 ==================
 
+EN KOLAY:
   git add .
-  git commit -m "fix: vardiya server actions - sabit'leri lib/staff-constants'a tasi"
+  git commit -m "feat: vardiya haftalik tablo + sablonlar (sprint 4 paket 3)"
   git push origin main
 
 
 TEST
 =====
 
-[A] BUILD GEÇİYOR MU:
-    npm run build  → ✓ Compiled successfully
-    pre-push hook artık geçer
+[A] PERSONELLER TAB:
+    1. panel.alegstudio.com/vardiya
+    2. ✅ Header altında [Personeller (N)] [Haftalık Vardiya] tab'ları
+    3. ✅ Personeller seçili gelir, mevcut UI çalışır
 
-[B] PERSONEL EKRANI:
-    panel.alegstudio.com/vardiya → aynı şekilde çalışmalı
-    (sadece refactor, davranış değişmedi)
+[B] HAFTALIK VARDİYA TAB:
+    1. "Haftalık Vardiya" tab'ına geç
+    2. ✅ Üst kısımda hafta navigasyonu + bu haftanın tarihi
+    3. ✅ Vardiya Saatleri kartı: sabah 08-14, öğle 12-18, akşam 16-23
+    4. ✅ Sağda kara kart: Haftalık Toplam (0h ilk başta)
+    5. ✅ Tablo: aktif personellerin satırları + 7 gün sütunları
+
+[C] HÜCRE TIKLAMA:
+    1. Bir hücreye tıkla (örn. Pazartesi)
+    2. ✅ İzinli → Sabah olur, kart sarı renge döner, "08:00–14:00" görünür
+    3. Tekrar tıkla → Öğle, sonra Akşam, sonra İzinli
+    4. ✅ Sağ sütunda toplam saat artıp azalır
+    5. ✅ Üstteki Haftalık Toplam da değişir
+
+[D] ŞABLON DEĞİŞTİR:
+    1. Sabah başlangıcı 09:00 yap, kutudan dış'a tıkla
+    2. ✅ Saat hesabı 6h → 5h olur
+    3. ✅ Tüm "Sabah" hücrelerinde "09:00-14:00" görünür
+    4. Sayfayı yenile → değişiklik kalıcı
+
+[E] HAFTA NAVIGASYON:
+    1. › butonu sonraki haftaya geçer
+    2. ‹ butonu önceki haftaya
+    3. "Bu Hafta" şu anki pazartesi'ye
+    4. ✅ Her geçişte vardiyalar yeniden yüklenir
+
+[F] BOŞ DURUM:
+    1. Tüm aktif personeli pasifleştir
+    2. ✅ Vardiya tab'ı "Önce personel ekle" CTA'sı gösterir
+
+
+SONRAKI
+========
+
+Paket 4: PDF export + Sidebar 'Vardiya' menüsü entegrasyonu

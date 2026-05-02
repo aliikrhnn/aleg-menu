@@ -1,5 +1,6 @@
 'use client';
 
+import * as React from 'react';
 import { useState, useTransition } from 'react';
 import { useEscapeKey } from '@/lib/hooks/use-escape-key';
 import { confirmDialog } from '@/components/ui/confirm-dialog';
@@ -21,20 +22,37 @@ import {
 
 type Props = {
   initialStaff: Staff[];
-  error: string | null;
+  // VardiyaManager bunu kontrol ediyor (tab geçişlerinde "yeni" butonu da o tarafta)
+  createOpen: boolean;
+  setCreateOpen: (v: boolean) => void;
+  // Reload - parent'a yeni veriyi bildirmek için
+  onChange: () => void;
 };
 
 // ============================================================
 // MAIN
 // ============================================================
-export function StaffList({ initialStaff, error: initialError }: Props) {
+export function StaffList({
+  initialStaff,
+  createOpen,
+  setCreateOpen,
+  onChange,
+}: Props) {
   const [staff, setStaff] = useState<Staff[]>(initialStaff);
-  const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<Staff | null>(null);
+
+  // Parent'tan gelen yeni veri varsa state güncelle
+  // (örn. başka bir tab'dan eklenirse)
+  React.useEffect(() => {
+    setStaff(initialStaff);
+  }, [initialStaff]);
 
   const reload = async () => {
     const r = await listStaff(true);
-    if (r.success && r.staff) setStaff(r.staff);
+    if (r.success && r.staff) {
+      setStaff(r.staff);
+      onChange();
+    }
   };
 
   const activeStaff = staff.filter((s) => s.active);
@@ -42,83 +60,6 @@ export function StaffList({ initialStaff, error: initialError }: Props) {
 
   return (
     <div>
-      {/* Başlık */}
-      <div className="flex items-start justify-between gap-4 mb-6 flex-wrap">
-        <div>
-          <div
-            className="uppercase mb-2 flex items-center gap-3"
-            style={{
-              fontFamily: 'var(--f-mono)',
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: '0.16em',
-              color: 'var(--accent)',
-            }}
-          >
-            <span
-              style={{
-                width: 24,
-                height: 1,
-                background: 'var(--accent)',
-                display: 'inline-block',
-              }}
-            />
-            EKİP · VARDİYA
-          </div>
-          <h1
-            style={{
-              fontFamily: 'var(--f-serif)',
-              fontSize: 'clamp(32px, 4vw, 44px)',
-              fontWeight: 700,
-              letterSpacing: '-0.03em',
-              lineHeight: 1.02,
-              color: 'var(--ink)',
-            }}
-          >
-            Personel{' '}
-            <span
-              style={{ fontStyle: 'italic', fontWeight: 400, color: 'var(--accent)' }}
-            >
-              ve vardiya.
-            </span>
-          </h1>
-          <p
-            className="text-sm mt-2"
-            style={{ color: 'var(--ink-2)', maxWidth: 540 }}
-          >
-            Çalışanlarını ekle, rollerini ata, saatlik ücretlerini gir. Vardiya
-            planlamasını tablodan yapabilirsin.
-          </p>
-        </div>
-
-        <button
-          onClick={() => setCreateOpen(true)}
-          className="group h-11 px-5 rounded-[10px] font-semibold text-sm flex items-center gap-2 transition-all hover:opacity-95 active:scale-[0.99]"
-          style={{
-            background: 'var(--accent)',
-            color: '#FAF5EA',
-            boxShadow:
-              '0 1px 2px rgba(196,85,58,0.2), 0 4px 12px -4px rgba(196,85,58,0.3)',
-          }}
-        >
-          <span>+</span>
-          <span>Yeni Personel</span>
-        </button>
-      </div>
-
-      {initialError && (
-        <div
-          className="mb-4 p-3 rounded-[10px] text-sm"
-          style={{
-            background: 'color-mix(in srgb, var(--danger) 8%, var(--card))',
-            border: '1px solid color-mix(in srgb, var(--danger) 25%, var(--line))',
-            color: 'var(--danger)',
-          }}
-        >
-          {initialError}
-        </div>
-      )}
-
       {/* AKTİF PERSONEL */}
       {activeStaff.length === 0 ? (
         <EmptyState onAdd={() => setCreateOpen(true)} />
