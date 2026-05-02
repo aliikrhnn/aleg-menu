@@ -19,6 +19,11 @@ import {
   updateBusinessPlan,
   type BusinessDetail,
 } from '@/lib/actions/admin-businesses';
+import {
+  deleteBusiness,
+  getDeleteBusinessPreflight,
+  type DeleteBusinessPreflight,
+} from '@/lib/actions/businesses';
 
 type Plan = {
   id: string;
@@ -954,21 +959,341 @@ function TabAyarlar({
         </div>
       </Card>
 
-      <Card title="Tehlikeli Bölge">
-        <div
-          className="p-4 rounded-[var(--r-sm)]"
-          style={{
-            background: 'color-mix(in oklab, var(--danger) 5%, transparent)',
-            border: '1px solid color-mix(in oklab, var(--danger) 30%, transparent)',
-          }}
-        >
-          <Eyebrow tone="danger">DİKKAT</Eyebrow>
-          <div className="text-sm mt-2 text-ink-2">
-            İşletme silme işlemi henüz aktif değil. İhtiyaç olunca eklenecek.
-            Şimdilik askıya alıp <code className="text-xs bg-paper-3 px-1 rounded">cancelled</code> durumuna getirebilirsiniz.
-          </div>
+      <DangerZoneSection b={b} />
+    </div>
+  );
+}
+
+// ============================================================
+// DANGER ZONE — kalıcı işletme silme
+// ============================================================
+function DangerZoneSection({ b }: { b: BusinessDetail }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [preflight, setPreflight] =
+    useState<DeleteBusinessPreflight | null>(null);
+  const [loadingPreflight, setLoadingPreflight] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [forceMode, setForceMode] = useState(false);
+  const [blockedBy, setBlockedBy] = useState<{
+    open_orders?: number;
+    open_cash_session?: boolean;
+    on_account_balance?: number;
+  } | null>(null);
+
+  async function startDelete() {
+    setError(null);
+    setBlockedBy(null);
+    setForceMode(false);
+    setConfirmText('');
+    setOpen(true);
+    setLoadingPreflight(true);
+    const r = await getDeleteBusinessPreflight(b.id);
+    setLoadingPreflight(false);
+    if (!r.success || !r.data) {
+      setError(r.error || 'Önkontrol başarısız');
+      return;
+    }
+    setPreflight(r.data);
+  }
+
+  async function confirmDelete() {
+    if (!preflight) return;
+    if (confirmText !== preflight.business_name) {
+      setError(`Onaylamak için adı tam yaz: "${preflight.business_name}"`);
+      return;
+    }
+    setDeleting(true);
+    setError(null);
+    const r = await deleteBusiness(b.id, { force: forceMode });
+    setDeleting(false);
+
+    if (r.success) {
+      router.push('/admin/isletmeler');
+      return;
+    }
+
+    if (r.blockedBy) {
+      // Risk var — force toggle göster
+      setBlockedBy(r.blockedBy);
+      return;
+    }
+
+    setError(r.error || 'Silme başarısız');
+  }
+
+  function reset() {
+    setOpen(false);
+    setPreflight(null);
+    setConfirmText('');
+    setError(null);
+    setBlockedBy(null);
+    setForceMode(false);
+  }
+
+  return (
+    <Card title="Tehlikeli Bölge">
+      <div
+        className="p-4 rounded-[var(--r-sm)]"
+        style={{
+          background: 'color-mix(in oklab, var(--danger) 5%, transparent)',
+          border:
+            '1px solid color-mix(in oklab, var(--danger) 30%, transparent)',
+        }}
+      >
+        <Eyebrow tone="danger">İŞLETMEYİ SİL</Eyebrow>
+        <div className="text-sm mt-2 text-ink-2 mb-3">
+          İşletmeyi <strong className="text-ink">kalıcı olarak</strong> sil.
+          Tüm ürünler, masalar, siparişler, üyeler, kasa kayıtları ve cari
+          hesaplar silinir.{' '}
+          <strong className="text-danger">Geri alınamaz.</strong>
         </div>
-      </Card>
+
+        {!open ? (
+          <button
+            onClick={startDelete}
+            className="h-10 px-4 rounded-[var(--r-sm)] text-sm font-semibold transition-all hover:opacity-90"
+            style={{
+              background: 'transparent',
+              color: 'var(--danger)',
+              border: '1.5px solid var(--danger)',
+              fontFamily: 'var(--f-mono)',
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+            }}
+          >
+            İşletmeyi Sil
+          </button>
+        ) : (
+          <div
+            className="mt-3 p-4 rounded-[var(--r-sm)]"
+            style={{
+              background: 'var(--card)',
+              border: '1px solid var(--line)',
+            }}
+          >
+            {/* Preflight loading */}
+            {loadingPreflight && (
+              <div className="text-sm text-ink-3">Kontrol ediliyor…</div>
+            )}
+
+            {/* Preflight bilgileri */}
+            {preflight && !loadingPreflight && (
+              <>
+                <div
+                  className="uppercase mb-3"
+                  style={{
+                    fontFamily: 'var(--f-mono)',
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: '0.14em',
+                    color: 'var(--ink-3)',
+                  }}
+                >
+                  SİLİNECEK VERİ
+                </div>
+                <div className="grid grid-cols-2 gap-2 mb-4 text-sm">
+                  <Stat label="Üye" value={preflight.total_members} />
+                  <Stat label="Ürün" value={preflight.total_products} />
+                  <Stat label="Toplam sipariş" value={preflight.total_orders} />
+                  <Stat
+                    label="Cari bakiye"
+                    value={`₺${preflight.on_account_balance.toFixed(2)}`}
+                    tone={
+                      preflight.on_account_balance > 0 ? 'warn' : 'muted'
+                    }
+                  />
+                </div>
+
+                {/* Risk uyarıları */}
+                {(preflight.open_orders > 0 ||
+                  preflight.open_cash_session ||
+                  preflight.on_account_balance > 0 ||
+                  blockedBy) && (
+                  <div
+                    className="p-3 rounded-[var(--r-sm)] mb-4"
+                    style={{
+                      background:
+                        'color-mix(in oklab, var(--warn) 8%, transparent)',
+                      border:
+                        '1px solid color-mix(in oklab, var(--warn) 35%, transparent)',
+                    }}
+                  >
+                    <Eyebrow tone="warn">⚠ DİKKAT — RİSK VAR</Eyebrow>
+                    <ul className="text-sm text-ink-2 mt-2 space-y-1 list-disc list-inside">
+                      {preflight.open_orders > 0 && (
+                        <li>
+                          <strong>{preflight.open_orders}</strong> ödenmemiş
+                          aktif sipariş var
+                        </li>
+                      )}
+                      {preflight.open_cash_session && (
+                        <li>Açık kasa oturumu var (kapatılmamış)</li>
+                      )}
+                      {preflight.on_account_balance > 0 && (
+                        <li>
+                          <strong>
+                            ₺{preflight.on_account_balance.toFixed(2)}
+                          </strong>{' '}
+                          cari bakiye var (tahsil edilmemiş)
+                        </li>
+                      )}
+                    </ul>
+                    <label className="flex items-center gap-2 mt-3 text-sm cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={forceMode}
+                        onChange={(e) => setForceMode(e.target.checked)}
+                        className="cursor-pointer"
+                      />
+                      <span className="text-ink-2">
+                        Riskleri biliyorum, yine de sil
+                      </span>
+                    </label>
+                  </div>
+                )}
+
+                {/* Ad yazma onayı */}
+                <div className="mb-3">
+                  <div
+                    className="uppercase mb-1.5"
+                    style={{
+                      fontFamily: 'var(--f-mono)',
+                      fontSize: 10,
+                      fontWeight: 700,
+                      letterSpacing: '0.14em',
+                      color: 'var(--ink-3)',
+                    }}
+                  >
+                    ONAYLAMAK İÇİN ADI YAZ
+                  </div>
+                  <input
+                    type="text"
+                    value={confirmText}
+                    onChange={(e) => setConfirmText(e.target.value)}
+                    placeholder={preflight.business_name}
+                    autoFocus
+                    className="w-full h-11 px-3 rounded-[var(--r-sm)] text-sm outline-none"
+                    style={{
+                      background: 'var(--paper)',
+                      border: `1px solid ${
+                        confirmText && confirmText !== preflight.business_name
+                          ? 'var(--warn)'
+                          : 'var(--line)'
+                      }`,
+                      fontFamily: 'var(--f-mono)',
+                    }}
+                  />
+                </div>
+
+                {/* Hata */}
+                {error && (
+                  <div
+                    className="text-sm mb-3 px-3 py-2 rounded-[var(--r-sm)]"
+                    style={{
+                      background:
+                        'color-mix(in srgb, var(--danger) 10%, transparent)',
+                      color: 'var(--danger)',
+                      border:
+                        '1px solid color-mix(in srgb, var(--danger) 30%, var(--line))',
+                    }}
+                  >
+                    {error}
+                  </div>
+                )}
+
+                {/* Butonlar */}
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={reset}
+                    disabled={deleting}
+                    className="h-10 px-4 rounded-[var(--r-sm)] text-ink-2 text-sm font-medium hover:bg-paper-2 disabled:opacity-50"
+                  >
+                    Vazgeç
+                  </button>
+                  <button
+                    onClick={confirmDelete}
+                    disabled={
+                      deleting ||
+                      confirmText !== preflight.business_name ||
+                      (!!blockedBy && !forceMode) ||
+                      ((preflight.open_orders > 0 ||
+                        preflight.open_cash_session ||
+                        preflight.on_account_balance > 0) &&
+                        !forceMode)
+                    }
+                    className="h-10 px-4 rounded-[var(--r-sm)] text-card text-sm font-semibold transition-all hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
+                    style={{
+                      background: 'var(--danger)',
+                      fontFamily: 'var(--f-mono)',
+                      letterSpacing: '0.06em',
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    {deleting ? 'Siliniyor…' : 'Kalıcı Sil'}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* Preflight gelmedi (hata) */}
+            {error && !preflight && !loadingPreflight && (
+              <>
+                <div className="text-sm text-danger mb-3">{error}</div>
+                <button
+                  onClick={reset}
+                  className="h-10 px-4 rounded-[var(--r-sm)] border border-line text-ink-2 text-sm font-medium"
+                >
+                  Kapat
+                </button>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+function Stat({
+  label,
+  value,
+  tone = 'muted',
+}: {
+  label: string;
+  value: string | number;
+  tone?: 'muted' | 'warn';
+}) {
+  return (
+    <div
+      className="px-3 py-2 rounded-[var(--r-sm)]"
+      style={{ background: 'var(--paper-2)' }}
+    >
+      <div
+        className="uppercase"
+        style={{
+          fontFamily: 'var(--f-mono)',
+          fontSize: 9,
+          fontWeight: 700,
+          letterSpacing: '0.12em',
+          color: 'var(--ink-3)',
+        }}
+      >
+        {label}
+      </div>
+      <div
+        className="mt-1"
+        style={{
+          fontFamily: 'var(--f-mono)',
+          fontSize: 16,
+          fontWeight: 700,
+          color: tone === 'warn' ? 'var(--warn)' : 'var(--ink)',
+        }}
+      >
+        {value}
+      </div>
     </div>
   );
 }
