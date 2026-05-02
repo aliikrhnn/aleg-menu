@@ -517,27 +517,15 @@ export async function updateBusinessStatus(
 // ============================================================
 
 function generateTempPassword(): string {
-  // 12 karakter, büyük/küçük harf + rakam + sembol
-  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-  const symbols = '!@#$%';
+  // 14 karakter, sadece alfanumerik. Kafa karıştıran karakterler (0/O, 1/l/I)
+  // zaten yok. Sembol YOK çünkü Türkçe klavyede AltGr gerektiriyor + URL'de
+  // encode oluyor + farklı font'larda bazıları karışıyor (! vs l, $ vs S).
+  // 14 alfanumerik: 56^14 ≈ 7×10^24 kombinasyon — bcrypt ile yeterli güvenlik.
+  const chars =
+    'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
   let password = '';
-
-  // 8 normal karakter
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 14; i++) {
     password += chars[Math.floor(Math.random() * chars.length)];
   }
-  // 2 sembol
-  for (let i = 0; i < 2; i++) {
-    password += symbols[Math.floor(Math.random() * symbols.length)];
-  }
-  // 2 rakam daha (sayısal güç için)
-  for (let i = 0; i < 2; i++) {
-    password += Math.floor(Math.random() * 10);
-  }
-
-  // Karıştır
-  return password
-    .split('')
-    .sort(() => Math.random() - 0.5)
-    .join('');
+  return password;
 }

@@ -1,180 +1,105 @@
 ═══════════════════════════════════════════════════════════════
-  ALEG · ADMIN PANELİNDE İŞLETME SİLME
-  Preflight + audit log + multi-tenant safe
+  ALEG · GEÇİCİ ŞİFRE KOPYALAMA-UYUMLU
+  + Önceki paketlerin push durumu kontrolü
   2 Mayıs 2026
 ═══════════════════════════════════════════════════════════════
 
-✱ NE YAPILDI
-─────────────
-Süper admin panelinde işletme detay sayfası → Ayarlar tab'ında
-"Tehlikeli Bölge" bölümü AKTİFLEŞTİRİLDİ. Önceden placeholder
-("İşletme silme işlemi henüz aktif değil") vardı, şimdi gerçek
-silme akışı çalışıyor.
+⚠ ÖNCE DURUM TESPİTİ
+────────────────────
+ramazan@aleg.com hesabı için DB'de must_change_password=true var
+ama panel girişinden sonra /sifre-degistir'e yönlendirme olmadı.
+Bu büyük olasılıkla:
 
-✱ AKIŞ
-──────
-1. /admin/isletmeler/{id} → Ayarlar tab → "Tehlikeli Bölge"
-2. "İşletmeyi Sil" → preflight kontrol (anlık veri sayımı)
-3. Karşı ekranda görünen:
-   - Üye / Ürün / Toplam sipariş / Cari bakiye sayıları
-   - RİSK varsa altın uyarı kutusu (ödenmemiş sipariş, açık kasa,
-     pozitif cari bakiye)
-   - "Riskleri biliyorum, yine de sil" toggle
-   - "Onaylamak için adı yaz" inputu (tam eşleşme)
-4. Adı doğru yaz + onay → kalıcı silme
-5. CASCADE: tüm alt veriler (orders, products, members, vs.) silinir
-6. Sahibi başka işletmenin sahibi/üyesi DEĞİLSE auth user da silinir
-7. platform_audit_logs'a 'business.deleted' kaydı atılır
+  → Önceki "aleg-sifre-degistir.zip" paketi henüz push edilmemiş.
 
-✱ KORUMALAR
-────────────
-🛡 PREFLIGHT — kazara silmeyi önler:
-   - Ödenmemiş aktif sipariş varsa
-   - Açık kasa oturumu (kapatılmamış vardiya) varsa
-   - Cari bakiye pozitifse (tahsil edilmemiş para)
-   → Süper admin "Riskleri biliyorum" kutusunu işaretlemeden silemez
+10 SANİYE TEST:
+  Tarayıcıda direkt aç → https://panel.alegstudio.com/sifre-degistir
 
-🛡 AD YAZMA ONAYI — yanlış işletme silmeyi önler:
-   - İşletme adı tam yazılmadan "Kalıcı Sil" butonu disabled
-   - Case-sensitive (büyük/küçük harf önemli)
+  ┌─────────────────────────────────────────────────────────┐
+  │ 404 hatası:    Sayfayı oluşturan paket push edilmemiş   │
+  │                → "aleg-sifre-degistir.zip" push'la       │
+  │                                                          │
+  │ Sayfa açıldı:  Sayfa var ama redirect çalışmıyor         │
+  │                → ekran görüntüsü atla, ben bakarım       │
+  └─────────────────────────────────────────────────────────┘
 
-🛡 MULTI-TENANT SAFE — sahibi başka kafelerin de sahibi/üyesi ise
-   auth user'ı SİLMEZ:
-   - Mesela aynı kişi 2 kafenin sahibi → birini silersen
-     diğerine girişi devam eder
-   - businesses tablosunda owner_user_id veya
-     business_members'ta user_id kontrolü yapılır
+═══════════════════════════════════════════════════════════════
 
-🛡 AUDIT LOG — silme işlemi platform_audit_logs'a yazılır:
-   - actor_id (kim sildi), actor_email
-   - target_type='business', target_id (silindi ama UUID kalır),
-     target_label (işletme adı snapshot)
-   - meta: { slug, product_count, total_order_count, forced,
-            auth_user_deleted, owner_user_id }
-   - tone='danger'
-   - business_id null çünkü silindi (ON DELETE SET NULL'a düşmesin)
+✱ BU PAKETİN ASIL İŞİ
+──────────────────────
+generateTempPassword fonksiyonu sadeleştirildi.
 
-✱ DOSYALAR (2 adet)
-───────────────────
-  lib/actions/businesses.ts             deleteBusiness rewrite + preflight
-  components/admin/business-detail-client.tsx   DangerZoneSection eklendi
+ÖNCE:
+  12 karakter = 8 alfanumerik + 2 sembol (!@#$%) + 2 rakam
+  Karıştırılıyor.
+  PROBLEMLER:
+   - Türkçe klavyede @, #, $ AltGr gerektiriyor
+   - URL'de encode oluyor
+   - Bazı font'larda ! ↔ l, $ ↔ S karışıyor
 
-✱ DEĞİŞİKLİK DETAYI
-───────────────────
-lib/actions/businesses.ts:
-  + writeAuditLog helper (platform_audit_logs için)
-  + getDeleteBusinessPreflight action (yeni — preflight veri sayımı)
-  + DeleteBusinessPreflight type
-  ~ deleteBusiness rewrite:
-    - options.force parametresi eklendi
-    - Preflight kontrolü (force=false → blockedBy döner)
-    - Multi-tenant auth user check
-    - Audit log (başarılı + başarısız ayrı)
-  ~ requireSuperAdmin user.email döndürür artık (audit için)
+SONRA:
+  14 karakter, sadece alfanumerik (büyük + küçük + rakam)
+  Kafa karıştıran karakterler (0/O, 1/l/I) zaten yoktu, kaldı.
+  TÜM KARAKTERLER tek tuşla yazılır, kopyalama %100 sağlam.
 
-components/admin/business-detail-client.tsx:
-  + Import: deleteBusiness, getDeleteBusinessPreflight, type
-  + DangerZoneSection component (TabAyarlar içine yerleştirildi)
-  + Stat helper (ufak kart)
-  ~ TabAyarlar'daki placeholder kaldırıldı
+  Örnek: "K7mPxR3qJaS4nW"  — temiz, hatasız.
 
-NOT: components/admin/business-detail-client.tsx'in toplam satır
-sayısı ~1130 → ~1456'a çıktı. Artış sadece DangerZoneSection ve
-Stat helper'larından.
+  Güvenlik: 56^14 ≈ 7×10^24 kombinasyon. bcrypt hashing zaten var.
+  Mevcut sembollü 12 karakterden bir tık daha güvenli aslında.
+
+✱ DOSYA (1 adet)
+─────────────────
+  lib/actions/businesses.ts
+
+NOT: Bu dosya önceki üç paketin (sifre-degistir, isletme-sil,
+ve şimdi temppass) tüm değişikliklerini içeriyor:
+  ✓ must_change_password=true metadata (createBusiness)
+  ✓ deleteBusiness rewrite (preflight + audit + multi-tenant)
+  ✓ getDeleteBusinessPreflight + writeAuditLog helpers
+  ✓ generateTempPassword sadeleştirildi
+
+Eğer sifre-degistir paketini ya da isletme-sil paketini hiç
+push etmediysen, bu dosya hepsini birden taşıyor.
+
+ANCAK: o paketlerin DİĞER dosyaları (sifre-degistir page/form/
+layout, panel shell layout, business-detail-client) bu pakette
+YOK. Onlar için ilgili zip'leri ayrıca push'la.
 
 ✱ NPM KURULUM
 ─────────────
-GEREKMİYOR. Yeni dependency yok, package.json değişmedi.
+GEREKMİYOR.
 
-✱ MIGRATION
-─────────────
-GEREKMİYOR. platform_audit_logs tablosu zaten var
-(migrations/0030_admin_paket_1.sql'de tanımlı).
-DB'de ON DELETE CASCADE kuralları zaten kurulu (categories,
-products, orders, business_members, branches, vs.).
-
-✱ TEST AKIŞI
-────────────
-ÖNCE: Test için DENEME bir kafe oluştur (canlı kafelerden birini
-silmek istemezsin). Adı "Test Sil Kafe" gibi olsun.
-
-Senaryo 1 — Risksiz silme:
-  1. /admin/isletmeler → "Test Sil Kafe" detayına gir
-  2. Ayarlar tab → "Tehlikeli Bölge" kartı görünmeli
-  3. "İşletmeyi Sil" → preflight kart açılmalı
-  4. Veri sayıları: 0 üye/0 ürün/0 sipariş/₺0 (yeni kafe)
-  5. Risk uyarısı YOK çünkü hiç veri yok
-  6. Adı yaz "Test Sil Kafe" → "Kalıcı Sil" aktifleşir
-  7. Tıkla → /admin/isletmeler'e dön
-  8. ✓ Liste'den kayboldu mu kontrol et
-
-Senaryo 2 — Riskli silme (ÖNEMLİ):
-  1. demo.alegstudio.com'da bir masaya sipariş gir, ödeme YAPMA
-     (unpaid order yarattın)
-  2. /admin/isletmeler → demo kafe detayı → Ayarlar
-  3. "İşletmeyi Sil" → preflight'ta:
-     - Risk uyarısı görünmeli ("X ödenmemiş sipariş var")
-     - "Riskleri biliyorum" kutusu işaretsiz
-     - "Kalıcı Sil" DISABLED
-  4. Adı yaz, kutuyu işaretleme → buton hâlâ disabled
-  5. Kutuyu işaretle → buton aktif
-  6. ⚠ DEMO KAFEYİ SİLME (test bitti, vazgeç tıkla)
-  7. Sipariş ödemesini tamamla, masa boşalt → demo durumunu eski
-     haline getir
-
-Senaryo 3 — Audit kontrol:
-  1. Senaryo 1 ile bir test kafe sildikten sonra:
-  2. Supabase → Table Editor → platform_audit_logs
-  3. En üstte action='business.deleted' kaydı olmalı
-  4. target_label = "Test Sil Kafe"
-  5. meta.product_count, meta.auth_user_deleted alanları dolu
-
-REGRESYON:
-  ✓ Eski "askıya al" / "geri aç" / "iptal et" akışı aynen çalışır
-  ✓ Aktif kafelerin status değiştirme akışı bozulmadı
-  ✓ Yeni kafe oluşturma (createBusiness) etkilenmedi
-  ✓ Audit log yazımı opsiyonel — başarısız olursa silme akışı
-    devam eder
-
-✱ EDGE CASES İLE İLGİLİ NOT
-───────────────────────────
-• Sahibi 2 kafenin de sahibi:
-  → 1. kafeyi sildin → auth user silinmez (diğerine girişi var)
-  → 2. kafeyi de sildin → auth user silinir (artık hiçbir yere
-    bağlı değil)
-
-• Sahibi başka kafenin sadece üyesi (business_members):
-  → İşletme silinince auth user silinmez
-
-• Silme sırasında database hatası:
-  → audit log'a 'business.delete_failed' kaydı atılır,
-    error mesajı kullanıcıya gösterilir, business korunur
-
-• Subdomain (Vercel) silme YOK — manuel:
-  → Sildikten sonra Vercel dashboard'a git, Domains → ilgili
-    subdomain'i remove et (yoksa boş slug için 404 dönmeye devam eder)
+✱ TEST
+──────
+1. Bu paketi push'la
+2. ramazan@aleg.com'u sil (admin panelden veya DB'den manuel)
+3. Yeni bir test kafe oluştur:
+   - admin.alegstudio.com → Yeni İşletme
+   - Ad: "Sade Şifre Test"
+   - vs.
+4. Success ekranında geçici şifre artık sadece harf+rakam
+   olmalı, sembol YOK.
+5. Şifreyi kopyala → panel'e yapıştır → giriş başarılı olmalı.
 
 ✱ PUSH (Windows PowerShell)
 ───────────────────────────
-KOLAY YOL:
-  git add .
-  git status
-  git commit -m "feat(admin): isletme silme aktif (preflight+audit)"
-  git push
-
-VEYA tek tek (parantezli path → tek tırnak ZORUNLU):
   git add lib/actions/businesses.ts
-  git add components/admin/business-detail-client.tsx
   git status
-  git commit -m "feat(admin): isletme silme aktif (preflight+audit)"
+  git commit -m "feat: temp password sade alfanumerik (kopyalama-uyumlu)"
   git push
 
-✱ ROLLBACK PLANI
-────────────────
+✱ ROLLBACK
+──────────
 git revert HEAD
 git push
 
-Tek commit, temiz revert. Eski deleteBusiness davranışı geri gelir
-(ama o da kullanılmıyordu zaten — UI'a entegre değildi).
+═══════════════════════════════════════════════════════════════
+
+ÖZET — sıralama önerim:
+  1. https://panel.alegstudio.com/sifre-degistir aç → 404 mu kontrol
+  2. 404 ise: "aleg-sifre-degistir.zip" push'la
+  3. Sonra bu paketi push'la
+  4. Yeni kafe oluştur → sade şifre + zorla yönlendirme akışı
+     birlikte test et
 
 ═══════════════════════════════════════════════════════════════
