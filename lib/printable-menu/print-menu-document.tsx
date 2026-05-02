@@ -1970,7 +1970,7 @@ const BoldBadgeLayout = forwardRef<HTMLDivElement, LayoutVariantProps>(
       scale = 1,
       widthPx,
       heightPx,
-      socialQrs,
+      socialQrs: _socialQrs,
     },
     ref
   ) {
