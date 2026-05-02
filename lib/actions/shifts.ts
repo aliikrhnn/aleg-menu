@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { revalidatePath } from 'next/cache';
+import type { ShiftTemplateKey, ShiftCellValue } from '@/lib/staff-constants';
 
 // ============================================================
 // İzin kontrolü
@@ -27,11 +28,10 @@ async function requireBusinessAccess() {
 }
 
 // ============================================================
-// TYPES
+// TYPES (re-export — eski importlar bozulmasın)
 // ============================================================
 
-export type ShiftTemplateKey = 'morning' | 'mid' | 'evening';
-export type ShiftCellValue = ShiftTemplateKey | 'off';
+export type { ShiftTemplateKey, ShiftCellValue };
 
 export type ShiftTemplate = {
   template_key: ShiftTemplateKey;

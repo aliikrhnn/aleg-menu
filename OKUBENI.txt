@@ -1,51 +1,46 @@
-ALEG SPRINT 4 — VARDİYA Paket 2/4 (Personel listesi UI)
-==========================================================
+ALEG VARDİYA — BUILD HOTFIX
+==============================
 
-ÖNEMLİ — POWERSHELL UYARISI
-============================
-Klasör adında parantez var: app/panel/(shell)/vardiya/
-PowerShell'de bu komut PARSING HATASI verir:
-  git add app/panel/(shell)/vardiya/page.tsx        ❌ HATA
-
-DOĞRUSU — TEK TIRNAK içine al:
-  git add 'app/panel/(shell)/vardiya/page.tsx'      ✓
+SORUN
+======
+Pre-push hook'ta build hatası:
+  "Server actions must be async functions"
   
-VEYA daha kolayı: git add . kullan (tüm değişiklikler)
+SEBEP
+======
+'use server' dosyalarda SADECE async fonksiyonlar export edilebilir
+(Next.js kuralı). lib/actions/staff.ts içinde:
+  - export const ROLE_COLORS  ❌ (sabit, async değil)
+  - export function getRoleColor()  ❌ (senkron fonksiyon)
+
+TYPE export'ları sorun değil (compile'da silinir) ama runtime
+const/function export'u hata veriyor.
 
 
 YAPILDI
 ========
 
-[1] app/panel/(shell)/vardiya/page.tsx (YENİ)
-    Server component, listStaff(includeInactive=true) çağırır
-    StaffList component'ine veri geçirir
+[1] lib/staff-constants.ts (YENİ)
+   'use server' yok → her şey export edilebilir
+   • StaffRole, ShiftTemplateKey, ShiftCellValue tip'leri
+   • ROLE_COLORS, ROLE_LABELS, ROLE_KEYS sabitleri
+   • SHIFT_COLORS, SHIFT_LABELS sabitleri
+   • getRoleColor() helper
 
-[2] app/panel/(shell)/vardiya/staff-list.tsx (YENİ)
-    İnteraktif personel CRUD UI:
-    
-    • Header: "EKİP · VARDİYA" eyebrow + "Personel ve vardiya." başlığı
-    • "Yeni Personel" butonu (sağ üst, accent rengi)
-    • Aktif personel grid (3 kolon @ desktop, 2 @ tablet, 1 @ mobile)
-    • Pasif personel ayrı grid (opacity 60%)
-    • Empty state — hiç personel yoksa CTA göster
-    
-    Her personel kartında:
-    • Avatar (rol rengi + initial harfler) — manager kırmızı,
-      barista yeşil, server mavi, kitchen sarı
-    • Ad + rol etiketi (mono caps)
-    • Telefon (varsa)
-    • Saatlik ücret (varsa)
-    • [Düzenle] [Pasifle / Aktif Et] butonları
-    • Pasifte: [×] kalıcı sil butonu (sadece vardiyası yoksa)
-    
-    Modal:
-    • Yeni personel + düzenleme aynı modal (mode prop)
-    • Ad (zorunlu, min 2 karakter)
-    • Rol toggle (4 buton, seçilen renkli)
-    • Telefon (opsiyonel)
-    • Saatlik ücret (opsiyonel, 0-10.000 ₺)
-    • ESC ile kapanma
-    • Backdrop tıklama ile kapanma
+[2] lib/actions/staff.ts (üzerine)
+   • Sabit ve helper KALDIRILDI
+   • lib/staff-constants'tan import edip type re-export
+
+[3] lib/actions/shifts.ts (üzerine)
+   • Type'lar lib/staff-constants'tan re-export
+   • Sadece async fonksiyonlar kaldı (zaten öyleydi, temizlik için)
+
+[4] app/panel/(shell)/vardiya/staff-list.tsx (üzerine)
+   • Import iki kaynaktan:
+     - lib/actions/staff: server actions (async)
+     - lib/staff-constants: getRoleColor + sabit'ler
+   • Component içindeki duplicate ROLE_LABELS/ROLES kaldırıldı,
+     constants'tan kullanıyor
 
 
 PAKET DEĞİŞMİYOR (npm install GEREKMEZ)
@@ -54,63 +49,28 @@ PAKET DEĞİŞMİYOR (npm install GEREKMEZ)
 KURULUM
 ========
 
-2 yeni dosya:
-  app/panel/(shell)/vardiya/page.tsx
-  app/panel/(shell)/vardiya/staff-list.tsx
+4 dosya (1 yeni + 3 üzerine):
+  lib/staff-constants.ts                      (YENİ)
+  lib/actions/staff.ts                        (üzerine)
+  lib/actions/shifts.ts                       (üzerine)
+  app/panel/(shell)/vardiya/staff-list.tsx    (üzerine)
 
 
 PUSH (PowerShell)
 ==================
 
-EN KOLAY:
   git add .
-  git commit -m "feat: vardiya personel listesi UI (sprint 4 paket 2)"
-  git push origin main
-
-VEYA tek tek (parantezler için tek tırnak):
-  git add 'app/panel/(shell)/vardiya/page.tsx'
-  git add 'app/panel/(shell)/vardiya/staff-list.tsx'
-  git commit -m "feat: vardiya personel listesi UI (sprint 4 paket 2)"
+  git commit -m "fix: vardiya server actions - sabit'leri lib/staff-constants'a tasi"
   git push origin main
 
 
 TEST
 =====
 
-[A] SAYFA AÇILIYOR MU:
-    1. panel.alegstudio.com/vardiya  (sidebar'da menü yok henüz, URL'i elle yaz)
-    2. ✅ Sayfa yüklenmeli, "EKİP · VARDİYA" başlık görünmeli
-    3. ✅ Boş durum: "Henüz personel yok" + CTA buton
+[A] BUILD GEÇİYOR MU:
+    npm run build  → ✓ Compiled successfully
+    pre-push hook artık geçer
 
-[B] PERSONEL EKLE:
-    1. "+ Yeni Personel" tıkla
-    2. Modal açılır → Ada Yılmaz, Barista, 0555..., 120 yaz
-    3. "Ekle" → toast "Ada Yılmaz eklendi"
-    4. ✅ Aktif Personel · 1 başlığı altında kart görünür
-
-[C] DÜZENLE:
-    1. Personelin "Düzenle" butonu
-    2. Modal açılır, mevcut bilgiler dolu
-    3. Saatlik ücreti değiştir, "Kaydet"
-    4. ✅ Kart güncellenmeli
-
-[D] PASİFLE:
-    1. "Pasifle" → onay modali → Pasifle
-    2. ✅ Kart "Pasif Personel" başlığı altına geçer (opacity 60%)
-    3. Pasifte "Aktif Et" görünür
-
-[E] SİL:
-    1. Önce pasif yap
-    2. [×] kalıcı sil butonuna bas
-    3. ✅ Onay sonrası tamamen kaybolur
-    4. Eğer vardiyası varsa "Bu personelin vardiya kayıtları var" hatası çıkar
-
-[F] SIDEBAR'DA MENÜ YOK — Paket 4'te eklenecek
-    Şu an URL'i elle yazıp test ediyorsun.
-
-
-SONRAKİ
-========
-
-Paket 3: Haftalık vardiya tablosu (matriks + template editör)
-Paket 4: PDF export + Sidebar 'Vardiya' menüsü
+[B] PERSONEL EKRANI:
+    panel.alegstudio.com/vardiya → aynı şekilde çalışmalı
+    (sadece refactor, davranış değişmedi)

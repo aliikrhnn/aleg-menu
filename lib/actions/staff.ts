@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { revalidatePath } from 'next/cache';
+import { ROLE_COLORS, type StaffRole } from '@/lib/staff-constants';
 
 // ============================================================
 // İzin kontrolü
@@ -27,10 +28,10 @@ async function requireBusinessAccess() {
 }
 
 // ============================================================
-// TYPES
+// TYPES (re-export — eski importlar bozulmasın)
 // ============================================================
 
-export type StaffRole = 'manager' | 'barista' | 'server' | 'kitchen';
+export type { StaffRole };
 
 export type Staff = {
   id: string;
@@ -47,19 +48,6 @@ export type Staff = {
   active: boolean;
   created_at: string;
 };
-
-// Rol bazlı varsayılan renkler (Brutalist Spice paleti)
-const ROLE_COLORS: Record<StaffRole, string> = {
-  manager: '#C4553A',
-  barista: '#6B7A4B',
-  server: '#2E5B7A',
-  kitchen: '#B08A3E',
-};
-
-export function getRoleColor(role: StaffRole | null | undefined): string {
-  if (!role) return '#8C7A69';
-  return ROLE_COLORS[role] || '#8C7A69';
-}
 
 // ============================================================
 // LİSTE — Aktif personel listesi

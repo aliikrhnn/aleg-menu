@@ -10,24 +10,19 @@ import {
   deactivateStaff,
   deleteStaff,
   listStaff,
-  getRoleColor,
   type Staff,
-  type StaffRole,
 } from '@/lib/actions/staff';
+import {
+  getRoleColor,
+  ROLE_LABELS,
+  ROLE_KEYS,
+  type StaffRole,
+} from '@/lib/staff-constants';
 
 type Props = {
   initialStaff: Staff[];
   error: string | null;
 };
-
-const ROLE_LABELS: Record<StaffRole, string> = {
-  manager: 'Müdür',
-  barista: 'Barista',
-  server: 'Garson',
-  kitchen: 'Mutfak',
-};
-
-const ROLES: StaffRole[] = ['manager', 'barista', 'server', 'kitchen'];
 
 // ============================================================
 // MAIN
@@ -624,7 +619,7 @@ function StaffModal({
         <div className="mb-4">
           <FieldLabel>Rol *</FieldLabel>
           <div className="grid grid-cols-2 gap-2">
-            {ROLES.map((r) => (
+            {ROLE_KEYS.map((r) => (
               <button
                 key={r}
                 type="button"
