@@ -196,6 +196,120 @@ export function ShiftsGrid({
     }
   };
 
+  // PDF / yazdırma — yeni pencerede temalı HTML aç, kullanıcı Ctrl+P / Cmd+P ile PDF kaydeder
+  const exportPdf = () => {
+    const startDate = formatDate(weekDates[0]);
+    const endDate = formatDate(weekDates[6]);
+    const monthYear = new Date(weekDates[0] + 'T00:00:00Z').toLocaleDateString(
+      'tr-TR',
+      { month: 'long', year: 'numeric' }
+    );
+
+    const timeOf = (k: ShiftCellValue) =>
+      k === 'off' ? '—' : `${templates[k].starts_at}–${templates[k].ends_at}`;
+
+    const rows = activeStaff
+      .map((p) => {
+        const initials = p.name
+          .split(' ')
+          .map((s) => s[0])
+          .slice(0, 2)
+          .join('')
+          .toUpperCase();
+        const color = p.color || getRoleColor(p.role as StaffRole);
+        const cells = weekDates
+          .map((date) => {
+            const v: ShiftCellValue = shifts[p.id]?.[date] || 'off';
+            const bg = v === 'off' ? '#F2ECDD' : SHIFT_COLORS[v] + '22';
+            const dotColor = v === 'off' ? '#8A7A6D' : SHIFT_COLORS[v];
+            const txtColor = v === 'off' ? '#8A7A6D' : '#2A1F18';
+            return `<td style="padding:8px 6px;border:1px solid #E5DCC7;background:${bg};vertical-align:top">
+                      <div style="display:flex;align-items:center;gap:5px">
+                        <span style="width:6px;height:6px;border-radius:50%;background:${dotColor};display:inline-block"></span>
+                        <span style="font-size:11px;font-weight:600;color:${txtColor}">${SHIFT_LABELS[v]}</span>
+                      </div>
+                      <div style="font-size:9.5px;color:#8A7A6D;margin-top:2px;font-family:monospace">${timeOf(v)}</div>
+                    </td>`;
+          })
+          .join('');
+        return `<tr>
+          <td style="padding:10px 12px;border:1px solid #E5DCC7;vertical-align:middle">
+            <div style="display:flex;align-items:center;gap:10px">
+              <div style="width:32px;height:32px;border-radius:50%;background:${color};color:#FAF5EA;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;font-family:monospace;letter-spacing:0.04em">${initials}</div>
+              <div>
+                <div style="font-size:13px;font-weight:600;color:#2A1F18">${p.name}</div>
+                <div style="font-size:9.5px;color:#8A7A6D;font-family:monospace;text-transform:uppercase;letter-spacing:0.08em;margin-top:2px">${ROLE_LABELS[p.role as StaffRole] || p.role || '—'}</div>
+              </div>
+            </div>
+          </td>
+          ${cells}
+          <td style="padding:10px 12px;border:1px solid #E5DCC7;text-align:right;vertical-align:middle">
+            <div style="font-family:'Instrument Serif',Georgia,serif;font-style:italic;font-size:18px;color:#2A1F18">${totalForStaff(p.id)}<span style="font-size:11px;color:#8A7A6D">h</span></div>
+          </td>
+        </tr>`;
+      })
+      .join('');
+
+    const headers = ['Çalışan', ...DAY_LABELS, 'Saat']
+      .map(
+        (h) =>
+          `<th style="padding:10px 8px;border:1px solid #E5DCC7;background:#F2ECDD;font-size:10px;font-family:monospace;letter-spacing:0.12em;color:#8A7A6D;text-align:left;text-transform:uppercase;font-weight:700">${h}</th>`
+      )
+      .join('');
+
+    const html = `<!DOCTYPE html>
+<html lang="tr"><head>
+<meta charset="utf-8"/>
+<title>Vardiya Planı · ${startDate.date}-${endDate.date} ${monthYear}</title>
+<style>
+  @page { size: A4 landscape; margin: 14mm; }
+  body { font-family: 'Bricolage Grotesque', -apple-system, sans-serif; color:#2A1F18; background:#FAF5EA; margin:0; padding:24px; }
+  h1 { font-family:'Instrument Serif', Georgia, serif; font-size:32px; font-weight:400; margin:0 0 4px; letter-spacing:-0.02em }
+  h1 em { font-style:italic; color:#C4553A; font-weight:400 }
+  .eyebrow { font-family:monospace; font-size:10px; letter-spacing:0.16em; color:#C4553A; text-transform:uppercase; font-weight:700; margin-bottom:8px }
+  .sub { font-size:12px; color:#8A7A6D; font-family:monospace; margin-bottom:24px }
+  table { width:100%; border-collapse:collapse; margin-bottom:24px }
+  .footer { display:flex; justify-content:space-between; align-items:center; padding-top:16px; border-top:1px solid #E5DCC7; font-size:11px; color:#8A7A6D; font-family:monospace }
+  .total { font-family:'Instrument Serif',serif; font-style:italic; font-size:24px; color:#2A1F18 }
+  .legend { display:flex; gap:16px; flex-wrap:wrap; margin-bottom:16px; font-size:11px; color:#564439 }
+  .legend span.dot { width:10px; height:10px; border-radius:2px; display:inline-block; margin-right:5px; vertical-align:middle }
+  @media print { body { padding:0 } button { display:none } }
+</style></head>
+<body>
+  <div class="eyebrow"><span style="display:inline-block;width:24px;height:1px;background:#C4553A;vertical-align:middle;margin-right:8px"></span>VARDİYA PLANI</div>
+  <h1>Haftalık <em>vardiya.</em></h1>
+  <div class="sub">${startDate.date}—${endDate.date} ${monthYear}</div>
+
+  <div class="legend">
+    <span><span class="dot" style="background:#B08A3E"></span>Sabah ${timeOf('morning')}</span>
+    <span><span class="dot" style="background:#C4553A"></span>Öğle ${timeOf('mid')}</span>
+    <span><span class="dot" style="background:#6B7A4B"></span>Akşam ${timeOf('evening')}</span>
+    <span><span class="dot" style="background:#C5B79C;opacity:0.5"></span>İzinli</span>
+  </div>
+
+  <table>
+    <thead><tr>${headers}</tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+
+  <div class="footer">
+    <span>Aleg · alegstudio.com</span>
+    <span>HAFTALIK TOPLAM: <span class="total">${weeklyTotal}h</span> · ${activeStaff.length} kişi</span>
+  </div>
+
+  <button onclick="window.print()" style="position:fixed;bottom:20px;right:20px;background:#C4553A;color:#FAF5EA;padding:12px 20px;border:none;border-radius:10px;font-family:monospace;font-size:13px;letter-spacing:0.06em;text-transform:uppercase;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,0.15)">PDF olarak yazdır</button>
+  <script>setTimeout(()=>window.print(),300)</script>
+</body></html>`;
+
+    const w = window.open('', '_blank', 'width=1200,height=800');
+    if (!w) {
+      toast.error('Pop-up engellenmiş, izin ver');
+      return;
+    }
+    w.document.write(html);
+    w.document.close();
+  };
+
   // Boş durum
   if (activeStaff.length === 0) {
     return (
@@ -303,15 +417,32 @@ export function ShiftsGrid({
           </div>
         </div>
 
-        <div
-          className="text-xs"
-          style={{
-            color: 'var(--ink-3)',
-            fontFamily: 'var(--f-mono)',
-            letterSpacing: '0.04em',
-          }}
-        >
-          Hücreye tıklayarak vardiya türünü seç
+        <div className="flex items-center gap-3">
+          <div
+            className="text-xs hidden md:block"
+            style={{
+              color: 'var(--ink-3)',
+              fontFamily: 'var(--f-mono)',
+              letterSpacing: '0.04em',
+            }}
+          >
+            Hücreye tıklayarak vardiya türünü seç
+          </div>
+          <button
+            onClick={exportPdf}
+            className="h-9 px-3 rounded-[8px] text-xs font-semibold transition-all hover:opacity-90 flex items-center gap-1.5"
+            style={{
+              background: 'var(--ink)',
+              color: '#FAF5EA',
+              fontFamily: 'var(--f-mono)',
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+            }}
+            title="PDF olarak yazdır"
+          >
+            <span>↓</span>
+            <span>PDF</span>
+          </button>
         </div>
       </div>
 

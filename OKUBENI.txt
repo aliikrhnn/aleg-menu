@@ -1,47 +1,36 @@
-ALEG SPRINT 4 — VARDİYA Paket 3/4 (Haftalık Vardiya Tablosu)
-================================================================
+ALEG SPRINT 4 — VARDİYA Paket 4/4 (PDF + Sidebar)
+====================================================
+
+VARDİYA SİSTEMİ TAMAM 🎉
+==========================
+
 
 YAPILDI
 ========
 
-[1] app/panel/(shell)/vardiya/page.tsx (üzerine)
-   • Server component artık staff + shift_templates ikisini birlikte çeker
-   • Promise.all ile paralel yükleme
-   • Sonuçları VardiyaManager'a geçirir
-
-[2] app/panel/(shell)/vardiya/vardiya-manager.tsx (YENİ)
-   Tab parent component:
-   • Header (eyebrow + büyük başlık + alt metin)
-   • "Yeni Personel" butonu (sadece Personeller tab'ında)
-   • Tab seçici: [Personeller (N)] [Haftalık Vardiya]
-   • Vardiya tab'ı LAZY yükler — ilk açılışta getWeeklyShifts çağrısı
-   • staff state parent'ta, alt componentlere prop olarak akıyor
-
-[3] app/panel/(shell)/vardiya/staff-list.tsx (üzerine)
-   • Header BU dosyadan kaldırıldı (parent'ta artık)
-   • createOpen state parent'tan kontrol ediliyor (prop)
-   • onChange callback parent'ı bilgilendirir
-
-[4] app/panel/(shell)/vardiya/shifts-grid.tsx (YENİ)
-   Haftalık vardiya tablosu:
+[1] components/panel/nav-config.ts (üzerine)
+   "Ekip" menüsü:
+   • comingSoon: true → KALDIRILDI (artık aktif)
+   • href: '/ekip' → '/vardiya' (yeni vardiya sayfasına gider)
+   • İkon ◐ ve label "Ekip" KORUNDU
    
-   • Hafta navigasyonu: ‹ Bu Hafta › butonları + tarih gösterici
-   • Vardiya saat template editör:
-     - Sabah / Öğle / Akşam başlangıç-bitiş input'ları
-     - Her template için anlık saat hesabı (örn. 6h)
-     - Sağda toplam haftalık saat (büyük italic, koyu kart)
-     - Blur olunca otomatik kaydet
-   
-   • 7 gün × N personel matriks:
-     - Her hücre tıklanabilir → off → morning → mid → evening döngü
-     - Optimistic update (anında UI değişir, arka planda kaydet)
-     - Hata olursa rollback + toast
-     - Hücrede vardiya etiketi + saat aralığı
-     - Personel başına haftalık toplam (sağ sütun)
-     - Renk kodlu (sabah:sarı, öğle:kırmızı, akşam:yeşil, izin:gri)
-   
-   • Renk açıklaması altta
-   • Boş durum: "Önce personel ekle" CTA
+   Mantık: "Ekip" üst kavram olarak kalsın, içeriği zaten
+   tab'lı yapı (Personeller + Vardiya). İleride bordro,
+   izin, mesai gibi tab'lar eklenince yine "Ekip" altında olur.
+
+[2] app/panel/(shell)/vardiya/shifts-grid.tsx (üzerine)
+   PDF/Yazdırma export butonu eklendi:
+   • Sağ üstte hafta navigasyon yanında "↓ PDF" butonu
+   • Tıklayınca yeni sekme açılır:
+     - Brutalist Spice temalı HTML
+     - A4 yatay sayfa, kenar boşluğu 14mm
+     - Header: "VARDİYA PLANI" eyebrow + "Haftalık vardiya."
+     - Tarih aralığı (örn. 20-26 Nisan 2026)
+     - Renk açıklaması (Sabah/Öğle/Akşam/İzinli + saatleri)
+     - Tablo: tüm personel × 7 gün matriks (renkli hücreler)
+     - Footer: "Aleg · alegstudio.com" + Haftalık Toplam
+     - Sağ alta sabit "PDF olarak yazdır" butonu
+     - Otomatik 300ms sonra print dialog açılır
 
 
 PAKET DEĞİŞMİYOR (npm install GEREKMEZ)
@@ -50,62 +39,60 @@ PAKET DEĞİŞMİYOR (npm install GEREKMEZ)
 KURULUM
 ========
 
-4 dosya (3 yeni, 1 üzerine):
-  app/panel/(shell)/vardiya/page.tsx              (üzerine)
-  app/panel/(shell)/vardiya/vardiya-manager.tsx   (YENİ)
-  app/panel/(shell)/vardiya/staff-list.tsx        (üzerine)
-  app/panel/(shell)/vardiya/shifts-grid.tsx       (YENİ)
+2 dosya (üzerine):
+  components/panel/nav-config.ts
+  app/panel/(shell)/vardiya/shifts-grid.tsx
 
 
 PUSH (PowerShell)
 ==================
 
-EN KOLAY:
   git add .
-  git commit -m "feat: vardiya haftalik tablo + sablonlar (sprint 4 paket 3)"
+  git commit -m "feat: vardiya pdf export + ekip sidebar aktif (sprint 4 paket 4)"
   git push origin main
 
 
 TEST
 =====
 
-[A] PERSONELLER TAB:
-    1. panel.alegstudio.com/vardiya
-    2. ✅ Header altında [Personeller (N)] [Haftalık Vardiya] tab'ları
-    3. ✅ Personeller seçili gelir, mevcut UI çalışır
+[A] SIDEBAR'DA "EKİP":
+    1. Panel'i aç
+    2. Sol menü → OPERASYON grubu
+    3. ✅ "Ekip" artık tıklanabilir (gri/coming soon değil)
+    4. Tıkla → /panel/vardiya açılır
 
-[B] HAFTALIK VARDİYA TAB:
-    1. "Haftalık Vardiya" tab'ına geç
-    2. ✅ Üst kısımda hafta navigasyonu + bu haftanın tarihi
-    3. ✅ Vardiya Saatleri kartı: sabah 08-14, öğle 12-18, akşam 16-23
-    4. ✅ Sağda kara kart: Haftalık Toplam (0h ilk başta)
-    5. ✅ Tablo: aktif personellerin satırları + 7 gün sütunları
-
-[C] HÜCRE TIKLAMA:
-    1. Bir hücreye tıkla (örn. Pazartesi)
-    2. ✅ İzinli → Sabah olur, kart sarı renge döner, "08:00–14:00" görünür
-    3. Tekrar tıkla → Öğle, sonra Akşam, sonra İzinli
-    4. ✅ Sağ sütunda toplam saat artıp azalır
-    5. ✅ Üstteki Haftalık Toplam da değişir
-
-[D] ŞABLON DEĞİŞTİR:
-    1. Sabah başlangıcı 09:00 yap, kutudan dış'a tıkla
-    2. ✅ Saat hesabı 6h → 5h olur
-    3. ✅ Tüm "Sabah" hücrelerinde "09:00-14:00" görünür
-    4. Sayfayı yenile → değişiklik kalıcı
-
-[E] HAFTA NAVIGASYON:
-    1. › butonu sonraki haftaya geçer
-    2. ‹ butonu önceki haftaya
-    3. "Bu Hafta" şu anki pazartesi'ye
-    4. ✅ Her geçişte vardiyalar yeniden yüklenir
-
-[F] BOŞ DURUM:
-    1. Tüm aktif personeli pasifleştir
-    2. ✅ Vardiya tab'ı "Önce personel ekle" CTA'sı gösterir
+[B] PDF EXPORT:
+    1. /panel/vardiya → "Haftalık Vardiya" tab'ı
+    2. Sağ üstte "↓ PDF" butonu
+    3. Tıkla → yeni sekme açılır
+    4. ✅ Otomatik print dialog (300ms sonra)
+    5. ✅ "PDF olarak kaydet" seçeneği
+    6. ✅ A4 yatay, vardiya tablosu temiz görünür
 
 
-SONRAKI
-========
+TÜM SPRİNT 4 ÖZETİ
+====================
 
-Paket 4: PDF export + Sidebar 'Vardiya' menüsü entegrasyonu
+Paket 1: Backend (staff + shifts server actions + DB migration) ✓
+Paket 2: Personel listesi UI ✓
+Paket 3: Haftalık vardiya tablosu + şablon editörü ✓
+Paket 4: PDF export + Sidebar entegrasyon ✓
+
+Modül artık tam fonksiyonel:
+  • Personel CRUD (ad, rol, telefon, saatlik ücret, fotoğraf URL)
+  • Aktif/pasif yönetimi
+  • Haftalık vardiya planlama (tıklamalı matriks)
+  • Sabah/öğle/akşam saat şablonları (işletme bazlı)
+  • Otomatik haftalık saat hesabı
+  • PDF olarak yazdırma
+  • Brutalist Spice tasarım dili tutarlı
+
+
+GELECEK ÖZELLIKLER (aklınızda olsun)
+======================================
+• Mesai takibi: kasiyer ekranında "Vardiyaya başla / Vardiyayı bitir"
+  → shifts.actual_clock_in / actual_clock_out doldurulur
+• Bordro raporu: vardiya saatleri × hourly_rate = haftalık ücret
+• İzin yönetimi: resmi tatil, hastalık, ücretli izin
+• Personel fotoğrafı yükleme (Supabase Storage)
+• Member_id ile cashier_accounts bağlantısı (kasiyer = personel)

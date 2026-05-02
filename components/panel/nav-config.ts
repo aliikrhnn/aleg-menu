@@ -57,7 +57,7 @@ export const PANEL_NAV: PanelNavGroup[] = [
       { id: 'cashiers', label: 'Personeller', href: '/kasiyerler', icon: '👤' },
       { id: 'cari', label: 'Cari Hesaplar', href: '/cari-hesaplar', icon: '📒' },
       { id: 'call_buttons', label: 'Çağrı Butonları', href: '/cagrilar', icon: '✆' },
-      { id: 'team', label: 'Ekip', href: '/ekip', icon: '◐', comingSoon: true },
+      { id: 'team', label: 'Ekip', href: '/vardiya', icon: '◐' },
     ],
   },
   {
