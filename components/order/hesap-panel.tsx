@@ -675,18 +675,19 @@ export function HesapPanel({
 
   return (
     <div
-      className="fixed inset-0 z-[95] flex items-center justify-center p-2 sm:p-4"
+      className="fixed inset-0 z-[95] flex items-center justify-center p-1 sm:p-2"
       style={{ background: 'rgba(42, 31, 24, 0.65)' }}
       onClick={(e) => {
         if (e.target === e.currentTarget && !submitting) onClose();
       }}
     >
       <div
-        className="w-full max-w-[1400px] rounded-[14px] flex flex-col overflow-hidden aleg-modal-desktop-first aleg-modal-content"
+        className="w-full max-w-none rounded-[14px] flex flex-col overflow-hidden aleg-modal-desktop-first aleg-modal-content"
         style={{
           background: 'var(--card)',
           boxShadow: '0 24px 80px -20px rgba(0,0,0,0.5)',
           animation: 'aleg-modal-in 0.22s cubic-bezier(0.16, 1, 0.3, 1)',
+          height: 'calc(100vh - 0.5rem)',
         }}
       >
         <style>{`@keyframes aleg-modal-in { from { opacity: 0; transform: translateY(8px) scale(0.99); } to { opacity: 1; transform: translateY(0) scale(1); } }`}</style>
@@ -801,7 +802,7 @@ export function HesapPanel({
         <div className="flex-1 flex min-h-0 lg:flex-row flex-col">
           {/* SOL: KALEMLER */}
           <div
-            className={`flex flex-col min-w-0 flex-1 lg:border-r ${
+            className={`flex flex-col min-w-0 flex-1 lg:flex-none lg:w-[480px] xl:w-[560px] lg:border-r ${
               isMobile && mobileTab !== 'items' ? 'hidden' : ''
             }`}
             style={{ borderColor: 'var(--line)' }}
@@ -1187,7 +1188,7 @@ export function HesapPanel({
           {/* SAĞ: MENÜ (+ ÜRÜN EKLE) */}
           {!hideMenu && (
             <div
-              className={`flex flex-col flex-shrink-0 lg:w-[380px] lg:border-l ${
+              className={`flex flex-col min-w-0 lg:flex-1 lg:border-l ${
                 isMobile && mobileTab !== 'menu' ? 'hidden' : ''
               }`}
               style={{ borderColor: 'var(--line)' }}

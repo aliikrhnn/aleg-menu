@@ -342,7 +342,7 @@ export function MenuPicker({
             {search ? 'Eşleşen ürün yok' : 'Bu kategoride ürün yok'}
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-2">
             {filteredProducts.map((p) => (
               <ProductCard
                 key={p.id}

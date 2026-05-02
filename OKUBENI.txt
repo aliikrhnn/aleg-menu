@@ -1,98 +1,70 @@
-ALEG SPRINT 4 — VARDİYA Paket 4/4 (PDF + Sidebar)
-====================================================
+═══════════════════════════════════════════════════════════
+  ALEG · KASA HESAP-PANEL TAM EKRAN
+  2 Mayıs 2026
+═══════════════════════════════════════════════════════════
 
-VARDİYA SİSTEMİ TAMAM 🎉
-==========================
+✱ NE DEĞİŞTİ
+─────────────
+Kasada "Hesap Al" tıklanınca açılan modal artık TAM EKRAN.
+Sağ taraftaki menü (ürün ekle) paneli çok daha geniş.
+Geniş ekranda ürün gridi 3-4 sütuna çıkıyor (önceden hep 2 sabitti).
 
+✱ DOSYALAR (2 adet)
+───────────────────
+  components/order/hesap-panel.tsx
+  components/order/menu-picker.tsx
 
-YAPILDI
-========
+✱ DEĞİŞİKLİK DETAYI
+───────────────────
+hesap-panel.tsx:
+  1. Modal wrapper: max-w-[1400px] → max-w-none + height calc(100vh - 0.5rem)
+  2. Outer padding: p-2/sm:p-4 → p-1/sm:p-2 (kenardan minimum)
+  3. Sol kalemler: flex-1 → lg:w-[480px] xl:w-[560px] (max sabit)
+  4. Sağ menü: lg:w-[380px] sabit → lg:flex-1 (kalan tüm alan)
 
-[1] components/panel/nav-config.ts (üzerine)
-   "Ekip" menüsü:
-   • comingSoon: true → KALDIRILDI (artık aktif)
-   • href: '/ekip' → '/vardiya' (yeni vardiya sayfasına gider)
-   • İkon ◐ ve label "Ekip" KORUNDU
-   
-   Mantık: "Ekip" üst kavram olarak kalsın, içeriği zaten
-   tab'lı yapı (Personeller + Vardiya). İleride bordro,
-   izin, mesai gibi tab'lar eklenince yine "Ekip" altında olur.
+menu-picker.tsx:
+  5. Ürün gridi: grid-cols-2 → grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4
 
-[2] app/panel/(shell)/vardiya/shifts-grid.tsx (üzerine)
-   PDF/Yazdırma export butonu eklendi:
-   • Sağ üstte hafta navigasyon yanında "↓ PDF" butonu
-   • Tıklayınca yeni sekme açılır:
-     - Brutalist Spice temalı HTML
-     - A4 yatay sayfa, kenar boşluğu 14mm
-     - Header: "VARDİYA PLANI" eyebrow + "Haftalık vardiya."
-     - Tarih aralığı (örn. 20-26 Nisan 2026)
-     - Renk açıklaması (Sabah/Öğle/Akşam/İzinli + saatleri)
-     - Tablo: tüm personel × 7 gün matriks (renkli hücreler)
-     - Footer: "Aleg · alegstudio.com" + Haftalık Toplam
-     - Sağ alta sabit "PDF olarak yazdır" butonu
-     - Otomatik 300ms sonra print dialog açılır
+NOT: Ödeme/sipariş mantığına HİÇ dokunulmadı — sadece layout/className.
+Bölme ödeme, indirim, parçalı, açık hesap akışları aynen çalışır.
 
+✱ NPM KURULUM
+─────────────
+GEREKMİYOR. Yeni dependency yok, package.json değişmedi.
 
-PAKET DEĞİŞMİYOR (npm install GEREKMEZ)
+✱ TEST AKIŞI (canlı push öncesi mutlaka)
+────────────────────────────────────────
+1. demo.alegstudio.com/kasa aç
+2. Aktif masa seç → "Hesap Al" tıkla
+3. ✓ Modal tam ekran açılmalı
+4. ✓ Sağ menü geniş olmalı, sol kalemler kompakt
+5. ✓ xl ekranda (≥1280px) → 3 sütun ürün
+6. ✓ 2xl ekranda (≥1536px) → 4 sütun ürün
+7. ✓ Mobile'da değişiklik olmamalı (alt tab bar aynı)
 
+Akış testleri (kritik):
+  ✓ Tüm masayı öde · nakit
+  ✓ Tüm masayı öde · kart
+  ✓ İndirim uygula → öde
+  ✓ Parçalı ödeme (split) — bölme bug fix ile
+  ✓ Açık hesap (cari)
+  ✓ Sağdan ürün ekle → masaya gitti mi
+  ✓ ESC ile modal kapanır mı
 
-KURULUM
-========
-
-2 dosya (üzerine):
-  components/panel/nav-config.ts
-  app/panel/(shell)/vardiya/shifts-grid.tsx
-
-
-PUSH (PowerShell)
-==================
+✱ PUSH (Windows PowerShell)
+───────────────────────────
+Daha kolay yol:
 
   git add .
-  git commit -m "feat: vardiya pdf export + ekip sidebar aktif (sprint 4 paket 4)"
-  git push origin main
+  git status
+  git commit -m "feat(kasa): hesap-panel tam ekran + sağ menü genişletildi"
+  git push
 
+VEYA dosyaları tek tek:
 
-TEST
-=====
+  git add components/order/hesap-panel.tsx components/order/menu-picker.tsx
+  git status
+  git commit -m "feat(kasa): hesap-panel tam ekran + sağ menü genişletildi"
+  git push
 
-[A] SIDEBAR'DA "EKİP":
-    1. Panel'i aç
-    2. Sol menü → OPERASYON grubu
-    3. ✅ "Ekip" artık tıklanabilir (gri/coming soon değil)
-    4. Tıkla → /panel/vardiya açılır
-
-[B] PDF EXPORT:
-    1. /panel/vardiya → "Haftalık Vardiya" tab'ı
-    2. Sağ üstte "↓ PDF" butonu
-    3. Tıkla → yeni sekme açılır
-    4. ✅ Otomatik print dialog (300ms sonra)
-    5. ✅ "PDF olarak kaydet" seçeneği
-    6. ✅ A4 yatay, vardiya tablosu temiz görünür
-
-
-TÜM SPRİNT 4 ÖZETİ
-====================
-
-Paket 1: Backend (staff + shifts server actions + DB migration) ✓
-Paket 2: Personel listesi UI ✓
-Paket 3: Haftalık vardiya tablosu + şablon editörü ✓
-Paket 4: PDF export + Sidebar entegrasyon ✓
-
-Modül artık tam fonksiyonel:
-  • Personel CRUD (ad, rol, telefon, saatlik ücret, fotoğraf URL)
-  • Aktif/pasif yönetimi
-  • Haftalık vardiya planlama (tıklamalı matriks)
-  • Sabah/öğle/akşam saat şablonları (işletme bazlı)
-  • Otomatik haftalık saat hesabı
-  • PDF olarak yazdırma
-  • Brutalist Spice tasarım dili tutarlı
-
-
-GELECEK ÖZELLIKLER (aklınızda olsun)
-======================================
-• Mesai takibi: kasiyer ekranında "Vardiyaya başla / Vardiyayı bitir"
-  → shifts.actual_clock_in / actual_clock_out doldurulur
-• Bordro raporu: vardiya saatleri × hourly_rate = haftalık ücret
-• İzin yönetimi: resmi tatil, hastalık, ücretli izin
-• Personel fotoğrafı yükleme (Supabase Storage)
-• Member_id ile cashier_accounts bağlantısı (kasiyer = personel)
+═══════════════════════════════════════════════════════════
