@@ -1,189 +1,24 @@
 ═══════════════════════════════════════════════════════════════
-  ALEG · MENU TASARIM EKLENDİ + WIFI HINT + CANLI FONT ÖNİZLEME
-  3 iş tek pakette
+  ALEG · LINT FIX (apostrof)
   2 Mayıs 2026
 ═══════════════════════════════════════════════════════════════
 
-✱ PAKETTE 3 İŞ
-───────────────
+✱ DÜZELTİLDİ
+─────────────
+client.tsx satır 973 — JSX text'inde apostrof escape edilmemişti:
+  Önce:  font'unu
+  Sonra: font&apos;unu
 
-═══ 1) MENU TASARIM SAYFASINA FONT + SOSYAL QR ═══
-
-Sidebar'daki "Menü Tasarımları" sayfasında (printable PDF) iki
-yeni section eklendi:
-
-▸ "Yazı Tipi" (7. section)
-  - Şablon varsayılanı (mevcut davranış — template'in kendi font'u)
-  - Serif (Instrument Serif italik)
-  - Sans (Inter)
-  - Display (Bricolage Grotesque, kalın)
-  - Mono (JetBrains Mono, brutalist)
-  Seçim → preview anlık değişir, PDF/PNG indirmede o font'la basılır.
-  
-  Önemli: Bu seçim SADECE basılı PDF/PNG için. Müşterinin telefonda
-  gördüğü dijital menü font'u Ayarlar → Tema'dan ayrı seçilir.
-
-▸ "Sosyal QR" (8. section)
-  - Settings'te girilen tüm sosyal hesaplar otomatik listelenir
-    (Instagram, Facebook, Web, TikTok, X, YouTube, Threads, LinkedIn)
-  - Toggle ile hangileri menüye eklenecek seçilir
-  - Seçilenlerin QR'ları menünün altına "BİZİ TAKİP ET" bölümünde
-    grid olarak yerleştirilir (16mm × 16mm, label'lı)
-  - QR'lar client-side QRCode.toDataURL ile üretilir (anlık)
-  - Sosyal hesabı yoksa "Önce Ayarlar → Kimlik'ten ekle" mesajı
-
-Sayfa numaralandırması yenilendi:
-  6. Rozetler · 7. Yazı Tipi · 8. Sosyal QR · 9. Masa · 10. İndir
-
-═══ 2) WIFI İKONU ARTIK NE OLDUĞU BELLİ ═══
-
-Önceki: Sadece yuvarlak 📶 ikonu — müşteri ne olduğunu bilmiyordu
-Şimdi:  Genişletilmiş pill — "📶 WiFi · Şifre" yazıyor + hafif
-        ping animasyonu (her 2.4 saniyede bir nazik halka pulse)
-
-Tasarım:
-  ┌─────────────────────────┐
-  │ 📶  WIFI · ŞİFRE        │  ← extended pill (yatay)
-  └─────────────────────────┘
-
-Sosyal medya ikonları aynı kalır (yuvarlak 36×36).
-WiFi pill yan yana: yatay scroll'da diğer sosyal ikonlar görünür.
-
-Hint mesajı tıklamaya teşvik eder, müşteri arayıp soramayacak.
-Ping animasyonu dikkat çeker ama sürekli rahatsız etmez (1s gecikmeli).
-
-═══ 3) AYARLAR → MENÜ ÖNİZLEME CANLI FONT ═══
-
-Önceki: Tema + Vurgu rengi değişimi anında iframe yenileniyordu,
-        ama font seçimi yenilemiyordu. Sayfa refresh gerekiyordu.
-
-Şimdi: Font seçimi de iframe URL'inde preview_font query param
-        olarak geçer, müşteri menüsü anında yansıtır.
-
-Akış:
-  Tema tab → font seç (Sans, Display vs.)
-  ↓
-  ThemePreview → iframe URL'inde &preview_font=sans
-  ↓
-  Müşteri page.tsx → searchParams.preview_font okur, finalFont
-  belirler (preview_font > DB > default 'serif')
-  ↓
-  fontCSS [data-menu-font] doğru preset'e göre uygulanır
-
-Kullanıcı kaydet düğmesine basınca DB'ye yazılır, müşteri canlısı
-da o font'la görünür.
-
-═══════════════════════════════════════════════════════════════
-
-✱ DOSYALAR (8 adet)
-────────────────────
-
-İŞ 1 — Menu Tasarım sayfası:
-  lib/actions/printable-menu.ts                    facebook + social_links
-                                                   data'da
-  lib/printable-menu/templates.ts                  FONT_PRESETS sabit +
-                                                   resolveFonts() helper
-  lib/printable-menu/print-menu-document.tsx       fontPreset + socialQrs
-                                                   props, Footer'a alt-row
-  app/panel/(shell)/menu-tasarim/client.tsx        2 yeni Section UI
-                                                   (Font + Sosyal QR)
-
-İŞ 2 — WiFi hint:
-  app/menu/[slug]/business-extras.tsx              WiFi extended pill +
-                                                   ping animasyonu
-
-İŞ 3 — Canlı font önizleme:
-  app/panel/(shell)/ayarlar/tabs/theme-preview.tsx fontPreset prop
-                                                   + URL'e preview_font
-  app/panel/(shell)/ayarlar/tabs/theme-tab.tsx     ThemePreview'a
-                                                   fontPreset geç
-  app/menu/[slug]/page.tsx                          preview_font query
-                                                   param oku, finalFont'a
-                                                   uygula
-
-✱ NPM / MIGRATION
+✱ DOSYA (1 adet)
 ─────────────────
-NPM: GEREKMİYOR. qrcode + jspdf + html-to-image + jszip zaten dependent.
-MIGRATION: GEREKMİYOR. Veriler businesses.menu_theme JSONB'sinde.
+  app/panel/(shell)/menu-tasarim/client.tsx
 
-✱ TEKNİK NOTLAR
-────────────────
-• PrintMenuDocument'ta `t = TEMPLATES[id]` satırından sonra
-  `t = { ...tBase, fonts: resolveFonts(...) }` ile font override.
-  30+ yerdeki `t.fonts.serif` kullanımı OTOMATIK değişti, dosyada
-  başka değişiklik yok.
-
-• Footer fonksiyonu Fragment'e (<>...</>) sarıldı, sosyal QR alt-row
-  sadece socialQrs varsa render edilir. Mevcut footer aynen çalışır.
-
-• Sosyal QR'lar client-side üretilir (qrcode lib zaten bundle'da).
-  Eğer ileride sayfa yavaşlarsa server-side'a taşınabilir.
-
-• Müşteri menüsündeki font önceliği:
-  preview_font (iframe panelden) > DB menu_theme.font_preset > 'serif'
-
-✱ TEST AKIŞI
-────────────
-
-İŞ 1 — Menu Tasarım font:
-  1. Sidebar → Menü Tasarımları
-  2. Sol panelde "Yazı Tipi" sekmesi (7. accordion)
-  3. "Sans" seç → preview anlık değişmeli (başlıklar Inter olmalı)
-  4. PDF indir → font Inter ile gelmeli
-  5. "Şablon varsayılanı" → eski davranış (template'in font'u)
-
-İŞ 1 — Sosyal QR:
-  1. Önce Ayarlar → Kimlik → Sosyal Medya kartına URL ekle (TikTok)
-  2. Menu Tasarımları → "Sosyal QR" sekmesi
-  3. "TikTok" toggle aç → preview menünün altında yeni bölüm:
-     "BİZİ TAKİP ET" + TikTok QR kartı
-  4. PDF indir → QR'lı footer çıktıda görünmeli
-  5. Toggle kapat → kaybolmalı
-
-İŞ 2 — WiFi pill:
-  1. Müşteri menüsünü aç (panel.alegstudio.com veya subdomain)
-  2. Sağ üstte WiFi pill: "📶 WiFi · Şifre" yazısı
-  3. Pill'in çevresinde her 2-3sn'de bir nazik halka pulse
-  4. Pill'e tıkla → şifre + QR modal açılmalı
-  5. Sosyal medya ikon(lar) yuvarlak (36×36) kalmalı
-
-İŞ 3 — Canlı font:
-  1. Ayarlar → Tema sekmesi
-  2. Adım 3 Yazı tipi: "Sans" seç
-  3. Adım 4 Canlı önizleme: iframe ANINDA Inter font ile yenilenmeli
-     (sayfa refresh GEREKMEZ)
-  4. "Display" seç → Bricolage Grotesque
-  5. "Serif" seç → Instrument Serif italic geri gelir
-  6. "Kaydet" → DB'ye yazılır, müşteri canlısında da değişir
-
-REGRESYON KONTROL:
-  ✓ Eski şablonlar (Şablon varsayılanı seçili) eskisi gibi çalışır
-  ✓ Sosyal QR seçimi yapılmazsa footer aynen kalır
-  ✓ Tema preset/accent değişimi hâlâ canlı yansır
-  ✓ Müşteri menüsünde font seçilmemişse default 'serif' (Instrument)
-
-✱ PUSH (Windows PowerShell)
-───────────────────────────
-  git add .
-  git status            # 8 dosya değişiklik
-  git commit -m "feat: menu-tasarim font/social qr + wifi hint + canli font preview"
-  git push
-
-VEYA tek tek (parantezli path → tek tırnak ZORUNLU):
-  git add lib/actions/printable-menu.ts
-  git add lib/printable-menu/templates.ts
-  git add lib/printable-menu/print-menu-document.tsx
+✱ PUSH
+──────
   git add 'app/panel/(shell)/menu-tasarim/client.tsx'
-  git add 'app/panel/(shell)/ayarlar/tabs/theme-tab.tsx'
-  git add 'app/panel/(shell)/ayarlar/tabs/theme-preview.tsx'
-  git add 'app/menu/[slug]/business-extras.tsx'
-  git add 'app/menu/[slug]/page.tsx'
-  git commit -m "feat: menu-tasarim font/social qr + wifi hint + canli font preview"
+  git commit -m "fix(lint): apostrof escape"
   git push
 
-✱ ROLLBACK
-──────────
-git revert HEAD
-git push
+VEYA: git add . && git commit -m "fix(lint): apostrof escape" && git push
 
 ═══════════════════════════════════════════════════════════════

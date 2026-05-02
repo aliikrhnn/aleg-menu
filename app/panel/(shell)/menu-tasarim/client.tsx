@@ -970,7 +970,7 @@ export function PrintableMenuClient({ data }: Props) {
                   className="mt-1"
                   style={{ fontSize: 11, color: 'var(--ink-3)' }}
                 >
-                  Seçtiğin şablonun kendi font'unu kullanır
+                  Seçtiğin şablonun kendi font&apos;unu kullanır
                 </div>
               </button>
 
