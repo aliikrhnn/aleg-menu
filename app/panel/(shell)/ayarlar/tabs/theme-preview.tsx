@@ -2,10 +2,12 @@
 
 import { useState, useEffect, useRef } from 'react';
 import type { ThemePreset } from '@/lib/menu-themes';
+import type { FontPreset } from '@/lib/actions/settings';
 
 type Props = {
   preset: ThemePreset;
   accentOverride: string | null;
+  fontPreset?: FontPreset;
   slug: string;
   rootDomain: string;
 };
@@ -13,6 +15,7 @@ type Props = {
 export function ThemePreview({
   preset,
   accentOverride,
+  fontPreset = 'serif',
   slug,
   rootDomain,
 }: Props) {
@@ -21,17 +24,16 @@ export function ThemePreview({
   const [reloadKey, setReloadKey] = useState(0);
 
   // Preview URL — subdomain üzerinden müşteri menüsü
-  // (subdomain refactor sonrası /menu/[slug] rotası panel'den erişilebilir değil)
   const accentParam = accentOverride
     ? accentOverride.replace('#', '')
     : 'default';
-  const previewUrl = `https://${slug}.${rootDomain}/?preview_theme=${preset}&preview_accent=${accentParam}&_=${reloadKey}`;
+  const previewUrl = `https://${slug}.${rootDomain}/?preview_theme=${preset}&preview_accent=${accentParam}&preview_font=${fontPreset}&_=${reloadKey}`;
 
-  // Tema değişince iframe yeniden yüklensin
+  // Tema/font değişince iframe yeniden yüklensin
   useEffect(() => {
     setLoading(true);
     setReloadKey((k) => k + 1);
-  }, [preset, accentOverride]);
+  }, [preset, accentOverride, fontPreset]);
 
   return (
     <div>

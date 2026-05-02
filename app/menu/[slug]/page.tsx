@@ -15,6 +15,7 @@ interface Props {
     t?: string;
     preview_theme?: string;
     preview_accent?: string;
+    preview_font?: string;
   };
 }
 
@@ -257,11 +258,17 @@ export default async function CustomerMenuPage({ params, searchParams }: Props) 
   // Font preset
   const validFonts = ['serif', 'sans', 'display', 'mono'] as const;
   type FontPreset = (typeof validFonts)[number];
-  const finalFont: FontPreset = validFonts.includes(
-    (themeConfig?.font_preset || '') as FontPreset
+  // Önce preview (panelden iframe ile gelen), sonra DB
+  const previewFont = validFonts.includes(
+    (searchParams.preview_font || '') as FontPreset
   )
-    ? (themeConfig!.font_preset as FontPreset)
-    : 'serif';
+    ? (searchParams.preview_font as FontPreset)
+    : null;
+  const finalFont: FontPreset =
+    previewFont ||
+    (validFonts.includes((themeConfig?.font_preset || '') as FontPreset)
+      ? (themeConfig!.font_preset as FontPreset)
+      : 'serif');
 
   const resolvedTheme = resolveTheme({
     preset: finalPreset,

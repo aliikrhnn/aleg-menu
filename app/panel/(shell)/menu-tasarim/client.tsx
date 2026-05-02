@@ -16,12 +16,14 @@ import {
   SIZES,
   HEADER_VARIANTS,
   FOOTER_VARIANTS,
+  FONT_PRESETS,
   type TemplateId,
   type PaperSize,
   type HeaderVariant,
   type FooterVariant,
+  type FontPresetId,
 } from '@/lib/printable-menu/templates';
-import { PrintMenuDocument } from '@/lib/printable-menu/print-menu-document';
+import { PrintMenuDocument, type SocialQr } from '@/lib/printable-menu/print-menu-document';
 import { toast } from '@/components/ui/toast';
 
 type Props = {
@@ -39,6 +41,83 @@ export function PrintableMenuClient({ data }: Props) {
   const [showDietaryTags, setShowDietaryTags] = useState(true);
   const [showSinceBadge, setShowSinceBadge] = useState(true);
   const [customSignature, setCustomSignature] = useState('');
+
+  // Yeni: Font seçimi
+  const [fontPreset, setFontPreset] = useState<FontPresetId>('template');
+
+  // Yeni: Sosyal QR seçimi (hangi platformlar menüye eklenecek)
+  type SocialPlatform =
+    | 'instagram'
+    | 'facebook'
+    | 'website'
+    | 'tiktok'
+    | 'x'
+    | 'youtube'
+    | 'threads'
+    | 'linkedin';
+
+  // Tüm platformların URL'lerini settings'ten topla
+  const availableSocials = useMemo<
+    Array<{ id: SocialPlatform; label: string; url: string; icon: string }>
+  >(() => {
+    const out: Array<{ id: SocialPlatform; label: string; url: string; icon: string }> = [];
+    const push = (
+      id: SocialPlatform,
+      label: string,
+      url: string | null | undefined,
+      icon: string
+    ) => {
+      if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+        out.push({ id, label, url, icon });
+      }
+    };
+    push('instagram', 'Instagram', data.business.instagram, '📷');
+    push('facebook', 'Facebook', data.business.facebook, '📘');
+    push('website', 'Web', data.business.website, '🌐');
+    push('tiktok', 'TikTok', data.business.social_links.tiktok, '🎵');
+    push('x', 'X', data.business.social_links.x, '𝕏');
+    push('youtube', 'YouTube', data.business.social_links.youtube, '▶');
+    push('threads', 'Threads', data.business.social_links.threads, '@');
+    push('linkedin', 'LinkedIn', data.business.social_links.linkedin, 'in');
+    return out;
+  }, [data.business]);
+
+  const [socialEnabled, setSocialEnabled] = useState<Record<string, boolean>>(
+    {}
+  );
+
+  // Seçilen platformlar için QR'ları client-side oluştur
+  const [socialQrs, setSocialQrs] = useState<SocialQr[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    async function gen() {
+      const enabled = availableSocials.filter((s) => socialEnabled[s.id]);
+      const qrs: SocialQr[] = [];
+      for (const s of enabled) {
+        try {
+          const dataUrl = await QRCode.toDataURL(s.url, {
+            margin: 1,
+            width: 240,
+            color: { dark: '#1a1a1a', light: '#FFFFFF' },
+          });
+          qrs.push({
+            id: s.id,
+            label: s.label,
+            url: s.url,
+            qrDataUrl: dataUrl,
+            icon: s.icon,
+          });
+        } catch {
+          // Yoksay
+        }
+      }
+      if (!cancelled) setSocialQrs(qrs);
+    }
+    gen();
+    return () => {
+      cancelled = true;
+    };
+  }, [availableSocials, socialEnabled]);
 
   // Masa seçimi (sadece masa-bazlı QR — genel QR kaldırıldı)
   const [selectedTableId, setSelectedTableId] = useState<string | null>(
@@ -58,6 +137,8 @@ export function PrintableMenuClient({ data }: Props) {
     | 'extras'
     | 'qr'
     | 'logo'
+    | 'font'
+    | 'social'
     | 'download'
   >('template');
 
@@ -802,7 +883,7 @@ export function PrintableMenuClient({ data }: Props) {
             open={activeSection === 'extras'}
             onToggle={() =>
               setActiveSection(
-                activeSection === 'extras' ? 'qr' : 'extras'
+                activeSection === 'extras' ? 'font' : 'extras'
               )
             }
             summary={
@@ -845,10 +926,247 @@ export function PrintableMenuClient({ data }: Props) {
             </div>
           </Section>
 
-          {/* 7. Masa seçici */}
+          {/* 7. Yazı Tipi */}
+          <Section
+            title="Yazı Tipi"
+            eyebrow="7"
+            open={activeSection === 'font'}
+            onToggle={() =>
+              setActiveSection(activeSection === 'font' ? 'social' : 'font')
+            }
+            summary={
+              fontPreset === 'template'
+                ? 'Şablon varsayılanı'
+                : FONT_PRESETS[fontPreset].name
+            }
+          >
+            <div className="grid grid-cols-1 gap-2">
+              {/* Şablon varsayılanı */}
+              <button
+                onClick={() => setFontPreset('template')}
+                className="text-left p-3 rounded-[8px] transition-all"
+                style={{
+                  background:
+                    fontPreset === 'template'
+                      ? 'color-mix(in oklab, var(--ink) 4%, var(--card))'
+                      : 'var(--card)',
+                  border:
+                    fontPreset === 'template'
+                      ? '2px solid var(--ink)'
+                      : '1px solid var(--line)',
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: 'var(--f-serif)',
+                    fontStyle: 'italic',
+                    fontSize: 18,
+                    color: 'var(--ink)',
+                  }}
+                >
+                  Şablon varsayılanı
+                </div>
+                <div
+                  className="mt-1"
+                  style={{ fontSize: 11, color: 'var(--ink-3)' }}
+                >
+                  Seçtiğin şablonun kendi font'unu kullanır
+                </div>
+              </button>
+
+              {/* 4 preset */}
+              {(['serif', 'sans', 'display', 'mono'] as const).map((id) => {
+                const p = FONT_PRESETS[id];
+                const selected = fontPreset === id;
+                return (
+                  <button
+                    key={id}
+                    onClick={() => setFontPreset(id)}
+                    className="text-left p-3 rounded-[8px] transition-all"
+                    style={{
+                      background: selected
+                        ? 'color-mix(in oklab, var(--ink) 4%, var(--card))'
+                        : 'var(--card)',
+                      border: selected
+                        ? '2px solid var(--ink)'
+                        : '1px solid var(--line)',
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontFamily: p.serif,
+                        fontStyle: p.italic ? 'italic' : 'normal',
+                        fontSize: 20,
+                        fontWeight: id === 'display' ? 700 : 500,
+                        color: 'var(--ink)',
+                        lineHeight: 1,
+                      }}
+                    >
+                      {p.name}
+                    </div>
+                    <div
+                      className="mt-1"
+                      style={{ fontSize: 11, color: 'var(--ink-3)' }}
+                    >
+                      {p.description}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            <div
+              className="mt-3 p-3 rounded-[8px] text-[11px]"
+              style={{
+                background: 'var(--paper-2)',
+                color: 'var(--ink-3)',
+                border: '1px solid var(--line)',
+                lineHeight: 1.5,
+              }}
+            >
+              💡 Bu seçim sadece <strong>basılı PDF/PNG menü</strong> için.
+              Müşterinin telefonda gördüğü dijital menü için Ayarlar → Tema
+              sekmesinden ayrıca seçilir.
+            </div>
+          </Section>
+
+          {/* 8. Sosyal QR */}
+          <Section
+            title="Sosyal QR"
+            eyebrow="8"
+            open={activeSection === 'social'}
+            onToggle={() =>
+              setActiveSection(activeSection === 'social' ? 'qr' : 'social')
+            }
+            summary={
+              availableSocials.length === 0
+                ? 'Hesap eklenmemiş'
+                : socialQrs.length === 0
+                  ? 'Seçim yok'
+                  : `${socialQrs.length} hesap`
+            }
+          >
+            {availableSocials.length === 0 ? (
+              <div
+                className="p-3 rounded-[8px] text-[12px]"
+                style={{
+                  background: 'var(--paper-2)',
+                  color: 'var(--ink-2)',
+                  border: '1px solid var(--line)',
+                  lineHeight: 1.5,
+                }}
+              >
+                Henüz sosyal medya hesabı eklenmemiş. Önce{' '}
+                <strong style={{ color: 'var(--ink)' }}>
+                  Ayarlar → Kimlik
+                </strong>{' '}
+                sayfasından Instagram, TikTok, YouTube vb. hesaplarını ekle.
+                Sonra buraya dönüp QR&apos;larını seçebilirsin.
+              </div>
+            ) : (
+              <>
+                <div
+                  className="mb-3 p-3 rounded-[8px] text-[11px]"
+                  style={{
+                    background: 'var(--paper-2)',
+                    color: 'var(--ink-3)',
+                    border: '1px solid var(--line)',
+                    lineHeight: 1.5,
+                  }}
+                >
+                  💡 Seçtiğin hesapların QR&apos;ları menünün altına eklenir.
+                  Müşteriler tarayıp profile gider.
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {availableSocials.map((s) => {
+                    const checked = !!socialEnabled[s.id];
+                    return (
+                      <button
+                        key={s.id}
+                        onClick={() =>
+                          setSocialEnabled((prev) => ({
+                            ...prev,
+                            [s.id]: !prev[s.id],
+                          }))
+                        }
+                        className="flex items-center gap-2 p-3 rounded-[8px] text-left transition-all"
+                        style={{
+                          background: checked
+                            ? 'color-mix(in oklab, var(--ink) 4%, var(--card))'
+                            : 'var(--card)',
+                          border: checked
+                            ? '2px solid var(--ink)'
+                            : '1px solid var(--line)',
+                        }}
+                      >
+                        <div
+                          className="flex-shrink-0 w-7 h-7 rounded-full grid place-items-center"
+                          style={{
+                            background: checked
+                              ? 'var(--ink)'
+                              : 'var(--paper-2)',
+                            color: checked
+                              ? 'var(--paper)'
+                              : 'var(--ink-2)',
+                            fontSize: 14,
+                            border: checked
+                              ? 'none'
+                              : '1px solid var(--line)',
+                          }}
+                        >
+                          {checked ? '✓' : s.icon}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div
+                            style={{
+                              fontSize: 13,
+                              fontWeight: 600,
+                              color: 'var(--ink)',
+                            }}
+                          >
+                            {s.label}
+                          </div>
+                          <div
+                            className="truncate"
+                            style={{
+                              fontSize: 10,
+                              color: 'var(--ink-3)',
+                            }}
+                          >
+                            {s.url.replace(/^https?:\/\//, '')}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+                {socialQrs.length > 0 && (
+                  <div
+                    className="mt-3 text-[11px] flex items-center justify-between"
+                    style={{ color: 'var(--ink-3)' }}
+                  >
+                    <span>
+                      <strong style={{ color: 'var(--ink)' }}>
+                        {socialQrs.length}
+                      </strong>{' '}
+                      QR menüye eklendi
+                    </span>
+                    <button
+                      onClick={() => setSocialEnabled({})}
+                      className="text-[11px] underline"
+                      style={{ color: 'var(--ink-2)' }}
+                    >
+                      Hepsini kaldır
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </Section>
+
+          {/* 9. Masa seçici */}
           <Section
             title="Masa"
-            eyebrow="7"
+            eyebrow="9"
             open={activeSection === 'qr'}
             onToggle={() =>
               setActiveSection(activeSection === 'qr' ? 'download' : 'qr')
@@ -945,10 +1263,10 @@ export function PrintableMenuClient({ data }: Props) {
             )}
           </Section>
 
-          {/* 8. İndir */}
+          {/* 10. İndir */}
           <Section
             title="İndir"
-            eyebrow="8"
+            eyebrow="10"
             open={activeSection === 'download'}
             onToggle={() =>
               setActiveSection(
@@ -1166,6 +1484,8 @@ export function PrintableMenuClient({ data }: Props) {
                   pageCategories={pages[currentPage - 1] || data.categories}
                   pageNumber={currentPage}
                   totalPages={pages.length}
+                  fontPreset={fontPreset}
+                  socialQrs={socialQrs}
                 />
               </div>
             )}

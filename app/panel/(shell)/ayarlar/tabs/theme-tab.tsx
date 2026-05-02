@@ -450,6 +450,7 @@ export function ThemeTab({ theme, onChange, slug, rootDomain }: Props) {
         <ThemePreview
           preset={theme.preset}
           accentOverride={theme.accent_override}
+          fontPreset={theme.font_preset}
           slug={slug}
           rootDomain={rootDomain}
         />

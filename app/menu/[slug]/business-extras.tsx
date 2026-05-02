@@ -99,35 +99,74 @@ export function BusinessExtras({ wifi, socialLinks }: Props) {
           justifyContent: 'flex-end',
         }}
       >
-        {items.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => setActiveId(item.id)}
-            aria-label={item.label}
-            title={item.label}
-            className="extras-fab"
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 999,
-              display: 'grid',
-              placeItems: 'center',
-              background:
-                'color-mix(in oklab, var(--card) 88%, transparent)',
-              backdropFilter: 'saturate(140%) blur(10px)',
-              WebkitBackdropFilter: 'saturate(140%) blur(10px)',
-              border: '1px solid var(--line)',
-              color: 'var(--ink)',
-              cursor: 'pointer',
-              boxShadow:
-                '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.06)',
-              transition: 'transform 180ms ease, box-shadow 180ms ease',
-              padding: 0,
-            }}
-          >
-            {item.icon}
-          </button>
-        ))}
+        {items.map((item) => {
+          const isWifi = item.kind === 'wifi';
+          return (
+            <button
+              key={item.id}
+              onClick={() => setActiveId(item.id)}
+              aria-label={item.label}
+              title={isWifi ? 'WiFi şifresi için dokun' : item.label}
+              className="extras-fab"
+              style={{
+                position: 'relative',
+                height: 36,
+                width: isWifi ? 'auto' : 36,
+                paddingLeft: isWifi ? 12 : 0,
+                paddingRight: isWifi ? 14 : 0,
+                borderRadius: 999,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: isWifi ? 8 : 0,
+                background:
+                  'color-mix(in oklab, var(--card) 88%, transparent)',
+                backdropFilter: 'saturate(140%) blur(10px)',
+                WebkitBackdropFilter: 'saturate(140%) blur(10px)',
+                border: '1px solid var(--line)',
+                color: 'var(--ink)',
+                cursor: 'pointer',
+                boxShadow:
+                  '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.06)',
+                transition: 'transform 180ms ease, box-shadow 180ms ease',
+              }}
+            >
+              {item.icon}
+              {isWifi && (
+                <span
+                  style={{
+                    fontFamily: 'var(--f-mono, monospace)',
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: '0.10em',
+                    textTransform: 'uppercase',
+                    lineHeight: 1,
+                    color: 'var(--ink)',
+                  }}
+                >
+                  WiFi · Şifre
+                </span>
+              )}
+              {/* Subtle ping pulse — WiFi'yi fark ettirir */}
+              {isWifi && (
+                <span
+                  aria-hidden
+                  className="extras-ping"
+                  style={{
+                    position: 'absolute',
+                    width: 36,
+                    height: 36,
+                    borderRadius: 999,
+                    background: 'var(--accent)',
+                    opacity: 0,
+                    pointerEvents: 'none',
+                    marginLeft: -12,
+                  }}
+                />
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* ============ MODAL ============ */}
@@ -390,6 +429,16 @@ export function BusinessExtras({ wifi, socialLinks }: Props) {
         @keyframes extras-pop {
           from { opacity: 0; transform: translateY(8px) scale(0.96); }
           to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes extras-ping {
+          0%   { transform: scale(0.95); opacity: 0.55; }
+          80%  { transform: scale(1.6); opacity: 0; }
+          100% { transform: scale(1.6); opacity: 0; }
+        }
+        .extras-ping {
+          animation: extras-ping 2.4s cubic-bezier(0,0,0.2,1) infinite;
+          animation-delay: 1s;
+          left: 0;
         }
         .extras-fab:hover {
           transform: translateY(-1px);

@@ -481,8 +481,75 @@ export const FOOTER_VARIANTS: Array<{
 ];
 
 // ============================================================
-// DIETARY TAG ETIKETLERI
+// FONT PRESET (Template font'larını override etmek için)
 // ============================================================
+// Kullanıcı isterse template'in default font'unu görmezden gelip
+// kendi font'unu seçebilir. preset='template' default davranıştır.
+
+export type FontPresetId = 'template' | 'serif' | 'sans' | 'display' | 'mono';
+
+export const FONT_PRESETS: Record<
+  Exclude<FontPresetId, 'template'>,
+  { name: string; description: string; serif: string; sans: string; mono: string; italic: boolean }
+> = {
+  serif: {
+    name: 'Serif',
+    description: 'Klasik, edebi (Instrument Serif italik)',
+    serif: '"Instrument Serif", "Cormorant Garamond", Georgia, serif',
+    sans: '"Inter", "Helvetica Neue", system-ui, sans-serif',
+    mono: '"JetBrains Mono", "Courier New", monospace',
+    italic: true,
+  },
+  sans: {
+    name: 'Sans',
+    description: 'Modern, temiz (Inter)',
+    serif: '"Inter", "Helvetica Neue", system-ui, sans-serif',
+    sans: '"Inter", "Helvetica Neue", system-ui, sans-serif',
+    mono: '"JetBrains Mono", "Courier New", monospace',
+    italic: false,
+  },
+  display: {
+    name: 'Display',
+    description: 'İddialı, kalın (Bricolage Grotesque)',
+    serif: '"Bricolage Grotesque", "Inter", sans-serif',
+    sans: '"Bricolage Grotesque", "Inter", sans-serif',
+    mono: '"JetBrains Mono", "Courier New", monospace',
+    italic: false,
+  },
+  mono: {
+    name: 'Mono',
+    description: 'Teknik, brutalist (JetBrains Mono)',
+    serif: '"JetBrains Mono", "Courier New", monospace',
+    sans: '"JetBrains Mono", "Courier New", monospace',
+    mono: '"JetBrains Mono", "Courier New", monospace',
+    italic: false,
+  },
+};
+
+/**
+ * Template'in font'unu (varsayılan) ya da preset font'u döndürür.
+ */
+export function resolveFonts(
+  templateFonts: TemplateSpec['fonts'],
+  preset: FontPresetId
+): { serif: string; sans: string; mono: string; italicHeadings: boolean } {
+  if (preset === 'template') {
+    return {
+      serif: templateFonts.serif,
+      sans: templateFonts.sans,
+      mono: templateFonts.mono,
+      italicHeadings: templateFonts.italicHeadings,
+    };
+  }
+  const p = FONT_PRESETS[preset];
+  return {
+    serif: p.serif,
+    sans: p.sans,
+    mono: p.mono,
+    italicHeadings: p.italic,
+  };
+}
+
 export const DIETARY_TAG_INFO: Record<
   string,
   { icon: string; label: string; color: string }

@@ -51,7 +51,15 @@ export type PrintableMenuData = {
     address: string | null;
     phone: string | null;
     instagram: string | null;
+    facebook: string | null;
     website: string | null;
+    social_links: {
+      tiktok: string | null;
+      x: string | null;
+      youtube: string | null;
+      threads: string | null;
+      linkedin: string | null;
+    };
     created_year: number;
   };
   categories: PrintableMenuCategory[];
@@ -96,7 +104,7 @@ export async function getPrintableMenuData(): Promise<{
         admin
           .from('businesses')
           .select(
-            'id, name, slug, logo_url, city, tagline_tr, address, phone, instagram, website, created_at'
+            'id, name, slug, logo_url, city, tagline_tr, address, phone, instagram, facebook, website, created_at, menu_theme'
           )
           .eq('id', businessId)
           .maybeSingle(),
@@ -229,6 +237,24 @@ export async function getPrintableMenuData(): Promise<{
       ? new Date(business.created_at as string).getFullYear()
       : new Date().getFullYear();
 
+    // menu_theme'den social_links'i parse et
+    const rawTheme = business.menu_theme as
+      | { social_links?: Partial<{
+          tiktok: string;
+          x: string;
+          youtube: string;
+          threads: string;
+          linkedin: string;
+        }> }
+      | null;
+    const socialLinks = {
+      tiktok: rawTheme?.social_links?.tiktok || null,
+      x: rawTheme?.social_links?.x || null,
+      youtube: rawTheme?.social_links?.youtube || null,
+      threads: rawTheme?.social_links?.threads || null,
+      linkedin: rawTheme?.social_links?.linkedin || null,
+    };
+
     return {
       success: true,
       data: {
@@ -242,7 +268,9 @@ export async function getPrintableMenuData(): Promise<{
           address: (business.address as string) || null,
           phone: (business.phone as string) || null,
           instagram: (business.instagram as string) || null,
+          facebook: (business.facebook as string) || null,
           website: (business.website as string) || null,
+          social_links: socialLinks,
           created_year: createdYear,
         },
         categories: nonEmpty,

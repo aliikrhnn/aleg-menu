@@ -10,12 +10,22 @@ import {
   TEMPLATES,
   SIZES,
   DIETARY_TAG_INFO,
+  resolveFonts,
   type TemplateId,
   type PaperSize,
   type TemplateSpec,
   type HeaderVariant,
   type FooterVariant,
+  type FontPresetId,
 } from '@/lib/printable-menu/templates';
+
+export type SocialQr = {
+  id: string;
+  label: string;
+  url: string;
+  qrDataUrl: string;
+  icon: string;
+};
 
 type Props = {
   data: PrintableMenuData;
@@ -36,6 +46,9 @@ type Props = {
   pageCategories?: PrintableMenuCategory[]; // Sadece bu sayfada gösterilecek kategoriler
   pageNumber?: number;
   totalPages?: number;
+  // Yeni — font + sosyal QR override (yarın ekleneceğini bilmiyorduk, şimdi eklendi)
+  fontPreset?: FontPresetId;
+  socialQrs?: SocialQr[];
 };
 
 const MM = 3.7795;
@@ -60,10 +73,15 @@ export const PrintMenuDocument = forwardRef<HTMLDivElement, Props>(
       pageCategories,
       pageNumber,
       totalPages,
+      fontPreset = 'template',
+      socialQrs,
     },
     ref
   ) {
-    const t = TEMPLATES[templateId];
+    const tBase = TEMPLATES[templateId];
+    // Font preset uygula — t.fonts.* her yerde otomatik değişir
+    const resolvedFonts = resolveFonts(tBase.fonts, fontPreset);
+    const t: TemplateSpec = { ...tBase, fonts: resolvedFonts };
     const s = SIZES[size];
     const widthPx = s.width_mm * MM;
     const heightPx = s.height_mm * MM;
@@ -285,6 +303,7 @@ export const PrintMenuDocument = forwardRef<HTMLDivElement, Props>(
               variant={footerVariant}
               customSignature={customSignature}
               tableLabel={tableLabel}
+              socialQrs={socialQrs}
             />
           )}
 
@@ -1121,6 +1140,7 @@ function Footer({
   variant,
   customSignature,
   tableLabel,
+  socialQrs,
 }: {
   t: TemplateSpec;
   business: PrintableMenuData['business'];
@@ -1129,8 +1149,11 @@ function Footer({
   variant: FooterVariant;
   customSignature: string;
   tableLabel?: string;
+  socialQrs?: SocialQr[];
 }) {
+  const hasSocialQrs = !!socialQrs && socialQrs.length > 0;
   return (
+    <>
     <div
       style={{
         marginTop: `${t.style.categoryGap}mm`,
@@ -1256,6 +1279,88 @@ function Footer({
         )}
       </div>
     </div>
+
+    {/* ============ SOSYAL MEDYA QR SATIRI (opsiyonel) ============ */}
+    {hasSocialQrs && (
+      <div
+        style={{
+          marginTop: `${t.style.categoryGap * 0.7}mm`,
+          paddingTop: `${t.style.categoryGap * 0.7}mm`,
+          borderTop: `1px dashed ${t.colors.line}`,
+        }}
+      >
+        <div
+          style={{
+            fontFamily: t.fonts.mono,
+            fontSize: '7pt',
+            fontWeight: 700,
+            letterSpacing: '0.24em',
+            textTransform: 'uppercase',
+            color: t.colors.accent,
+            marginBottom: '2mm',
+          }}
+        >
+          BİZİ TAKİP ET
+        </div>
+        <div
+          style={{
+            display: 'flex',
+            gap: '4mm',
+            flexWrap: 'wrap',
+          }}
+        >
+          {socialQrs!.map((s) => (
+            <div
+              key={s.id}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '1mm',
+                width: '18mm',
+              }}
+            >
+              <div
+                style={{
+                  width: '16mm',
+                  height: '16mm',
+                  background: '#FFFFFF',
+                  padding: '1mm',
+                  border: `1px solid ${t.colors.line}`,
+                  borderRadius: '1.5mm',
+                }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={s.qrDataUrl}
+                  alt={s.label}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    display: 'block',
+                  }}
+                />
+              </div>
+              <div
+                style={{
+                  fontFamily: t.fonts.mono,
+                  fontSize: '6pt',
+                  fontWeight: 700,
+                  letterSpacing: '0.10em',
+                  textTransform: 'uppercase',
+                  color: t.colors.ink_muted,
+                  textAlign: 'center',
+                  lineHeight: 1.1,
+                }}
+              >
+                {s.label}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 
@@ -1716,6 +1821,7 @@ const PhotoHeroLayout = forwardRef<HTMLDivElement, LayoutVariantProps>(
               variant={footerVariant}
               customSignature={customSignature}
               tableLabel={tableLabel}
+              socialQrs={socialQrs}
             />
           )}
 
@@ -2514,6 +2620,7 @@ const EditorialLayout = forwardRef<HTMLDivElement, LayoutVariantProps>(
               variant={footerVariant}
               customSignature={customSignature}
               tableLabel={tableLabel}
+              socialQrs={socialQrs}
             />
           )}
 
