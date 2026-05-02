@@ -428,6 +428,210 @@ export function IdentityTab({
         </div>
       </Card>
 
+      {/* ============ WIFI KARTI ============ */}
+      <Card
+        title="WiFi"
+        description="Müşteri menüsünde tıklanabilir kart. Müşteri tek tıkla bağlanabilir."
+      >
+        <div className="space-y-4">
+          <Field label="Ağ adı (SSID)" hint="Yönlendiricinin yayın adı">
+            <Input
+              value={settings.menu_theme.wifi.ssid || ''}
+              onChange={(v) =>
+                onChange('menu_theme', {
+                  ...settings.menu_theme,
+                  wifi: { ...settings.menu_theme.wifi, ssid: v || null },
+                })
+              }
+              placeholder="Cafe-Misafir"
+              maxLength={64}
+            />
+          </Field>
+
+          <Field label="Şifre" hint="Boş bırakırsan müşteri menüsünde gösterilmez">
+            <Input
+              value={settings.menu_theme.wifi.password || ''}
+              onChange={(v) =>
+                onChange('menu_theme', {
+                  ...settings.menu_theme,
+                  wifi: { ...settings.menu_theme.wifi, password: v || null },
+                })
+              }
+              placeholder="••••••••"
+              maxLength={128}
+              type="text"
+            />
+          </Field>
+
+          <Field label="Güvenlik tipi">
+            <div className="grid grid-cols-4 gap-2">
+              {(['WPA', 'WPA3', 'WEP', 'nopass'] as const).map((sec) => {
+                const selected = settings.menu_theme.wifi.security === sec;
+                return (
+                  <button
+                    key={sec}
+                    type="button"
+                    onClick={() =>
+                      onChange('menu_theme', {
+                        ...settings.menu_theme,
+                        wifi: { ...settings.menu_theme.wifi, security: sec },
+                      })
+                    }
+                    className="h-10 rounded-[var(--r-sm)] text-xs font-semibold transition-all uppercase"
+                    style={{
+                      fontFamily: 'var(--f-mono)',
+                      letterSpacing: '0.06em',
+                      background: selected
+                        ? 'var(--ink)'
+                        : 'var(--card)',
+                      color: selected
+                        ? 'var(--paper)'
+                        : 'var(--ink-2)',
+                      border: selected
+                        ? '1px solid var(--ink)'
+                        : '1px solid var(--line)',
+                    }}
+                  >
+                    {sec === 'nopass' ? 'Açık' : sec}
+                  </button>
+                );
+              })}
+            </div>
+          </Field>
+
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={settings.menu_theme.wifi.hidden}
+              onChange={(e) =>
+                onChange('menu_theme', {
+                  ...settings.menu_theme,
+                  wifi: {
+                    ...settings.menu_theme.wifi,
+                    hidden: e.target.checked,
+                  },
+                })
+              }
+              className="cursor-pointer"
+            />
+            <span className="text-sm text-ink-2">
+              Gizli ağ (SSID yayını yok)
+            </span>
+          </label>
+
+          {settings.menu_theme.wifi.ssid && (
+            <div
+              className="p-3 rounded-[var(--r-sm)] text-xs"
+              style={{
+                background: 'var(--paper-2)',
+                color: 'var(--ink-3)',
+              }}
+            >
+              💡 Müşteri menüsünde "WiFi" kartı görünür. Tıklayınca şifre +
+              QR kod açılır. iPhone/Android kamerası QR'ı tarayınca otomatik
+              bağlanır.
+            </div>
+          )}
+        </div>
+      </Card>
+
+      {/* ============ SOSYAL MEDYA QR KARTI ============ */}
+      <Card
+        title="Sosyal Medya"
+        description="Hesap bağlantıları. Müşteri menüsünde QR kodları otomatik oluşturulur."
+      >
+        <div className="space-y-4">
+          {/* Mevcut alanlar — kısa hatırlatma */}
+          <div
+            className="p-3 rounded-[var(--r-sm)] text-xs"
+            style={{ background: 'var(--paper-2)', color: 'var(--ink-3)' }}
+          >
+            Instagram, Facebook ve websitesi <strong>Yer & İletişim</strong>{' '}
+            sekmesinden eklenir. Aşağıda ek platformlar.
+          </div>
+
+          <Field label="TikTok" hint="https://tiktok.com/@kullanici">
+            <Input
+              value={settings.menu_theme.social_links.tiktok || ''}
+              onChange={(v) =>
+                onChange('menu_theme', {
+                  ...settings.menu_theme,
+                  social_links: {
+                    ...settings.menu_theme.social_links,
+                    tiktok: v || null,
+                  },
+                })
+              }
+              placeholder="https://tiktok.com/@..."
+            />
+          </Field>
+
+          <Field label="X (Twitter)" hint="https://x.com/kullanici">
+            <Input
+              value={settings.menu_theme.social_links.x || ''}
+              onChange={(v) =>
+                onChange('menu_theme', {
+                  ...settings.menu_theme,
+                  social_links: {
+                    ...settings.menu_theme.social_links,
+                    x: v || null,
+                  },
+                })
+              }
+              placeholder="https://x.com/..."
+            />
+          </Field>
+
+          <Field label="YouTube" hint="https://youtube.com/@kanal">
+            <Input
+              value={settings.menu_theme.social_links.youtube || ''}
+              onChange={(v) =>
+                onChange('menu_theme', {
+                  ...settings.menu_theme,
+                  social_links: {
+                    ...settings.menu_theme.social_links,
+                    youtube: v || null,
+                  },
+                })
+              }
+              placeholder="https://youtube.com/@..."
+            />
+          </Field>
+
+          <Field label="Threads" hint="https://threads.net/@kullanici">
+            <Input
+              value={settings.menu_theme.social_links.threads || ''}
+              onChange={(v) =>
+                onChange('menu_theme', {
+                  ...settings.menu_theme,
+                  social_links: {
+                    ...settings.menu_theme.social_links,
+                    threads: v || null,
+                  },
+                })
+              }
+              placeholder="https://threads.net/@..."
+            />
+          </Field>
+
+          <Field label="LinkedIn" hint="https://linkedin.com/company/...">
+            <Input
+              value={settings.menu_theme.social_links.linkedin || ''}
+              onChange={(v) =>
+                onChange('menu_theme', {
+                  ...settings.menu_theme,
+                  social_links: {
+                    ...settings.menu_theme.social_links,
+                    linkedin: v || null,
+                  },
+                })
+              }
+              placeholder="https://linkedin.com/..."
+            />
+          </Field>
+        </div>
+      </Card>
+
       {/* AI Modals */}
       {sloganModal && (
         <AiSloganModal

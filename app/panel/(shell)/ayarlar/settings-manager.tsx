@@ -400,8 +400,19 @@ export function SettingsManager({ initialSettings, rootDomain }: Props) {
 
         {tab === 'theme' && (
           <ThemeTab
-            theme={settings.menu_theme}
-            onChange={(t) => patch('menu_theme', t)}
+            theme={{
+              preset: settings.menu_theme.preset,
+              accent_override: settings.menu_theme.accent_override,
+              font_preset: settings.menu_theme.font_preset,
+            }}
+            onChange={(t) =>
+              patch('menu_theme', {
+                ...settings.menu_theme,
+                preset: t.preset,
+                accent_override: t.accent_override,
+                font_preset: t.font_preset,
+              })
+            }
             slug={settings.slug}
             rootDomain={rootDomain}
           />

@@ -8,15 +8,18 @@ import {
   resolveTheme,
 } from '@/lib/menu-themes';
 import { ThemePreview } from './theme-preview';
+import type { FontPreset } from '@/lib/actions/settings';
 
 type Props = {
   theme: {
     preset: ThemePreset;
     accent_override: string | null;
+    font_preset: FontPreset;
   };
   onChange: (next: {
     preset: ThemePreset;
     accent_override: string | null;
+    font_preset: FontPreset;
   }) => void;
   slug: string;
   rootDomain: string;
@@ -45,11 +48,27 @@ export function ThemeTab({ theme, onChange, slug, rootDomain }: Props) {
   );
 
   const handleSelectPreset = (preset: ThemePreset) => {
-    onChange({ preset, accent_override: theme.accent_override });
+    onChange({
+      preset,
+      accent_override: theme.accent_override,
+      font_preset: theme.font_preset,
+    });
   };
 
   const handleAccentChange = (color: string | null) => {
-    onChange({ preset: theme.preset, accent_override: color });
+    onChange({
+      preset: theme.preset,
+      accent_override: color,
+      font_preset: theme.font_preset,
+    });
+  };
+
+  const handleFontChange = (font_preset: FontPreset) => {
+    onChange({
+      preset: theme.preset,
+      accent_override: theme.accent_override,
+      font_preset,
+    });
   };
 
   const handleCustomColorApply = () => {
@@ -318,10 +337,112 @@ export function ThemeTab({ theme, onChange, slug, rootDomain }: Props) {
         </div>
       </section>
 
-      {/* ========== ÖNİZLEME ========== */}
+      {/* ========== YAZI TİPİ ========== */}
       <section>
         <SectionHeader
           eyebrow="Adım 3"
+          title="Yazı tipi"
+          description="Menü başlıklarının karakteri. Hikâyeli serif, modern sans, dikkat çeken display, ya da teknik mono."
+        />
+
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {(
+            [
+              {
+                id: 'serif',
+                label: 'Serif',
+                sample: 'Karaköy',
+                family:
+                  '"Instrument Serif", "Cormorant Garamond", Georgia, serif',
+                italic: true,
+                description: 'Klasik, edebi',
+              },
+              {
+                id: 'sans',
+                label: 'Sans',
+                sample: 'Karaköy',
+                family:
+                  '"Inter", "Helvetica Neue", system-ui, sans-serif',
+                italic: false,
+                description: 'Modern, temiz',
+              },
+              {
+                id: 'display',
+                label: 'Display',
+                sample: 'Karaköy',
+                family: '"Bricolage Grotesque", "Inter", sans-serif',
+                italic: false,
+                description: 'İddialı, dikkat çekici',
+                weight: 700,
+              },
+              {
+                id: 'mono',
+                label: 'Mono',
+                sample: 'Karaköy',
+                family: '"JetBrains Mono", "Courier New", monospace',
+                italic: false,
+                description: 'Teknik, brutalist',
+              },
+            ] as const
+          ).map((f) => {
+            const selected = theme.font_preset === f.id;
+            return (
+              <button
+                key={f.id}
+                onClick={() => handleFontChange(f.id)}
+                className="text-left p-4 rounded-[var(--r-sm)] transition-all"
+                style={{
+                  background: selected
+                    ? 'color-mix(in oklab, var(--ink) 4%, var(--card))'
+                    : 'var(--card)',
+                  border: selected
+                    ? '2px solid var(--ink)'
+                    : '1px solid var(--line)',
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: f.family,
+                    fontStyle: f.italic ? 'italic' : 'normal',
+                    fontSize: 28,
+                    fontWeight: 'weight' in f ? (f as { weight: number }).weight : 500,
+                    color: 'var(--ink)',
+                    lineHeight: 1,
+                  }}
+                >
+                  {f.sample}
+                </div>
+                <div
+                  className="mt-3 uppercase"
+                  style={{
+                    fontFamily: 'var(--f-mono)',
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: '0.14em',
+                    color: selected ? 'var(--ink)' : 'var(--ink-3)',
+                  }}
+                >
+                  {f.label}
+                </div>
+                <div
+                  className="mt-1"
+                  style={{
+                    fontSize: 12,
+                    color: 'var(--ink-3)',
+                  }}
+                >
+                  {f.description}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* ========== ÖNİZLEME ========== */}
+      <section>
+        <SectionHeader
+          eyebrow="Adım 4"
           title="Canlı önizleme"
           description="Müşterinin gerçek telefonunda gördüğü menü. Welcome animasyonu, dekoratif öğeler, tüm tema dokunuşları."
         />

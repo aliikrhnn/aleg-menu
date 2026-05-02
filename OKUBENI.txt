@@ -1,112 +1,205 @@
 ═══════════════════════════════════════════════════════════════
-  ALEG · ZORLA ŞİFRE DEĞİŞTİRME REDIRECT FİX
-  3 katmanlı belt-and-braces koruma
+  ALEG · 3 FEATURE — WIFI + SOSYAL QR + FONT
+  Müşteri menüsü zenginleştirme
   2 Mayıs 2026
 ═══════════════════════════════════════════════════════════════
 
-⚠ NEDEN BU PAKET
-─────────────────
-ramazan@aleg.com hesabıyla login olunca /sifre-degistir'e
-yönlendirme çalışmadı. Sayfa kendi başına açılıyor (push'lu)
-ama otomatik yönlendirme tetiklenmedi. Muhtemel sebepler:
+✱ NE EKLENDİ
+─────────────
+1. WIFI: Panelden ssid/şifre/güvenlik gir → müşteri menüsünde
+   tıklanabilir WiFi kartı, açınca şifre + QR kod (otomatik
+   bağlanma) gösterir.
 
-  • (shell)/layout.tsx push edilmemiş olabilir (PowerShell'de
-    'app/panel/(shell)/...' tırnak unutulduysa git add atlar)
-  • Cookie'deki user metadata güncel değil
-  • Server component cache
+2. SOSYAL MEDYA QR: Panelden TikTok/X/YouTube/Threads/LinkedIn
+   ekle → müşteri menüsünde mevcut Instagram/Facebook/Web ile
+   birlikte hepsinin QR'ı sistem tarafından otomatik üretilir.
 
-ÇÖZÜM: 3 katmanlı redirect — hangi katman push'lansa çalışır.
+3. FONT: Tema tab'a 4 font seçeneği (Serif/Sans/Display/Mono).
+   Müşteri menüsündeki başlıklar bu fonta geçer.
 
-✱ 3 KATMAN
-───────────
-Katman 1 — Login form (client, en hızlı):
-  Login butonu basıldığında, supabase'den dönen user_metadata
-  kontrol edilir. must_change_password=true ise direkt
-  /sifre-degistir'e router.push olur. Kullanıcı /panel'i
-  hiç görmez.
+DB MIGRATION YOK. Hepsi mevcut menu_theme JSONB kolonuna
+sıkıştırılır (geriye uyumlu, eski veri bozulmaz).
 
-Katman 2 — Middleware (her request, EN GÜÇLÜ):
-  Her request'te supabase.auth.getUser() ile metadata kontrol.
-  Cookie'leri her seferinde tazeler, cache yok. Eğer kullanıcı
-  /sifre-degistir dışında bir yere gitmeye çalışırsa zorla
-  oraya yönlendirir.
-
-Katman 3 — Panel (shell) layout (server component, yedek):
-  Önceki paketten gelen kontrol. Layout zaten doğruydu, bu
-  pakete dahil ettim ki push'lanmamışsa burada da gelir.
-
-✱ DOSYALAR (3 adet)
+✱ DOSYALAR (6 adet)
 ───────────────────
-  middleware.ts                            Katman 2 (yeni check)
-  app/panel/giris/login-form.tsx           Katman 1 (yeni redirect)
-  app/panel/(shell)/layout.tsx             Katman 3 (yedek olarak)
+DEĞİŞTİ:
+  lib/actions/settings.ts                          type + parse + validation
+  app/panel/(shell)/ayarlar/tabs/theme-tab.tsx     font seçim UI eklendi
+  app/panel/(shell)/ayarlar/tabs/identity-tab.tsx  WiFi + sosyal medya kartları
+  app/panel/(shell)/ayarlar/settings-manager.tsx   ThemeTab onChange merge fix
+  app/menu/[slug]/page.tsx                          QR generate + font CSS + render
 
-✱ DEĞİŞİKLİK DETAYI
-───────────────────
-middleware.ts (PANEL AUTH CHECK bloğu, ~satır 156):
-  + getUser sonrası: must_change_password kontrolü
-  + true ise + /sifre-degistir dışındaysa → redirect
+YENİ:
+  app/menu/[slug]/business-extras.tsx              Müşteri menüsünde WiFi/Social
 
-app/panel/giris/login-form.tsx (handleSubmit):
-  + signInWithPassword'dan data dönüşü alındı
-  + signInData.user.user_metadata.must_change_password kontrol
-  + true ise router.push('/sifre-degistir' veya '/panel/sifre-degistir')
-  + false ise eski akış (/ veya /panel)
+✱ PANEL TARAFI (NEREDE NE GİRİLECEK)
+─────────────────────────────────────
+Ayarlar → Kimlik tab:
+  • İşletme kimliği (mevcut)
+  • Logo görseli (mevcut)
+  • [YENİ] WiFi:
+      - Ağ adı (SSID)
+      - Şifre (boş bırakılırsa müşteri menüsünde gösterilmez)
+      - Güvenlik tipi: WPA / WPA3 / WEP / Açık
+      - Gizli ağ checkbox
+  • [YENİ] Sosyal Medya:
+      - TikTok URL
+      - X (Twitter) URL
+      - YouTube URL
+      - Threads URL
+      - LinkedIn URL
+      (Instagram/Facebook/Web hâlâ Yer & İletişim'de)
 
-app/panel/(shell)/layout.tsx:
-  Önceki "aleg-sifre-degistir" paketindeki must_change check
-  buradaydı zaten. Bu pakete dahil ettim ki PowerShell parantez
-  sorunu yüzünden push'lanmadıysa şimdi gelsin.
+Ayarlar → Tema tab:
+  • Adım 1: Tema seç (mevcut)
+  • Adım 2: Vurgu rengi (mevcut)
+  • [YENİ] Adım 3: Yazı tipi
+      - Serif (Instrument Serif italik) — varsayılan
+      - Sans (Inter)
+      - Display (Bricolage Grotesque)
+      - Mono (JetBrains Mono)
+  • Adım 4: Canlı önizleme (eski Adım 3)
+
+✱ MÜŞTERİ MENÜSÜ TARAFI
+────────────────────────
+Menü içeriği bittikten sonra (footer öncesi) yeni bölüm:
+
+WiFi kartı:
+  → SSID adı + "GÖSTER" butonu
+  → Açıldığında: tıklanabilir şifre kutusu (kopyala) + QR kod
+  → iPhone/Android kamerası QR'ı taradığında otomatik bağlanır
+  → Açık ağda şifre kısmı gizli
+
+Sosyal medya bölümü:
+  → "BİZİ TAKİP ET" başlığı
+  → Grid: her platform bir kart (emoji + ad)
+  → Karta tıklayınca QR + URL + "Aç →" butonu
+  → Mevcut Instagram/Facebook/Web + yeni 5 platform birlikte
+
+Font:
+  → Müşteri menüsü kök elementine data-menu-font="serif|sans|
+    display|mono" attribute eklenir
+  → CSS rule h1/h2/h3/.menu-heading'e font + italic uygular
+  → Tema CSS'ten BAĞIMSIZ (kullanıcı tema seçer, ayrıca font seçer)
+
+✱ TEKNİK KARARLAR
+──────────────────
+1. **Migration yok** — Tüm veri mevcut businesses.menu_theme
+   JSONB kolonu içinde. Eski kayıtlar default değerler alır,
+   yeni alanlar ezilmez.
+
+2. **QR server-side üretilir** — page.tsx (server component)
+   QRCode library ile data URL oluşturur, BusinessExtras'a
+   <img src={dataUrl} /> olarak geçer. Client'a qrcode bundle
+   gitmez (~100kb tasarruf).
+
+3. **WiFi QR formatı** — `WIFI:T:WPA;S:Name;P:Pass;H:false;;`
+   Standart format, iOS/Android kamera native destek.
+   Special karakterler `\` ile escape edilir (\\;,":).
+   WPA3 → WPA olarak fallback (bazı eski cihazlar için).
+
+4. **Font apply** — data-menu-font attribute + global CSS
+   rule'ları MenuView'ın 3449 satırlık koduna dokunmaz.
+   h1/h2/h3 ve .menu-heading class'ı olan elementlere uygulanır.
+
+5. **ThemeTab onChange merge** — wifi/social_links kullanıcının
+   font/tema değiştirmesinde KAYBOLMAYACAK şekilde merge'lenir.
+   settings-manager.tsx'te explicit spread var:
+   `{ ...settings.menu_theme, preset: t.preset, ... }`
 
 ✱ NPM KURULUM
 ─────────────
-GEREKMİYOR.
+GEREKMİYOR. qrcode dependency ZATEN package.json'da
+(zaten var, lib/utils/qr-design.ts kullanıyor).
 
-✱ TEST
-──────
-1. Bu paketi push'la
-2. ramazan@aleg.com hesabını sil (zaten şifresini değiştirmiş
-   olabilirsin — fark etmez, must_change_password=false zaten)
-3. Yeni test kafe oluştur: admin → Yeni İşletme
-4. Geçici şifreyi al, panel.alegstudio.com'a gir
-5. ✓ BEKLENEN: Login butonu basar basmaz /sifre-degistir'e
-   gitmeli (Katman 1 hemen tetiklenir)
-6. Adres çubuğuna /panel yaz, dene → middleware ZORLA
-   /sifre-degistir'e geri atmalı (Katman 2)
-7. Şifreyi belirle → /panel'e yönlendir
-8. Tekrar çıkış + yeni şifreyle giriş → /panel'e direkt gitmeli
-   (must_change artık false)
+✱ MIGRATION
+─────────────
+GEREKMİYOR. menu_theme JSONB var, default'lar parse layer'da
+verilir, eski kayıtlar bozulmaz.
+
+✱ TEST AKIŞI
+────────────
+Senaryo 1 — WiFi:
+  1. Panel → Ayarlar → Kimlik
+  2. WiFi kartı: SSID="Cafe-Misafir", Şifre="cafe2026", WPA seç
+  3. Kaydet
+  4. Müşteri menüsünü aç (subdomain veya /menu/SLUG)
+  5. ✓ Aşağıda "WiFi" kartı görünmeli (Cafe-Misafir)
+  6. Karta dokun → şifre + QR açılmalı
+  7. Şifreyi tıkla → "✓ KOPYALANDI" göster
+  8. Telefon kamerasıyla QR tara → otomatik bağlanma teklifi
+
+Senaryo 2 — Sosyal Medya:
+  1. Panel → Ayarlar → Kimlik → Sosyal Medya kartı
+  2. TikTok = https://tiktok.com/@aleg
+  3. YouTube = https://youtube.com/@aleg
+  4. Kaydet
+  5. Müşteri menüsünü aç
+  6. ✓ "BİZİ TAKİP ET" bölümünde grid: TikTok + YouTube + (varsa
+    Instagram/Facebook)
+  7. Karta tıkla → QR + URL + "Aç →" butonu
+  8. QR'ı tara → o platforma git
+
+Senaryo 3 — Font:
+  1. Panel → Ayarlar → Tema → Adım 3: Yazı tipi → "Mono" seç
+  2. Kaydet
+  3. Müşteri menüsünü aç
+  4. ✓ Tüm h1/h2/h3 başlıklar JetBrains Mono fontuyla
+  5. "Sans" seç → Inter
+  6. "Display" seç → Bricolage Grotesque
+  7. "Serif" → varsayılan italic Instrument Serif geri gelir
+
+Senaryo 4 — Tema değiştirince WiFi/Sosyal kaybolmuyor:
+  1. WiFi gir, kaydet
+  2. Tema değiştir, font değiştir, kaydet
+  3. Kimlik tab'a geri dön
+  4. ✓ WiFi bilgisi hâlâ orada (merge çalışıyor)
 
 REGRESYON:
-  ✓ Eski hesaplar (must_change yok) etkilenmez, normal akış
-  ✓ Süper admin paneli /admin etkilenmez (panel subdomain değil)
-  ✓ Müşteri menüsü cafem.alegstudio.com etkilenmez
+  ✓ Eski hesaplar (menu_theme'de wifi/social yok) etkilenmez
+  ✓ Default font: serif (eski görünüm aynı)
+  ✓ WiFi/Sosyal boşsa kart görünmez (sade kalır)
+  ✓ Mevcut Instagram/Facebook/Web alanları aynı yerde, aynı şekilde
+
+✱ EDGE CASES
+─────────────
+• WiFi şifresinde özel karakter (#, $, ', ", \, ;, :) — QR'a
+  encode edilirken \ ile escape edilir, sorun yok.
+
+• WiFi WPA3 — bazı eski telefonlar desteklemez, QR formatında
+  WPA olarak fallback'ler (bağlantı yine kurulur).
+
+• Sosyal medya URL https:// olmadan girilirse:
+  - Backend reddeder ("https:// ile başlamalı")
+  - Toast hatası gösterir
+
+• 3450 satırlık menu-view.tsx'e dokunulmadı — risk minimum.
 
 ✱ PUSH (Windows PowerShell)
 ───────────────────────────
-ÖNEMLİ: Parantezli path'ler için TEK TIRNAK ZORUNLU.
-
-KOLAY YOL (önerilen):
+KOLAY YOL:
   git add .
-  git status               # 3 dosya değişiklik onay
-  git commit -m "fix(panel): zorla sifre degistir redirect (3 katman)"
+  git status                  # 6 dosya değişiklik (1 yeni)
+  git commit -m "feat(menu): wifi + sosyal qr + font (3 feature)"
   git push
 
-VEYA tek tek:
-  git add middleware.ts
-  git add app/panel/giris/login-form.tsx
-  git add 'app/panel/(shell)/layout.tsx'      # ← TEK TIRNAK ZORUNLU
+VEYA tek tek (parantezli path → tek tırnak ZORUNLU):
+  git add lib/actions/settings.ts
+  git add 'app/panel/(shell)/ayarlar/tabs/theme-tab.tsx'
+  git add 'app/panel/(shell)/ayarlar/tabs/identity-tab.tsx'
+  git add 'app/panel/(shell)/ayarlar/settings-manager.tsx'
+  git add 'app/menu/[slug]/business-extras.tsx'
+  git add 'app/menu/[slug]/page.tsx'
   git status
-  git commit -m "fix(panel): zorla sifre degistir redirect (3 katman)"
+  git commit -m "feat(menu): wifi + sosyal qr + font (3 feature)"
   git push
-
-⚠ EĞER 'git add app/panel/(shell)/layout.tsx' ÇIPLAK YAZARSAN:
-PowerShell (shell) kısmını sub-expression olarak parse eder ve
-hata verir VEYA yanlış path eklenir. ALWAYS tek tırnak.
 
 ✱ ROLLBACK
 ──────────
 git revert HEAD
 git push
+
+Tek commit, temiz revert. Kullanıcı verisi (menu_theme JSONB)
+korunur, sadece yeni alanlar görünmez.
 
 ═══════════════════════════════════════════════════════════════

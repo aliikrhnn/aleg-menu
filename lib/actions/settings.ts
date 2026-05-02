@@ -37,6 +37,23 @@ export type OrderConfig = {
   };
 };
 
+export type WifiConfig = {
+  ssid: string | null;
+  password: string | null;
+  security: 'WPA' | 'WPA3' | 'WEP' | 'nopass';
+  hidden: boolean;
+};
+
+export type SocialLinks = {
+  tiktok: string | null;
+  x: string | null;
+  youtube: string | null;
+  threads: string | null;
+  linkedin: string | null;
+};
+
+export type FontPreset = 'serif' | 'sans' | 'display' | 'mono';
+
 export type BusinessSettings = {
   id: string;
   slug: string;
@@ -73,6 +90,9 @@ export type BusinessSettings = {
       | 'mediterranean'
       | 'darkluxe';
     accent_override: string | null;
+    font_preset: FontPreset;
+    wifi: WifiConfig;
+    social_links: SocialLinks;
   };
 };
 
@@ -149,7 +169,13 @@ export async function getBusinessSettings(): Promise<{
     }
 
     const rawTheme = data.menu_theme as
-      | { preset?: string; accent_override?: string | null }
+      | {
+          preset?: string;
+          accent_override?: string | null;
+          font_preset?: string;
+          wifi?: Partial<WifiConfig> | null;
+          social_links?: Partial<SocialLinks> | null;
+        }
       | null;
     const validPresets = [
       'brutalist',
@@ -168,6 +194,34 @@ export async function getBusinessSettings(): Promise<{
       /^#[0-9A-Fa-f]{6}$/.test(rawTheme.accent_override)
         ? rawTheme.accent_override
         : null;
+
+    // Font preset
+    const validFonts: FontPreset[] = ['serif', 'sans', 'display', 'mono'];
+    const themeFontPreset: FontPreset = validFonts.includes(
+      (rawTheme?.font_preset || '') as FontPreset
+    )
+      ? (rawTheme!.font_preset as FontPreset)
+      : 'serif';
+
+    // WiFi
+    const validSecurity = ['WPA', 'WPA3', 'WEP', 'nopass'];
+    const wifi: WifiConfig = {
+      ssid: rawTheme?.wifi?.ssid || null,
+      password: rawTheme?.wifi?.password || null,
+      security: validSecurity.includes(rawTheme?.wifi?.security || '')
+        ? (rawTheme!.wifi!.security as WifiConfig['security'])
+        : 'WPA',
+      hidden: !!rawTheme?.wifi?.hidden,
+    };
+
+    // Social links — sadece URL'leri sakla
+    const social_links: SocialLinks = {
+      tiktok: rawTheme?.social_links?.tiktok || null,
+      x: rawTheme?.social_links?.x || null,
+      youtube: rawTheme?.social_links?.youtube || null,
+      threads: rawTheme?.social_links?.threads || null,
+      linkedin: rawTheme?.social_links?.linkedin || null,
+    };
 
     const settings: BusinessSettings = {
       id: data.id,
@@ -190,6 +244,9 @@ export async function getBusinessSettings(): Promise<{
       menu_theme: {
         preset: themePreset,
         accent_override: themeAccent,
+        font_preset: themeFontPreset,
+        wifi,
+        social_links,
       },
     };
 
@@ -231,6 +288,9 @@ export type SettingsUpdate = Partial<{
       | 'mediterranean'
       | 'darkluxe';
     accent_override: string | null;
+    font_preset: FontPreset;
+    wifi: WifiConfig;
+    social_links: SocialLinks;
   };
 }>;
 
@@ -279,6 +339,49 @@ export async function updateBusinessSettings(
           success: false,
           error: 'Vurgu rengi #RRGGBB formatında olmalı',
         };
+      }
+      // font_preset
+      const validFonts = ['serif', 'sans', 'display', 'mono'];
+      if (
+        updates.menu_theme.font_preset !== undefined &&
+        !validFonts.includes(updates.menu_theme.font_preset)
+      ) {
+        return { success: false, error: 'Geçersiz font seçimi' };
+      }
+      // wifi
+      if (updates.menu_theme.wifi) {
+        const w = updates.menu_theme.wifi;
+        if (w.ssid && w.ssid.length > 64) {
+          return { success: false, error: 'WiFi adı 1-64 karakter' };
+        }
+        if (w.password && w.password.length > 128) {
+          return { success: false, error: 'WiFi şifresi en fazla 128 karakter' };
+        }
+        const validSec = ['WPA', 'WPA3', 'WEP', 'nopass'];
+        if (!validSec.includes(w.security)) {
+          return { success: false, error: 'Geçersiz WiFi güvenlik tipi' };
+        }
+      }
+      // social_links — URL kontrolü gevşek (https başlasın yeter)
+      if (updates.menu_theme.social_links) {
+        const sl = updates.menu_theme.social_links;
+        for (const [k, v] of Object.entries(sl)) {
+          if (v && typeof v === 'string') {
+            if (v.length > 300) {
+              return { success: false, error: `${k} bağlantısı çok uzun` };
+            }
+            if (
+              v.length > 0 &&
+              !v.startsWith('http://') &&
+              !v.startsWith('https://')
+            ) {
+              return {
+                success: false,
+                error: `${k} bağlantısı https:// ile başlamalı`,
+              };
+            }
+          }
+        }
       }
     }
 

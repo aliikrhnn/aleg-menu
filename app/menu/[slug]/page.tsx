@@ -1,9 +1,11 @@
 import { notFound } from 'next/navigation';
+import QRCode from 'qrcode';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { resolveQrSlug } from '@/lib/actions/qr';
 import { getPublicCallButtons } from '@/lib/actions/call-buttons';
 import { MenuView } from './menu-view';
 import { MenuThemeWrapper } from './menu-theme-wrapper';
+import { BusinessExtras } from './business-extras';
 import { resolveTheme, buildThemeCSS } from '@/lib/menu-themes';
 import type { LocalizedText } from '@/types/database';
 
@@ -29,7 +31,7 @@ export default async function CustomerMenuPage({ params, searchParams }: Props) 
   // 1. İşletmeyi slug'dan bul
   const { data: business } = await supabase
     .from('businesses')
-    .select('id, slug, name, logo_url, city, subscription_status, settings, app_config, order_config, menu_theme')
+    .select('id, slug, name, logo_url, city, subscription_status, settings, app_config, order_config, menu_theme, instagram, facebook, website')
     .eq('slug', params.slug)
     .maybeSingle();
 
@@ -226,6 +228,20 @@ export default async function CustomerMenuPage({ params, searchParams }: Props) 
   const themeConfig = (business.menu_theme as {
     preset?: string;
     accent_override?: string | null;
+    font_preset?: string;
+    wifi?: {
+      ssid?: string | null;
+      password?: string | null;
+      security?: 'WPA' | 'WPA3' | 'WEP' | 'nopass';
+      hidden?: boolean;
+    } | null;
+    social_links?: {
+      tiktok?: string | null;
+      x?: string | null;
+      youtube?: string | null;
+      threads?: string | null;
+      linkedin?: string | null;
+    } | null;
   } | null) || null;
 
   const finalPreset: ValidPreset =
@@ -238,17 +254,124 @@ export default async function CustomerMenuPage({ params, searchParams }: Props) 
       ? previewAccent
       : themeConfig?.accent_override || null;
 
+  // Font preset
+  const validFonts = ['serif', 'sans', 'display', 'mono'] as const;
+  type FontPreset = (typeof validFonts)[number];
+  const finalFont: FontPreset = validFonts.includes(
+    (themeConfig?.font_preset || '') as FontPreset
+  )
+    ? (themeConfig!.font_preset as FontPreset)
+    : 'serif';
+
   const resolvedTheme = resolveTheme({
     preset: finalPreset,
     accent_override: finalAccent,
   });
   const themeCSS = buildThemeCSS(resolvedTheme, '[data-menu-theme]');
 
+  // ============ FONT CSS (data-menu-font attribute'una göre) ============
+  // Müşteri menüsünün heading fontunu, kullanıcı seçimine göre değiştir.
+  // Tema CSS'ten BAĞIMSIZ — kullanıcı tema seçer, ayrıca font seçer.
+  const fontCSS = `
+    [data-menu-font="serif"] { --menu-heading-font: "Instrument Serif", "Cormorant Garamond", Georgia, serif; --menu-heading-italic: italic; }
+    [data-menu-font="sans"]  { --menu-heading-font: "Inter", "Helvetica Neue", system-ui, sans-serif; --menu-heading-italic: normal; }
+    [data-menu-font="display"] { --menu-heading-font: "Bricolage Grotesque", "Inter", sans-serif; --menu-heading-italic: normal; }
+    [data-menu-font="mono"]  { --menu-heading-font: "JetBrains Mono", "Courier New", monospace; --menu-heading-italic: normal; }
+    [data-menu-font] h1, [data-menu-font] h2, [data-menu-font] h3, [data-menu-font] .menu-heading {
+      font-family: var(--menu-heading-font, inherit) !important;
+      font-style: var(--menu-heading-italic, normal) !important;
+    }
+  `;
+
+  // ============ WIFI QR ============
+  // WIFI:T:WPA;S:NetworkName;P:Password;H:false;;
+  const wifi = {
+    ssid: themeConfig?.wifi?.ssid || null,
+    password: themeConfig?.wifi?.password || null,
+    security: (themeConfig?.wifi?.security || 'WPA') as
+      | 'WPA'
+      | 'WPA3'
+      | 'WEP'
+      | 'nopass',
+    hidden: !!themeConfig?.wifi?.hidden,
+    qrDataUrl: null as string | null,
+  };
+
+  if (wifi.ssid) {
+    const escape = (s: string) =>
+      s.replace(/([\\;,":])/g, '\\$1');
+    const wifiSec = wifi.security === 'WPA3' ? 'WPA' : wifi.security; // WPA3 → WPA fallback
+    const wifiString =
+      wifi.security === 'nopass'
+        ? `WIFI:T:nopass;S:${escape(wifi.ssid)};${
+            wifi.hidden ? 'H:true;' : ''
+          };`
+        : `WIFI:T:${wifiSec};S:${escape(wifi.ssid)};P:${escape(
+            wifi.password || ''
+          )};${wifi.hidden ? 'H:true;' : ''};`;
+    try {
+      wifi.qrDataUrl = await QRCode.toDataURL(wifiString, {
+        margin: 1,
+        width: 360,
+        color: { dark: '#1a1a1a', light: '#FFFFFF' },
+      });
+    } catch {
+      wifi.qrDataUrl = null;
+    }
+  }
+
+  // ============ SOSYAL MEDYA QR ============
+  // Hem mevcut alanlar (instagram/facebook/website) hem yenileri (tiktok/x/...)
+  const socialEntries: Array<{ id: string; label: string; url: string; icon: string }> = [];
+  const pushSocial = (
+    id: string,
+    label: string,
+    url: string | null | undefined,
+    icon: string
+  ) => {
+    if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+      socialEntries.push({ id, label, url, icon });
+    }
+  };
+  pushSocial('instagram', 'Instagram', business.instagram, '📷');
+  pushSocial('facebook', 'Facebook', business.facebook, '📘');
+  pushSocial('website', 'Web', business.website, '🌐');
+  pushSocial('tiktok', 'TikTok', themeConfig?.social_links?.tiktok, '🎵');
+  pushSocial('x', 'X', themeConfig?.social_links?.x, '𝕏');
+  pushSocial('youtube', 'YouTube', themeConfig?.social_links?.youtube, '▶');
+  pushSocial('threads', 'Threads', themeConfig?.social_links?.threads, '@');
+  pushSocial('linkedin', 'LinkedIn', themeConfig?.social_links?.linkedin, 'in');
+
+  const socialLinks: Array<{
+    id: string;
+    label: string;
+    url: string;
+    qrDataUrl: string;
+    icon: string;
+  }> = [];
+  for (const s of socialEntries) {
+    try {
+      const qr = await QRCode.toDataURL(s.url, {
+        margin: 1,
+        width: 240,
+        color: { dark: '#1a1a1a', light: '#FFFFFF' },
+      });
+      socialLinks.push({ ...s, qrDataUrl: qr });
+    } catch {
+      // QR oluşturulamadıysa atla
+    }
+  }
+
   return (
     <>
       {/* Tema CSS scope'lu olarak uygulanır */}
       <style dangerouslySetInnerHTML={{ __html: themeCSS }} />
-      <div data-menu-theme={resolvedTheme.id} style={{ position: 'relative', minHeight: '100vh' }}>
+      <style dangerouslySetInnerHTML={{ __html: fontCSS }} />
+      <div
+        data-menu-theme={resolvedTheme.id}
+        data-menu-font={finalFont}
+        style={{ position: 'relative', minHeight: '100vh' }}
+      >
         <MenuThemeWrapper
           theme={resolvedTheme}
           businessName={business.name}
@@ -273,6 +396,9 @@ export default async function CustomerMenuPage({ params, searchParams }: Props) 
             }
             callButtons={callButtons}
           />
+
+          {/* Wifi + Sosyal medya QR — menü altında */}
+          <BusinessExtras wifi={wifi} socialLinks={socialLinks} />
         </MenuThemeWrapper>
       </div>
     </>
