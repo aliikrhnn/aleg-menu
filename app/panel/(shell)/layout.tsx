@@ -19,6 +19,12 @@ export default async function PanelShellLayout({
     redirect('/panel/giris');
   }
 
+  // İlk login: geçici şifreyi değiştirmesi zorunlu
+  // (createBusiness yeni hesap için must_change_password=true atıyor)
+  if (user.user_metadata?.must_change_password === true) {
+    redirect('/panel/sifre-degistir');
+  }
+
   const { data: membership } = await supabase
     .from('business_members')
     .select('business_id, full_name')

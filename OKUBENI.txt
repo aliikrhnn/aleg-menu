@@ -1,146 +1,162 @@
 ═══════════════════════════════════════════════════════════════
-  ALEG · KASA HESAP-PANEL V2
-  TAM EKRAN + KALEM ADET BAZLI İKRAM/İPTAL
+  ALEG · GEÇİCİ ŞİFRE ZORLA DEĞİŞTİRME
+  Süper admin'den oluşturulan kafe sahipleri için ilk-login akışı
   2 Mayıs 2026
 ═══════════════════════════════════════════════════════════════
 
-⚠ ÖNEMLİ: BU PAKET 2 FEATURE BİRLİKTE İÇERİR
-─────────────────────────────────────────────
-  1. Hesap-panel TAM EKRAN modu (önceki paket)
-  2. 2x/3x kalemlerde her adet AYRI seçilip ikram/iptal (yeni)
-
-İki feature aynı dosyaya (hesap-panel.tsx) işlendiği için
-tek pakette geliyor. Önceki "aleg-hesap-tam-ekran" paketini
-push ettiysen de etmediysen de bunu pushlaman güvenli — her şey
-en son hâliyle gelecek.
+⚠ Bu paket "aleg-hesap-v2" paketinden BAĞIMSIZ — farklı dosyalar.
+İkisini de push ettiysen sorun yok, ikisi de bu paket dışında ve
+çakışmıyor. Sıraya göre push edebilirsin (önce v2, sonra bu).
 
 ═══════════════════════════════════════════════════════════════
 
-✱ NE DEĞİŞTİ — FEATURE 1: TAM EKRAN
-────────────────────────────────────
-Kasada "Hesap Al" tıklanınca açılan modal artık TAM EKRAN.
-Sağ menü (ürün ekle) çok daha geniş, geniş ekranda 3-4 sütun.
+✱ NE YAPILDI
+─────────────
+Yeni kafe oluşturulduğunda sahibi geçici şifreyle giriş yapıyor.
+Şu ana kadar bu şifreyle panele girip orada kalıyordu (güvensiz).
+Artık ilk girişte ZORLA "yeni şifre belirle" sayfasına yönlendiriyor.
+Kullanıcı yeni şifre belirlemeden panelin başka hiçbir yerine
+gidemiyor.
 
-✱ NE DEĞİŞTİ — FEATURE 2: ADET BAZLI İKRAM/İPTAL
-─────────────────────────────────────────────────
-Önceden "2× Ice Latte" tek satırdı, ikram/iptal hep tüm grubu
-işliyordu. Şimdi her adet ayrı satır olarak gözüküyor:
+✱ AKIŞ
+──────
+1. Süper admin → Yeni İşletme → form submit
+   → createBusiness auth user'ı yaratırken metadata:
+     must_change_password = true
+2. Sahibi panel.alegstudio.com'a giriş yapar (geçici şifreyle)
+3. Panel (shell) layout user.user_metadata.must_change_password
+   kontrolü → true → /panel/sifre-degistir'e zorla yönlendirme
+4. Kullanıcı yeni şifre + tekrar girer (en az 8 karakter)
+5. Submit → changeOwnPassword action:
+   - supabase.auth.updateUser({ password })
+   - metadata.must_change_password = false
+   - audit_log kaydı (opsiyonel, hata olursa ignore)
+6. Toast "Şifren güncellendi" + /panel'e yönlendirme
+7. Sonraki girişler artık doğrudan panele
 
-    ☐ 1× Ice Latte #1/2          ₺95
-    ☐ 1× Ice Latte #2/2          ₺95
-
-Kullanıcı 1'ini seçip ikram, diğerini iptal edebilir.
-Veya 1'ini ikram, kalan 1'i normal ödeyebilir.
-
-⚠ Para tutarsızlığı olmaması için: aynı kalemden KISMİ seçim
-varken (ör. 2'den sadece 1) → "Seçili Öde" / "Parçalı" / "Açık
-Hesap" butonları kapalı kalıyor. Üstte "⚠ KISMİ SEÇİM" altın
-badge'i çıkıyor. Önce ikram/iptal ile ayır, sonra öde.
-
-✱ DOSYALAR (2 adet)
+✱ DOSYALAR (6 adet)
 ───────────────────
-  components/order/hesap-panel.tsx
-  components/order/menu-picker.tsx
 
-✱ DEĞİŞİKLİK ÖZETİ
-──────────────────
-hesap-panel.tsx — TAM EKRAN:
-  • Modal: max-w-[1400px] → max-w-none + height calc(100vh - 0.5rem)
-  • Outer padding: p-2 sm:p-4 → p-1 sm:p-2
-  • Sol kalemler: flex-1 → lg:w-[480px] xl:w-[560px]
-  • Sağ menü: lg:w-[380px] sabit → lg:flex-1
+YENİ:
+  lib/actions/account.ts                      changeOwnPassword action
+  app/panel/sifre-degistir/page.tsx           Server component (auth check)
+  app/panel/sifre-degistir/form.tsx           Client form (3 alan, validasyon)
+  app/panel/sifre-degistir/layout.tsx         Minimal layout (sidebar yok)
 
-hesap-panel.tsx — ADET BAZLI:
-  • FlatItem tipi: subIndex + parentQuantity alanları
-  • flatItems: her item quantity adet sanal alt-satıra bölünüyor
-  • Selection key: orderId__itemId__subIndex (sanal key)
-  • itemRollups helper: virtual seçim → parent kaleme rollup
-  • hasPartialRollup flag: kısmi seçim → ödeme akışları kapalı
-  • İkram (handleGiftSelected): rollup + partialQty server desteği
-  • İptal (handleCancelSelected): rollup + partialQty server desteği
-  • Ödeme (Seçili / Parçalı / Açık Hesap): kısmi seçim → toast uyarı
-  • UI: "2× Item" → "1× Item #1/2" gösterimi
-  • Header: "1/4 seçili" + kısmi seçim badge
+DEĞİŞEN:
+  lib/actions/businesses.ts                   createBusiness'a metadata satırı
+  app/panel/(shell)/layout.tsx                must_change check + redirect
 
-menu-picker.tsx:
-  • Ürün gridi: grid-cols-2 → grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4
+✱ DEĞİŞİKLİK DETAYI
+───────────────────
+1. lib/actions/businesses.ts (createBusiness, ~satır 102-109):
+   user_metadata: {
+     full_name: input.owner_full_name,
+     must_change_password: true,         // YENİ SATIR
+   }
 
-NOT: Server tarafına HİÇ DOKUNULMADI. makeItemsComplimentary ve
-cancelOrderItems action'ları zaten partialQty parametresini
-destekliyordu, sadece UI kullanmıyordu. Şimdi kullanıyor.
+2. app/panel/(shell)/layout.tsx (auth check sonrası):
+   if (user.user_metadata?.must_change_password === true) {
+     redirect('/panel/sifre-degistir');
+   }
+
+3. lib/actions/account.ts (yeni dosya):
+   - changeOwnPassword({ newPassword, currentPassword? })
+   - Min 8 karakter validation
+   - currentPassword opsiyonel (forced akışta atlanır,
+     ayarlardan değişimde zorunlu — bonus tab için hazır)
+   - Şifre güncellendikten sonra metadata flag'i false yapar
+   - audit_log'a 'password_changed' kaydı atar (forced flag ile)
+
+4. app/panel/sifre-degistir/* (yeni klasör, 3 dosya):
+   - layout.tsx: sade ortalanmış kart, sidebar yok
+   - page.tsx: server component, login kontrol, başlık+açıklama
+     forced ise "Şifreni belirle / İLK GİRİŞ" eyebrow
+     forced değilse "Şifreni değiştir / HESAP" eyebrow
+   - form.tsx: client form, 3 alan (mevcut ops + yeni + tekrar),
+     göster/gizle toggle, çıkış yap butonu, hata gösterimi
 
 ✱ NPM KURULUM
 ─────────────
 GEREKMİYOR. Yeni dependency yok, package.json değişmedi.
+Migration GEREKMİYOR — supabase.auth.users.user_metadata
+kullanıyoruz, kendi DB tablomuza dokunmuyor.
 
-✱ TEST AKIŞI (canlı push öncesi MUTLAKA)
-────────────────────────────────────────
-1. demo.alegstudio.com/kasa aç
-2. Aktif masa seç, üzerinde 2x ya da 3x'li bir ürün varsa daha iyi
-   (ör. 2× Ice Latte = ₺190)
-3. "Hesap Al" tıkla
+✱ TEST AKIŞI (push öncesi)
+──────────────────────────
+Önkoşul: Süper admin'den TEST için yeni bir kafe oluştur
+(varsa eski test hesaplarını kullanmayalım — onların metadata'sında
+must_change_password yok, akış farklı çalışır).
 
-GÖRSEL:
-  ✓ Modal tam ekran açılmalı
-  ✓ Sağ menü geniş (xl:3 sütun, 2xl:4 sütun)
-  ✓ Sol kalem listesi: 2× Ice Latte yerine 2 ayrı satır:
-      ☐ 1× Ice Latte #1/2  ₺95
-      ☐ 1× Ice Latte #2/2  ₺95
+1. admin.alegstudio.com → Yeni İşletme:
+   - Ad: "Şifre Test Kafe"
+   - Slug: sifretestkafe
+   - Sahibi maili: kendi+test@gmail.com
+   - Plan: Pro
+   - Oluştur → success ekranında geçici şifreyi kopyala
 
-ADET BAZLI İKRAM TESTİ:
-  4. 2x'lik kalemden SADECE 1 adet seç (1 satır)
-  5. Üstte "1/X seçili" + sağında "⚠ KISMİ SEÇİM" badge'i çıksın
-  6. ★ İKRAM tıkla → "1 adet ikram edilecek" diyalog
-  7. Onayla → server otomatik kalemi böler:
-      • 1 adet is_complimentary=true
-      • 1 adet normal kalır
-  8. Liste yenilenmeli, görünüm:
-      ☐ 1× Ice Latte (★ İKRAM rozeti, üstü çizik ₺95)
-      ☐ 1× Ice Latte                          ₺95
+2. ⚠ Vercel manuel: Add Domain "sifretestkafe.alegstudio.com"
 
-ADET BAZLI İPTAL TESTİ:
-  9. Aynı şekilde 2x'lik kalemden 1 adet seç
-  10. ⊘ İPTAL → sebep gir → server kalemi 1+1'e böler, 1'i cancel
-  11. Liste:
-      • İPTAL rozetli, üstü çizik 1 satır
-      • Normal kalan 1 satır
+3. panel.alegstudio.com → giriş:
+   - Mail: kendi+test@gmail.com
+   - Şifre: (geçici şifre)
 
-ÖDEME GUARDLARI:
-  12. 2x'lik kalemden 1 adet seç (kısmi)
-  13. SEÇİLİ ÖDE tıkla → toast: "Aynı kalemden tüm adetleri seç..."
-  14. Parçalı butonu DİSABLED (tooltip uyarısı)
-  15. Aynı kalemin 2 adetini de seç (toggleAll ile veya tek tek)
-  16. Kısmi badge kaybolmalı, ödeme butonları açılmalı
+4. ✓ Beklenen: /panel'e değil, /panel/sifre-degistir'e gitsin.
+   Sayfada "Şifreni belirle / İLK GİRİŞ" başlık görünsün.
+   Sidebar yok, sadece form + çıkış butonu.
 
-REGRESYON (eski akışlar):
-  ✓ 1x'lik kalem ikram (parent qty=1, "ikram" → tüm kalem)
-  ✓ Tüm masayı öde (nakit/kart) — değişmedi
-  ✓ İndirim uygula — değişmedi
-  ✓ Bölme/parçalı ödeme (tüm adetler seçili) — çalışmalı
-  ✓ Mobile'da görünüm: tab bar aynı, kalemler aynı şekilde
-  ✓ Hızlı satış modu — virtual expansion da çalışmalı
+5. Validasyon kontrolleri:
+   - 7 karakterlik şifre yaz → "En az 8 karakter" hint
+   - Yeni ve tekrar farklı yaz → "Eşleşmiyor" hint
+   - "Şifreyi Belirle" butonu disabled kalmalı
+
+6. Geçerli şifre gir (örn. "Yeni12345"), tekrar aynı:
+   - "Şifreyi Belirle" tıkla
+   - Toast: "Şifren güncellendi"
+   - /panel'e yönlendirme
+
+7. ✓ Beklenen: /panel'de normal sidebar + dashboard.
+
+8. Çıkış yap, eski (geçici) şifreyle tekrar gir:
+   - "E-posta veya şifre hatalı" → DOĞRU davranış
+
+9. Yeni şifreyle gir:
+   - Direkt /panel'e gitsin, /panel/sifre-degistir gözükmesin
+
+REGRESYON:
+   ✓ Mevcut hesaplar (must_change_password yok) etkilenmez,
+     normal /panel akışı çalışır
+   ✓ Süper admin /admin paneli etkilenmez (farklı route group)
+   ✓ Müşteri menüsü (cafem.alegstudio.com) etkilenmez
 
 ✱ PUSH (Windows PowerShell)
 ───────────────────────────
-Önerilen (en kolay):
-
+KOLAY YOL:
   git add .
-  git status
-  git commit -m "feat(kasa): hesap-panel tam ekran + adet bazlı ikram/iptal"
+  git status                  # 6 dosya değişiklik onay
+  git commit -m "feat(panel): ilk girişte zorla sifre degistirme"
   git push
 
-Veya tek tek:
-
-  git add components/order/hesap-panel.tsx components/order/menu-picker.tsx
+VEYA tek tek (parantezli path → tek tırnak ZORUNLU):
+  git add lib/actions/account.ts lib/actions/businesses.ts
+  git add app/panel/sifre-degistir/
+  git add 'app/panel/(shell)/layout.tsx'
   git status
-  git commit -m "feat(kasa): hesap-panel tam ekran + adet bazlı ikram/iptal"
+  git commit -m "feat(panel): ilk girişte zorla sifre degistirme"
   git push
 
-✱ ROLLBACK PLANI (gerekirse)
-────────────────────────────
+✱ ROLLBACK PLANI
+────────────────
 git revert HEAD
 git push
 
-İki feature aynı commit'te olduğu için tek revert yeter.
+Tek commit, temiz revert.
+
+✱ SONRA GELECEK (Bonus tab — onay verilen)
+──────────────────────────────────────────
+Ayrı paket olarak: Ayarlar → Hesap tab. Kullanıcı her zaman
+şifresini değiştirebilsin, mevcut şifre + yeni + tekrar.
+changeOwnPassword action'ı ZATEN currentPassword destekli, bonus
+tab sadece UI. Bunu test sonrası ayrı paket olarak göndereceğim.
 
 ═══════════════════════════════════════════════════════════════

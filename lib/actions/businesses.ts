@@ -105,6 +105,9 @@ export async function createBusiness(input: CreateBusinessInput): Promise<Create
       email_confirm: true,
       user_metadata: {
         full_name: input.owner_full_name,
+        // Yeni kafe sahibi geçici şifreyle giriş yapacak. İlk login sonrası
+        // panel layout bu flag'i görüp /panel/sifre-degistir'e yönlendirecek.
+        must_change_password: true,
       },
     });
 
