@@ -9,20 +9,24 @@ type Props = {
     password: string | null;
     security: 'WPA' | 'WPA3' | 'WEP' | 'nopass';
     hidden: boolean;
-    qrDataUrl: string | null; // Server'da generate edildi
+    qrDataUrl: string | null;
   };
   socialLinks: Array<{
     id: string;
     label: string;
     url: string;
     qrDataUrl: string;
-    icon: string; // emoji veya SVG path
+    icon: string;
   }>;
 };
 
+type ActiveItem =
+  | { type: 'wifi' }
+  | { type: 'social'; id: string }
+  | null;
+
 export function BusinessExtras({ wifi, socialLinks }: Props) {
-  const [wifiOpen, setWifiOpen] = useState(false);
-  const [socialOpenId, setSocialOpenId] = useState<string | null>(null);
+  const [active, setActive] = useState<ActiveItem>(null);
   const [copied, setCopied] = useState(false);
 
   const hasWifi = !!wifi.ssid;
@@ -41,314 +45,284 @@ export function BusinessExtras({ wifi, socialLinks }: Props) {
     }
   }
 
+  function toggleWifi() {
+    setActive((prev) => (prev?.type === 'wifi' ? null : { type: 'wifi' }));
+  }
+  function toggleSocial(id: string) {
+    setActive((prev) =>
+      prev?.type === 'social' && prev.id === id
+        ? null
+        : { type: 'social', id }
+    );
+  }
+
+  const activeSocial =
+    active?.type === 'social'
+      ? socialLinks.find((s) => s.id === active.id) || null
+      : null;
+
   return (
-    <section
-      className="px-4 py-8 mt-4"
-      style={{ borderTop: '1px solid var(--line)' }}
-    >
-      <div className="max-w-2xl mx-auto space-y-4">
-        {/* ============ WIFI KARTI ============ */}
-        {hasWifi && (
+    <>
+      <div
+        className="sticky top-0 z-30"
+        style={{
+          background: 'color-mix(in oklab, var(--paper) 92%, transparent)',
+          backdropFilter: 'saturate(140%) blur(8px)',
+          WebkitBackdropFilter: 'saturate(140%) blur(8px)',
+          borderBottom: '1px solid var(--line)',
+        }}
+      >
+        <div className="max-w-2xl mx-auto px-4 py-2.5">
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+            {hasWifi && (
+              <PillButton
+                active={active?.type === 'wifi'}
+                onClick={toggleWifi}
+                label="WiFi"
+                icon={<WifiIcon />}
+              />
+            )}
+            {socialLinks.map((s) => (
+              <PillButton
+                key={s.id}
+                active={
+                  active?.type === 'social' && active.id === s.id
+                }
+                onClick={() => toggleSocial(s.id)}
+                label={s.label}
+                icon={<span style={{ fontSize: 14 }}>{s.icon}</span>}
+              />
+            ))}
+          </div>
+        </div>
+
+        {active && (
           <div
-            className="rounded-[14px] overflow-hidden transition-all"
             style={{
+              borderTop: '1px solid var(--line)',
               background: 'var(--card)',
-              border: '1px solid var(--line)',
             }}
           >
-            <button
-              onClick={() => setWifiOpen((v) => !v)}
-              className="w-full flex items-center gap-3 p-4 text-left transition-colors"
-              style={{ background: 'transparent' }}
-            >
-              <div
-                className="flex-shrink-0 w-11 h-11 rounded-full grid place-items-center"
-                style={{
-                  background: 'var(--accent)',
-                  color: 'var(--accent-ink)',
-                }}
-              >
-                <svg
-                  width="22"
-                  height="22"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M5 12.55a11 11 0 0 1 14.08 0" />
-                  <path d="M1.42 9a16 16 0 0 1 21.16 0" />
-                  <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
-                  <line x1="12" y1="20" x2="12.01" y2="20" />
-                </svg>
-              </div>
-              <div className="flex-1 min-w-0">
-                <div
-                  className="uppercase"
-                  style={{
-                    fontFamily: 'var(--f-mono, monospace)',
-                    fontSize: 10,
-                    fontWeight: 700,
-                    letterSpacing: '0.14em',
-                    color: 'var(--ink-3)',
-                  }}
-                >
-                  WIFI
-                </div>
-                <div
-                  className="truncate mt-0.5"
-                  style={{
-                    fontSize: 16,
-                    fontWeight: 600,
-                    color: 'var(--ink)',
-                  }}
-                >
-                  {wifi.ssid}
-                </div>
-              </div>
-              <div
-                style={{
-                  fontSize: 12,
-                  color: 'var(--ink-3)',
-                  fontFamily: 'var(--f-mono, monospace)',
-                  letterSpacing: '0.06em',
-                }}
-              >
-                {wifiOpen ? 'KAPAT' : 'GÖSTER'}
-              </div>
-            </button>
-
-            {wifiOpen && (
-              <div
-                className="px-4 pb-4 space-y-3"
-                style={{
-                  borderTop: '1px solid var(--line)',
-                }}
-              >
-                {/* Şifre */}
-                {wifi.password && wifi.security !== 'nopass' ? (
-                  <div className="pt-3">
-                    <div
-                      className="uppercase mb-1.5"
-                      style={{
-                        fontFamily: 'var(--f-mono, monospace)',
-                        fontSize: 9,
-                        fontWeight: 700,
-                        letterSpacing: '0.14em',
-                        color: 'var(--ink-3)',
-                      }}
-                    >
-                      ŞİFRE
-                    </div>
-                    <button
-                      onClick={copyPassword}
-                      className="w-full text-left p-3 rounded-[10px] transition-all hover:opacity-80"
-                      style={{
-                        background:
-                          'var(--paper-2)',
-                        fontFamily: 'var(--f-mono, monospace)',
-                        fontSize: 16,
-                        fontWeight: 700,
-                        color: 'var(--ink)',
-                        letterSpacing: '0.04em',
-                      }}
-                    >
-                      {wifi.password}
-                      <span
-                        style={{
-                          float: 'right',
-                          fontSize: 11,
-                          fontWeight: 500,
-                          color: 'var(--ink-3)',
-                          letterSpacing: '0.06em',
-                        }}
-                      >
-                        {copied ? '✓ KOPYALANDI' : 'KOPYALAMAK İÇİN DOKUN'}
-                      </span>
-                    </button>
-                  </div>
-                ) : (
+            <div className="max-w-2xl mx-auto px-4 py-4">
+              {active.type === 'wifi' && (
+                <div className="space-y-3">
                   <div
-                    className="pt-3 text-sm"
-                    style={{ color: 'var(--ink-2)' }}
-                  >
-                    Açık ağ — şifre gerektirmiyor.
-                  </div>
-                )}
-
-                {/* QR */}
-                {wifi.qrDataUrl && (
-                  <div className="pt-1">
-                    <div
-                      className="uppercase mb-1.5"
-                      style={{
-                        fontFamily: 'var(--f-mono, monospace)',
-                        fontSize: 9,
-                        fontWeight: 700,
-                        letterSpacing: '0.14em',
-                        color: 'var(--ink-3)',
-                      }}
-                    >
-                      VEYA TARA — OTOMATİK BAĞLAN
-                    </div>
-                    <div
-                      className="rounded-[10px] p-4 flex items-center justify-center"
-                      style={{
-                        background: '#FFFFFF',
-                      }}
-                    >
-                      <img
-                        src={wifi.qrDataUrl}
-                        alt="WiFi QR"
-                        width={180}
-                        height={180}
-                        style={{ display: 'block' }}
-                      />
-                    </div>
-                    <div
-                      className="text-center mt-2"
-                      style={{
-                        fontSize: 11,
-                        color: 'var(--ink-3)',
-                      }}
-                    >
-                      iPhone/Android kamerasıyla tara
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ============ SOSYAL MEDYA ============ */}
-        {hasSocial && (
-          <div>
-            <div
-              className="uppercase mb-3"
-              style={{
-                fontFamily: 'var(--f-mono, monospace)',
-                fontSize: 10,
-                fontWeight: 700,
-                letterSpacing: '0.14em',
-                color: 'var(--ink-3)',
-              }}
-            >
-              BİZİ TAKİP ET
-            </div>
-
-            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-              {socialLinks.map((s) => {
-                const open = socialOpenId === s.id;
-                return (
-                  <button
-                    key={s.id}
-                    onClick={() => setSocialOpenId(open ? null : s.id)}
-                    className="flex flex-col items-center justify-center p-3 rounded-[12px] transition-all"
+                    className="uppercase"
                     style={{
-                      background: open
-                        ? 'var(--accent)'
-                        : 'var(--card)',
-                      color: open
-                        ? 'var(--accent-ink)'
-                        : 'var(--ink)',
-                      border: open
-                        ? '1px solid var(--accent)'
-                        : '1px solid var(--line)',
+                      fontFamily: 'var(--f-mono, monospace)',
+                      fontSize: 9,
+                      fontWeight: 700,
+                      letterSpacing: '0.14em',
+                      color: 'var(--ink-3)',
                     }}
                   >
-                    <span style={{ fontSize: 22, lineHeight: 1 }}>
-                      {s.icon}
-                    </span>
-                    <span
-                      className="mt-1.5 uppercase"
-                      style={{
-                        fontFamily: 'var(--f-mono, monospace)',
-                        fontSize: 9,
-                        fontWeight: 700,
-                        letterSpacing: '0.10em',
-                      }}
-                    >
-                      {s.label}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+                    AĞ ADI
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 16,
+                      fontWeight: 600,
+                      color: 'var(--ink)',
+                    }}
+                  >
+                    {wifi.ssid}
+                  </div>
 
-            {/* QR detayı */}
-            {socialOpenId && (
-              <div
-                className="mt-3 p-4 rounded-[14px]"
-                style={{
-                  background: 'var(--card)',
-                  border: '1px solid var(--line)',
-                }}
-              >
-                {(() => {
-                  const s = socialLinks.find((x) => x.id === socialOpenId);
-                  if (!s) return null;
-                  return (
-                    <div className="flex items-center gap-4">
+                  {wifi.password && wifi.security !== 'nopass' ? (
+                    <>
+                      <div
+                        className="uppercase mt-3"
+                        style={{
+                          fontFamily: 'var(--f-mono, monospace)',
+                          fontSize: 9,
+                          fontWeight: 700,
+                          letterSpacing: '0.14em',
+                          color: 'var(--ink-3)',
+                        }}
+                      >
+                        ŞİFRE
+                      </div>
+                      <button
+                        onClick={copyPassword}
+                        className="w-full text-left p-3 rounded-[10px] transition-all hover:opacity-85"
+                        style={{
+                          background: 'var(--paper-2)',
+                          fontFamily: 'var(--f-mono, monospace)',
+                          fontSize: 16,
+                          fontWeight: 700,
+                          color: 'var(--ink)',
+                          letterSpacing: '0.04em',
+                        }}
+                      >
+                        {wifi.password}
+                        <span
+                          style={{
+                            float: 'right',
+                            fontSize: 10,
+                            fontWeight: 500,
+                            color: 'var(--ink-3)',
+                            letterSpacing: '0.06em',
+                          }}
+                        >
+                          {copied ? '✓ KOPYALANDI' : 'DOKUN'}
+                        </span>
+                      </button>
+                    </>
+                  ) : (
+                    <div className="text-sm" style={{ color: 'var(--ink-2)' }}>
+                      Açık ağ — şifre yok.
+                    </div>
+                  )}
+
+                  {wifi.qrDataUrl && (
+                    <div className="flex items-start gap-3 mt-2">
                       <div
                         className="flex-shrink-0 rounded-[10px] p-2"
                         style={{ background: '#FFFFFF' }}
                       >
                         <img
-                          src={s.qrDataUrl}
-                          alt={`${s.label} QR`}
+                          src={wifi.qrDataUrl}
+                          alt="WiFi QR"
                           width={120}
                           height={120}
                           style={{ display: 'block' }}
                         />
                       </div>
-                      <div className="flex-1 min-w-0">
+                      <div className="flex-1 pt-1">
                         <div
-                          className="uppercase mb-1"
+                          className="uppercase"
                           style={{
                             fontFamily: 'var(--f-mono, monospace)',
-                            fontSize: 10,
+                            fontSize: 9,
                             fontWeight: 700,
                             letterSpacing: '0.14em',
-                            color:
-                              'var(--ink-3)',
+                            color: 'var(--ink-3)',
                           }}
                         >
-                          {s.label}
+                          OTOMATİK BAĞLAN
                         </div>
                         <div
-                          className="text-sm break-all"
-                          style={{
-                            color: 'var(--ink-2)',
-                          }}
+                          className="mt-1 text-sm"
+                          style={{ color: 'var(--ink-2)' }}
                         >
-                          {s.url.replace(/^https?:\/\//, '')}
+                          Telefon kameranı QR&apos;a tut.
                         </div>
-                        <a
-                          href={s.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-block mt-2 px-3 py-1.5 rounded-[8px] text-xs font-semibold uppercase"
-                          style={{
-                            fontFamily: 'var(--f-mono, monospace)',
-                            letterSpacing: '0.06em',
-                            background: 'var(--accent)',
-                            color: 'var(--accent-ink)',
-                          }}
-                        >
-                          Aç →
-                        </a>
                       </div>
                     </div>
-                  );
-                })()}
-              </div>
-            )}
+                  )}
+                </div>
+              )}
+
+              {activeSocial && (
+                <div className="flex items-center gap-4">
+                  <div
+                    className="flex-shrink-0 rounded-[10px] p-2"
+                    style={{ background: '#FFFFFF' }}
+                  >
+                    <img
+                      src={activeSocial.qrDataUrl}
+                      alt={`${activeSocial.label} QR`}
+                      width={120}
+                      height={120}
+                      style={{ display: 'block' }}
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div
+                      className="uppercase mb-1"
+                      style={{
+                        fontFamily: 'var(--f-mono, monospace)',
+                        fontSize: 10,
+                        fontWeight: 700,
+                        letterSpacing: '0.14em',
+                        color: 'var(--ink-3)',
+                      }}
+                    >
+                      {activeSocial.label}
+                    </div>
+                    <div
+                      className="text-sm break-all"
+                      style={{ color: 'var(--ink-2)' }}
+                    >
+                      {activeSocial.url.replace(/^https?:\/\//, '')}
+                    </div>
+                    <a
+                      href={activeSocial.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-block mt-2 px-3 py-1.5 rounded-[8px] text-xs font-semibold uppercase transition-opacity hover:opacity-90"
+                      style={{
+                        fontFamily: 'var(--f-mono, monospace)',
+                        letterSpacing: '0.06em',
+                        background: 'var(--accent)',
+                        color: 'var(--accent-ink)',
+                      }}
+                    >
+                      Aç →
+                    </a>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
-    </section>
+
+      <style>{`.no-scrollbar::-webkit-scrollbar{display:none}.no-scrollbar{-ms-overflow-style:none;scrollbar-width:none}`}</style>
+    </>
+  );
+}
+
+function PillButton({
+  active,
+  onClick,
+  label,
+  icon,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  icon: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex-shrink-0 flex items-center gap-1.5 px-3 h-9 rounded-full transition-all"
+      style={{
+        background: active ? 'var(--accent)' : 'var(--card)',
+        color: active ? 'var(--accent-ink)' : 'var(--ink)',
+        border: active
+          ? '1px solid var(--accent)'
+          : '1px solid var(--line)',
+        fontFamily: 'var(--f-mono, monospace)',
+        fontSize: 11,
+        fontWeight: 700,
+        letterSpacing: '0.08em',
+        textTransform: 'uppercase',
+      }}
+    >
+      {icon}
+      <span>{label}</span>
+    </button>
+  );
+}
+
+function WifiIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M5 12.55a11 11 0 0 1 14.08 0" />
+      <path d="M1.42 9a16 16 0 0 1 21.16 0" />
+      <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
+      <line x1="12" y1="20" x2="12.01" y2="20" />
+    </svg>
   );
 }

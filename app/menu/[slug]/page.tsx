@@ -269,17 +269,26 @@ export default async function CustomerMenuPage({ params, searchParams }: Props) 
   });
   const themeCSS = buildThemeCSS(resolvedTheme, '[data-menu-theme]');
 
-  // ============ FONT CSS (data-menu-font attribute'una göre) ============
-  // Müşteri menüsünün heading fontunu, kullanıcı seçimine göre değiştir.
-  // Tema CSS'ten BAĞIMSIZ — kullanıcı tema seçer, ayrıca font seçer.
+  // ============ FONT CSS (data-menu-font'a göre) ============
+  // Müşteri menüsünde 69+ yerde inline `var(--f-serif)` kullanılıyor.
+  // h1/h2/h3 selector'ü yetersiz çünkü çoğu başlık div/span olarak yazılmış.
+  // Çözüm: değişkenin kendisini scope'lu olarak override etmek. Tema CSS'i
+  // önce render olur, fontCSS sonra → fontCSS kazanır.
   const fontCSS = `
-    [data-menu-font="serif"] { --menu-heading-font: "Instrument Serif", "Cormorant Garamond", Georgia, serif; --menu-heading-italic: italic; }
-    [data-menu-font="sans"]  { --menu-heading-font: "Inter", "Helvetica Neue", system-ui, sans-serif; --menu-heading-italic: normal; }
-    [data-menu-font="display"] { --menu-heading-font: "Bricolage Grotesque", "Inter", sans-serif; --menu-heading-italic: normal; }
-    [data-menu-font="mono"]  { --menu-heading-font: "JetBrains Mono", "Courier New", monospace; --menu-heading-italic: normal; }
-    [data-menu-font] h1, [data-menu-font] h2, [data-menu-font] h3, [data-menu-font] .menu-heading {
-      font-family: var(--menu-heading-font, inherit) !important;
-      font-style: var(--menu-heading-italic, normal) !important;
+    [data-menu-font="serif"] {
+      --f-serif: "Instrument Serif", "Cormorant Garamond", Georgia, serif !important;
+    }
+    [data-menu-font="sans"] {
+      --f-serif: "Inter", "Helvetica Neue", system-ui, sans-serif !important;
+      --f-sans: "Inter", "Helvetica Neue", system-ui, sans-serif !important;
+    }
+    [data-menu-font="display"] {
+      --f-serif: "Bricolage Grotesque", "Inter", sans-serif !important;
+      --f-sans: "Bricolage Grotesque", "Inter", sans-serif !important;
+    }
+    [data-menu-font="mono"] {
+      --f-serif: "JetBrains Mono", "Courier New", monospace !important;
+      --f-sans: "JetBrains Mono", "Courier New", monospace !important;
     }
   `;
 
@@ -377,6 +386,9 @@ export default async function CustomerMenuPage({ params, searchParams }: Props) 
           businessName={business.name}
           isPreview={!!previewPreset}
         >
+          {/* Wifi + Sosyal medya QR — sticky topbar (en üstte) */}
+          <BusinessExtras wifi={wifi} socialLinks={socialLinks} />
+
           <MenuView
             business={{
               id: business.id,
@@ -396,9 +408,6 @@ export default async function CustomerMenuPage({ params, searchParams }: Props) 
             }
             callButtons={callButtons}
           />
-
-          {/* Wifi + Sosyal medya QR — menü altında */}
-          <BusinessExtras wifi={wifi} socialLinks={socialLinks} />
         </MenuThemeWrapper>
       </div>
     </>

@@ -1,43 +1,117 @@
 ═══════════════════════════════════════════════════════════════
-  ALEG · LINT FIX (Push engelleyen 5 hata)
+  ALEG · MENÜ TOPBAR + FONT FİX
+  WiFi/Instagram başa taşındı, fontlar düzeltildi
   2 Mayıs 2026
 ═══════════════════════════════════════════════════════════════
 
 ✱ NE DÜZELTİLDİ
 ────────────────
-1. identity-tab.tsx satır 530-532 — JSX'te tırnak/apostrof
-   karakterleri escape edilmedi:
-   - "WiFi" → &quot;WiFi&quot;
-   - QR'ı  → QR&apos;ı
 
-2. hesap-panel.tsx satır 626 ve 760 — useCallback dependency
-   listesinde gereksiz `selectedFlatItems` vardı (callback
-   gövdesinde kullanılmıyordu, itemRollups zaten ondan türemiş).
+1) **FONT ÇALIŞMIYORDU — DÜZELTİLDİ**
+   Önceki paket h1/h2/h3 selector'ü kullanıyordu. Ama
+   menu-view.tsx'te 69 yerde `fontFamily: 'var(--f-serif)'`
+   inline style olarak yazılmış, sadece 8 yer h1/h2/h3.
+   Yani kuralım çoğu başlığa uygulanmıyordu.
+
+   Düzeltme: CSS değişkeninin KENDİSİNİ override etmek.
+   data-menu-font="sans" ise --f-serif: "Inter" yapıyoruz.
+   Böylece 69 inline style'ın hepsi otomatik değişir.
+
+   font preset etkisi:
+     • serif    → Instrument Serif (italik başlık)
+     • sans     → Inter (her yer modern temiz)
+     • display  → Bricolage Grotesque (kalın display)
+     • mono     → JetBrains Mono (teknik brutalist)
+
+2) **WiFi YERİ KÖTÜYDÜ — TOPBAR'A TAŞINDI**
+   Eskiden menünün ALTINDAYDI, müşteri scroll edip bulamıyordu.
+   Şimdi sticky topbar olarak EN ÜSTTE.
+
+   Görünüm:
+     ┌──────────────────────────────────────────┐
+     │ [📶 WIFI] [📷 INSTAGRAM] [🎵 TIKTOK] ... │ ← Sticky
+     └──────────────────────────────────────────┘
+            ↓ tıklayınca aşağı genişler
+     ┌──────────────────────────────────────────┐
+     │ AĞ ADI: Cafe-Misafir                     │
+     │ ŞİFRE:  cafe2026   [DOKUN]               │
+     │ [QR kod]   OTOMATİK BAĞLAN               │
+     └──────────────────────────────────────────┘
+     [müşteri menüsü buradan başlar]
+
+   - Yatay scroll'lu pill button'lar (mobile dostu)
+   - Tıkla → o butonun detayı topbar'ın hemen altında açılır
+   - Tema rengiyle uyumlu (--accent kullanıyor)
+   - Backdrop blur ile şık görünüm
 
 ✱ DOSYALAR (2 adet)
 ───────────────────
-  app/panel/(shell)/ayarlar/tabs/identity-tab.tsx
-  components/order/hesap-panel.tsx
+DEĞİŞTİ:
+  app/menu/[slug]/page.tsx                font CSS düzeltildi +
+                                          BusinessExtras üstte
+  app/menu/[slug]/business-extras.tsx     komple revize: sticky
+                                          topbar + pill butonlar +
+                                          expandable detay
 
-✱ NPM / MIGRATION
-─────────────────
-GEREKMİYOR.
+Yine MIGRATION YOK, NPM YOK.
+
+✱ TEST AKIŞI
+────────────
+1. Bu paketi push'la
+2. Müşteri menüsünü aç (panel.alegstudio.com/menu/SLUG veya
+   subdomain ise SLUG.alegstudio.com)
+3. ✓ TEST 1 — Topbar görünüyor mu:
+   - En üstte yatay buton barı [WIFI] [INSTAGRAM] vs.
+   - Scroll yapınca üstte sticky kalmalı
+4. ✓ TEST 2 — Tıkla detay açılıyor mu:
+   - WIFI'ye dokun → SSID + şifre + QR aşağı açılır
+   - Tekrar dokun → kapanır
+   - Başka bir butona dokun → o açılır, WIFI kapanır
+5. ✓ TEST 3 — Font değişiyor mu:
+   - Panel → Ayarlar → Tema → Adım 3 → "Sans" seç → Kaydet
+   - Müşteri menüsünü tekrar aç (gerekirse hard refresh Ctrl+F5)
+   - Tüm başlıklar Inter fontuyla görünmeli
+   - "Display" seç → Bricolage Grotesque (kalın)
+   - "Mono" seç → JetBrains Mono (teknik)
+   - "Serif" seç → varsayılan Instrument Serif italic geri gelir
+6. ✓ TEST 4 — Şifre kopyalama:
+   - WIFI'ye dokun → şifre kutusuna dokun
+   - "✓ KOPYALANDI" yazısı çıkmalı
+   - Yapıştır (notlar uygulamasına) → şifre gelmiş mi
+
+REGRESYON:
+  ✓ Eski hesaplar (wifi/social yok) → topbar görünmez (no-op)
+  ✓ Tema seçimi etkilenmedi
+  ✓ MenuView'a hâlâ dokunulmadı
+
+✱ MENÜ TASARIM SAYFASI (PRINTABLE PDF) İÇİN AYRI PAKET
+──────────────────────────────────────────────────────
+Sidebar'daki "Menü Tasarımları" sayfasına font + sosyal QR
+eklenmesi için AYRI BİR PAKET hazırlayacağım. Sebep:
+
+  - O sayfa printable PDF üretiyor (1470 satır)
+  - Font değişikliği template sisteminin font'larını revize
+    etmemi gerektirir
+  - Sosyal QR'ları template'in hangi pozisyonlarına eklenebilir
+    yapmam lazım (header/footer/dedicated section?)
+  - Bu büyük iş, tek pakete sığarsa risk büyür
+
+Bu paketi push'layıp test ettikten sonra ayrı paket yapacağım.
+Tek seferde test etmek daha güvenli.
 
 ✱ PUSH (Windows PowerShell)
 ───────────────────────────
 KOLAY YOL:
   git add .
   git status
-  git commit -m "fix(lint): jsx escape + useCallback deps temizle"
+  git commit -m "fix(menu): font override + topbar versiyonu"
   git push
 
-VEYA tek tek:
-  git add 'app/panel/(shell)/ayarlar/tabs/identity-tab.tsx'
-  git add components/order/hesap-panel.tsx
-  git commit -m "fix(lint): jsx escape + useCallback deps temizle"
+VEYA tek tek (parantezli path → tek tırnak ZORUNLU):
+  git add 'app/menu/[slug]/business-extras.tsx'
+  git add 'app/menu/[slug]/page.tsx'
+  git commit -m "fix(menu): font override + topbar versiyonu"
   git push
-
-Pre-push hook'taki next lint artık temiz geçer.
 
 ✱ ROLLBACK
 ──────────
