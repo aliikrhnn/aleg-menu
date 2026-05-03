@@ -35,6 +35,32 @@ export function PanelSidebar({
   const [collapsed, setCollapsed] = useState(false);
   const [stations, setStations] = useState<SidebarStation[]>(initialStations);
 
+  // External linkler için host bilgisini mount sonrası al (SSR-safe)
+  // Bu state set olunca external link'ler subdomain'li gerçek URL'e döner
+  const [hostInfo, setHostInfo] = useState<{
+    protocol: string;
+    rootDomain: string;
+    port: string;
+    isLocalDev: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    const host = window.location.hostname;
+    const isLocalDev =
+      host === 'localhost' ||
+      /^\d+\.\d+\.\d+\.\d+$/.test(host) ||
+      !host.includes('.');
+    const rootDomain = host.startsWith('panel.')
+      ? host.replace('panel.', '')
+      : host;
+    setHostInfo({
+      protocol: window.location.protocol,
+      rootDomain,
+      port: window.location.port ? `:${window.location.port}` : '',
+      isLocalDev,
+    });
+  }, []);
+
   const currentPath = pathname.startsWith('/panel') ? pathname.replace('/panel', '') || '/' : pathname;
 
   // Stations için Supabase Realtime
@@ -229,42 +255,31 @@ export function PanelSidebar({
               const openInNewTab = 'openInNewTab' in item && item.openInNewTab;
               const opensNewTab = external || openInNewTab;
 
-              // External linkler her zaman absolute '/kasa' gibi
-              // Subdomain'deysek root domain'e gitmek için tam URL kullan
-              // openInNewTab durumunda URL'i panel altında bırak (KDS panel.alegstudio.com/kds)
-              //
               // External (kasa/garson):
               //   - Hedef: https://[business-slug].alegstudio.com/kasa veya /garson
               //   - panel.alegstudio.com → baq.alegstudio.com/kasa (örnek)
               //   - localhost: olduğu gibi /kasa (single-tenant dev)
               //   - businessSlug yoksa fallback olarak root domain
+              //
+              // SSR-SAFE: hostInfo mount sonrası set olur, ilk render'da null
+              // Null iken external link item.href ile render edilir (örn /kasa)
+              // ama target=_blank olduğu için tarayıcı yeni sekmede açar.
+              // hostInfo geldikten sonra (mikrosaniye içinde) doğru URL render olur.
               const resolvedExternalHref = (() => {
                 if (!external) return null;
-                if (typeof window === 'undefined') return item.href;
-                const host = window.location.hostname;
-                const protocol = window.location.protocol;
-                const port = window.location.port ? `:${window.location.port}` : '';
-                // localhost / IP üzerinde subdomain yapmıyoruz
-                if (
-                  host === 'localhost' ||
-                  /^\d+\.\d+\.\d+\.\d+$/.test(host) ||
-                  !host.includes('.')
-                ) {
-                  return item.href;
-                }
-                // panel.alegstudio.com → ROOT alegstudio.com bul
-                const rootDomain = host.startsWith('panel.')
-                  ? host.replace('panel.', '')
-                  : host;
+                if (!hostInfo) return null; // SSR/hydration: null bırak, aşağıda işle
+                if (hostInfo.isLocalDev) return item.href;
                 if (businessSlug) {
-                  return `${protocol}//${businessSlug}.${rootDomain}${port}${item.href}`;
+                  return `${hostInfo.protocol}//${businessSlug}.${hostInfo.rootDomain}${hostInfo.port}${item.href}`;
                 }
-                // Slug yoksa root domain'e fallback (eski davranış)
-                return `${protocol}//${rootDomain}${port}${item.href}`;
+                // Slug yoksa root domain'e fallback
+                return `${hostInfo.protocol}//${hostInfo.rootDomain}${hostInfo.port}${item.href}`;
               })();
 
               const resolvedHref = external
-                ? resolvedExternalHref || item.href
+                ? // External link: hostInfo gelene kadar # render et (yanlış URL'e gitmesin)
+                  // hostInfo geldikten sonra gerçek subdomain URL'i basılır
+                  resolvedExternalHref || '#'
                 : isOnPanelSubdomain
                   ? item.href
                   : item.href === '/'
@@ -278,7 +293,16 @@ export function PanelSidebar({
                   target={opensNewTab ? '_blank' : undefined}
                   rel={opensNewTab ? 'noopener' : undefined}
                   onClick={(e) => {
-                    if (disabled) e.preventDefault();
+                    if (disabled) {
+                      e.preventDefault();
+                      return;
+                    }
+                    // External link henüz subdomain URL'ine resolve olmadıysa
+                    // (hostInfo gelmeden tıklandı) - engelle, yanlış URL'e gitmesin
+                    if (external && resolvedHref === '#') {
+                      e.preventDefault();
+                      return;
+                    }
                   }}
                   title={collapsed ? item.label : undefined}
                   className={cn(
