@@ -260,7 +260,7 @@ export async function deleteTable(
     // Güvenlik
     const { data: table } = await admin
       .from('tables')
-      .select('id, business_id')
+      .select('id, business_id, name')
       .eq('id', tableId)
       .maybeSingle();
 
@@ -282,11 +282,35 @@ export async function deleteTable(
       };
     }
 
-    // Soft delete: inactive yap (geçmiş siparişlerle ilişki kopmasın)
-    const { error } = await admin
-      .from('tables')
-      .update({ status: 'inactive' })
-      .eq('id', tableId);
+    // Açık (ödenmemiş) ticket var mı?
+    const { count: openTicketCount } = await admin
+      .from('tickets')
+      .select('*', { count: 'exact', head: true })
+      .eq('table_id', tableId)
+      .eq('status', 'open');
+
+    if ((openTicketCount ?? 0) > 0) {
+      return {
+        success: false,
+        error: 'Bu masada açık hesap var. Önce hesabı kapatın.',
+      };
+    }
+
+    // Bekleyen garson çağrısı varsa otomatik temizle (silinen masa için anlamsız)
+    await admin
+      .from('waiter_calls')
+      .update({ status: 'resolved', resolved_at: new Date().toISOString() })
+      .eq('table_id', tableId)
+      .in('status', ['pending', 'acknowledged']);
+
+    // GERÇEK SİLME — DB'den tamamen kaldır.
+    // FK constraint'leri otomatik halleder:
+    //   - orders.table_id → SET NULL (geçmiş sipariş kalır)
+    //   - tickets.table_id → SET NULL (kapanmış fişler kalır)
+    //   - order_logs.table_id → SET NULL (audit log korunur)
+    //   - waiter_calls.table_id → SET NULL (çağrı geçmişi korunur)
+    //   - qr_codes.table_id → CASCADE (QR otomatik silinir, masa yoksa kullanılamaz)
+    const { error } = await admin.from('tables').delete().eq('id', tableId);
 
     if (error) {
       return { success: false, error: error.message };

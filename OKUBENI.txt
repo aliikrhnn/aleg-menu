@@ -1,24 +1,76 @@
 ═══════════════════════════════════════════════════════════════
-  ALEG · LINT FIX (apostrof)
+  ALEG · MASA GERÇEK SİLME (soft → hard delete)
   2 Mayıs 2026
 ═══════════════════════════════════════════════════════════════
 
-✱ DÜZELTİLDİ
-─────────────
-client.tsx satır 973 — JSX text'inde apostrof escape edilmemişti:
-  Önce:  font'unu
-  Sonra: font&apos;unu
+✱ NE OLDU
+─────────
+deleteTable action'ı önceki halinde sadece status='inactive'
+yapıyordu. UI "kalıcı olarak silinecek" diyordu ama gerçekte
+masa DB'de kalıyordu — sadece listeden gizleniyordu.
+
+Sorun: zamanla DB'de "ölü" masalar birikiyor, isim çakışması
+yaşanabilir, kullanıcı şaşırıyor.
+
+✱ DÜZELTME
+──────────
+deleteTable artık DB'den GERÇEK SİL yapar. Sipariş geçmişi
+korunur çünkü FK constraint'leri ön tarafta doğru kurulmuş:
+
+  TABLO              ON DELETE   ANLAM
+  ─────────────────  ──────────  ────────────────────────────
+  orders.table_id    SET NULL    Geçmiş siparişler kalır,
+                                 sadece masa bağı kopar.
+  tickets.table_id   SET NULL    Kapanmış fişler korunur.
+  order_logs         SET NULL    Audit log korunur.
+  waiter_calls       SET NULL    Çağrı geçmişi korunur.
+  qr_codes           CASCADE     QR kod otomatik silinir
+                                 (masa yoksa anlamsız).
+
+Yani manuel temizleme yok, FK'ler kendi işini yapıyor.
+
+✱ EKLENEN PRE-FLIGHT KONTROLLER
+───────────────────────────────
+1. Aktif sipariş varsa (received/confirmed/preparing/ready)
+   → silmeyi reddet, "Önce siparişi tamamlayın" mesajı.
+2. Açık ticket (status=open) varsa
+   → silmeyi reddet, "Önce hesabı kapatın" mesajı.
+3. Bekleyen waiter_calls (pending/acknowledged) varsa
+   → otomatik resolve et (silinen masa için anlamsız).
 
 ✱ DOSYA (1 adet)
 ─────────────────
-  app/panel/(shell)/menu-tasarim/client.tsx
+  lib/actions/tables.ts
+
+✱ TEMİZLİK NOTU (Manuel SQL)
+────────────────────────────
+Eski sistemde inactive olarak kalmış 6 masa var:
+  - Demo Cafe (2): "Masa 111", "masa 1112322"
+  - Baq Kafe Lounge (4): "Lounge-1", "Lounge-10", "Lounge-11", "Lounge-12"
+
+Bunları zaten "silinmiş" sayıyoruz. Yeni delete mantığı sadece
+yeni silmeleri etkiler. Eskileri Claude ayrıca temizledi
+(SQL ile kalıcı kaldırıldı — sipariş geçmişi etkilenmedi).
+
+✱ TEST AKIŞI
+────────────
+1. Panel → Masalar
+2. Bir test masası oluştur (örn: "Test-99")
+3. Üzerine tıkla → "Sil" butonu
+4. "Bu masa kalıcı olarak silinecek" uyarısı → Onayla
+5. Masa listeden kaybolur ✓
+6. Aynı isimle (Test-99) tekrar oluşturabilirsin ✓ (önce çakışıyordu)
+
+REGRESYON KONTROL:
+  ✓ Geçmiş siparişler raporlarda görünmeye devam eder
+  ✓ "Bilinmeyen masa" olarak gözükebilir (table_id null)
+  ✓ Aktif siparişli masa silinmek istenirse hata verir
+  ✓ Açık hesaplı masa silinmek istenirse hata verir
 
 ✱ PUSH
 ──────
-  git add 'app/panel/(shell)/menu-tasarim/client.tsx'
-  git commit -m "fix(lint): apostrof escape"
+  git add lib/actions/tables.ts
+  git commit -m "feat(tables): soft delete -> hard delete with FK safety"
   git push
-
-VEYA: git add . && git commit -m "fix(lint): apostrof escape" && git push
 
 ═══════════════════════════════════════════════════════════════
