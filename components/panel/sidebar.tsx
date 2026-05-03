@@ -18,6 +18,7 @@ type SidebarStation = {
 
 interface PanelSidebarProps {
   businessName: string;
+  businessSlug: string;
   logoUrl?: string | null;
   businessId: string;
   initialStations: SidebarStation[];
@@ -25,6 +26,7 @@ interface PanelSidebarProps {
 
 export function PanelSidebar({
   businessName,
+  businessSlug,
   logoUrl,
   businessId,
   initialStations,
@@ -230,10 +232,39 @@ export function PanelSidebar({
               // External linkler her zaman absolute '/kasa' gibi
               // Subdomain'deysek root domain'e gitmek için tam URL kullan
               // openInNewTab durumunda URL'i panel altında bırak (KDS panel.alegstudio.com/kds)
+              //
+              // External (kasa/garson):
+              //   - Hedef: https://[business-slug].alegstudio.com/kasa veya /garson
+              //   - panel.alegstudio.com → baq.alegstudio.com/kasa (örnek)
+              //   - localhost: olduğu gibi /kasa (single-tenant dev)
+              //   - businessSlug yoksa fallback olarak root domain
+              const resolvedExternalHref = (() => {
+                if (!external) return null;
+                if (typeof window === 'undefined') return item.href;
+                const host = window.location.hostname;
+                const protocol = window.location.protocol;
+                const port = window.location.port ? `:${window.location.port}` : '';
+                // localhost / IP üzerinde subdomain yapmıyoruz
+                if (
+                  host === 'localhost' ||
+                  /^\d+\.\d+\.\d+\.\d+$/.test(host) ||
+                  !host.includes('.')
+                ) {
+                  return item.href;
+                }
+                // panel.alegstudio.com → ROOT alegstudio.com bul
+                const rootDomain = host.startsWith('panel.')
+                  ? host.replace('panel.', '')
+                  : host;
+                if (businessSlug) {
+                  return `${protocol}//${businessSlug}.${rootDomain}${port}${item.href}`;
+                }
+                // Slug yoksa root domain'e fallback (eski davranış)
+                return `${protocol}//${rootDomain}${port}${item.href}`;
+              })();
+
               const resolvedHref = external
-                ? isOnPanelSubdomain
-                  ? `${window.location.protocol}//${window.location.hostname.replace('panel.', '')}${item.href}`
-                  : item.href
+                ? resolvedExternalHref || item.href
                 : isOnPanelSubdomain
                   ? item.href
                   : item.href === '/'

@@ -188,7 +188,7 @@ function LivePulseCard({
   const hasActive = activeOrders > 0;
   return (
     <Link
-      href="/panel/pos"
+      href="/panel/masalar"
       className="group block rounded-[var(--r)] p-5 transition-all hover:scale-[1.01] active:scale-[0.99] relative overflow-hidden"
       style={{
         background: hasActive

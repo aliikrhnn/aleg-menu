@@ -72,30 +72,27 @@ export function OrderComposer({ open, mode, onClose, onSuccess }: Props) {
     open && !variantPicker && !complimentaryPicker && !isPending
   );
 
-  // Menu'yü yükle
+  // Menu + sık satılanlar paralel — açılışta tek round-trip
   useEffect(() => {
     if (!open || menu) return;
     setLoading(true);
-    getPosMenu().then((r) => {
-      if (r.success) {
-        setMenu({ categories: r.categories || [], products: r.products || [] });
-        // Default: Tüm kategoriler göster (null)
+    Promise.all([
+      getPosMenu(),
+      topProducts.length === 0
+        ? getTopProducts({ limit: 6, daysBack: 30 })
+        : Promise.resolve(null),
+    ]).then(([menuR, topR]) => {
+      if (menuR.success) {
+        setMenu({ categories: menuR.categories || [], products: menuR.products || [] });
       } else {
-        setError(r.error || 'Menü alınamadı');
+        setError(menuR.error || 'Menü alınamadı');
+      }
+      if (topR && topR.success && topR.products) {
+        setTopProducts(topR.products);
       }
       setLoading(false);
     });
-  }, [open, menu]);
-
-  // Sık satılanlar — açılınca bir kez
-  useEffect(() => {
-    if (!open || topProducts.length > 0) return;
-    getTopProducts({ limit: 6, daysBack: 30 }).then((r) => {
-      if (r.success && r.products) {
-        setTopProducts(r.products);
-      }
-    });
-  }, [open, topProducts.length]);
+  }, [open, menu, topProducts.length]);
 
   // ESC kapat
   useEffect(() => {

@@ -60,7 +60,7 @@ export default async function KdsPage() {
             {result.error}
           </p>
           <a
-            href="/panel/pos"
+            href="/panel/masalar"
             className="inline-block mt-6 px-5 py-2.5 rounded-full text-sm font-semibold transition-opacity hover:opacity-80"
             style={{
               background: 'var(--accent)',

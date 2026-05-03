@@ -38,7 +38,7 @@ export default async function PanelShellLayout({
 
   const { data: business } = await supabase
     .from('businesses')
-    .select('name, logo_url, subscription_status')
+    .select('name, slug, logo_url, subscription_status')
     .eq('id', membership.business_id)
     .maybeSingle();
 
@@ -62,6 +62,7 @@ export default async function PanelShellLayout({
     <div data-theme="warm" className="flex h-screen overflow-hidden bg-paper text-ink">
       <PanelSidebar
         businessName={business?.name || 'İşletme'}
+        businessSlug={business?.slug || ''}
         logoUrl={business?.logo_url || null}
         businessId={membership.business_id}
         initialStations={initialStations}

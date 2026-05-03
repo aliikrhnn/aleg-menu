@@ -255,8 +255,8 @@ export function LiveOps({
       {/* Aksiyon butonları */}
       <div className="flex gap-2 flex-wrap relative z-10">
         <ActionButton
-          href="/panel/pos"
-          label="POS"
+          href="/panel/masalar"
+          label="Masalar"
           icon="⌫"
           primary={live.newOrders > 0}
         />

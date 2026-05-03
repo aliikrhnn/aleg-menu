@@ -31,7 +31,7 @@ import {
   type ZReport,
   type DaySummaryRange,
 } from '@/lib/actions/payments';
-import { CashSessionModal } from '@/app/panel/(shell)/pos/cash-session-modal';
+import { CashSessionModal } from './cash-session-modal';
 import { KasaPinLock } from './kasa-pin-lock';
 import { DaySummaryPreview } from './day-summary-preview';
 import { DaySummaryWizard } from './day-summary-wizard';

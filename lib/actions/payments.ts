@@ -298,7 +298,7 @@ export async function takePayment(input: TakePaymentInput): Promise<{
       // Masa boşaltma (kırılgan or() yerine helper)
       await closeOrderAndMaybeFreeTable(admin, businessId, input.orderId, order.table_id);
 
-      revalidatePath('/panel/pos');
+      revalidatePath('/panel/masalar');
       revalidatePath('/panel');
       revalidatePath('/kasa');
 
@@ -415,7 +415,7 @@ export async function takePayment(input: TakePaymentInput): Promise<{
       }
     }
 
-    revalidatePath('/panel/pos');
+    revalidatePath('/panel/masalar');
     revalidatePath('/panel');
     revalidatePath('/kasa');
 
@@ -608,7 +608,7 @@ export async function takePartialPayment(input: TakePartialPaymentInput): Promis
       }
     }
 
-    revalidatePath('/panel/pos');
+    revalidatePath('/panel/masalar');
     revalidatePath('/kasa');
 
     return {
@@ -787,7 +787,7 @@ export async function refundPayment(
       return { success: false, error: logsError.message };
     }
 
-    revalidatePath('/panel/pos');
+    revalidatePath('/panel/masalar');
     revalidatePath('/kasa');
     return { success: true };
   } catch (err) {
@@ -941,7 +941,7 @@ export async function recordManualRefund(input: {
     }
 
     revalidatePath('/kasa');
-    revalidatePath('/panel/pos');
+    revalidatePath('/panel/masalar');
 
     return { success: true, refundLogId: logRow.id };
   } catch (err) {
@@ -1354,7 +1354,7 @@ export async function changeOrderTable(
       return { success: false, error: error.message };
     }
 
-    revalidatePath('/panel/pos');
+    revalidatePath('/panel/masalar');
     return { success: true };
   } catch (err) {
     return {
@@ -2571,7 +2571,7 @@ export async function applyAdjustmentsBeforeSplit(input: {
       ...performer,
     });
 
-    revalidatePath('/panel/pos');
+    revalidatePath('/panel/masalar');
     return { success: true, newTotal };
   } catch (err) {
     return {

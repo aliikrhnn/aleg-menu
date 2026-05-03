@@ -271,7 +271,7 @@ export async function updateOrderStatus(
       return { success: false, error: error.message };
     }
 
-    revalidatePath('/panel/pos');
+    revalidatePath('/panel/masalar');
     return { success: true };
   } catch (err) {
     return {
@@ -315,7 +315,7 @@ export async function cancelOrder(
       return { success: false, error: error.message };
     }
 
-    revalidatePath('/panel/pos');
+    revalidatePath('/panel/masalar');
     return { success: true };
   } catch (err) {
     return {

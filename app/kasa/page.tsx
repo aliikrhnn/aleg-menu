@@ -7,7 +7,11 @@ import { KasaEmptyState } from './kasa-empty-state';
 export const dynamic = 'force-dynamic';
 
 export default async function KasaPage() {
-  const cashiersResult = await listActiveCashiers('cashier');
+  // İki fetch paralel — kasiyer listesi + aktif siparişler aynı anda
+  const [cashiersResult, ordersResult] = await Promise.all([
+    listActiveCashiers('cashier'),
+    getActiveOrders(),
+  ]);
 
   if (!cashiersResult.success) {
     // Giriş yapılmadıysa panel giriş ekranına
@@ -22,9 +26,6 @@ export default async function KasaPage() {
       />
     );
   }
-
-  // Aktif sipariş listesi (offline cache için)
-  const ordersResult = await getActiveOrders();
 
   return (
     <KasaApp

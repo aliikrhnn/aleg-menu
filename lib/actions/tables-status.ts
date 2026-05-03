@@ -316,7 +316,8 @@ export async function getPosMenu(): Promise<{
     const { businessId } = await requireBusinessAccess();
     const admin = createAdminClient();
 
-    const [catResp, prodResp, variantResp, presetResp, valueResp, prodPresetResp] = await Promise.all([
+    // Önce kategoriler + ürünler + presetler paralel (bunlarda business_id var)
+    const [catResp, prodResp, presetResp, prodPresetResp] = await Promise.all([
       admin
         .from('categories')
         .select('id, name, sort_order, hero_icon, badge')
@@ -329,22 +330,13 @@ export async function getPosMenu(): Promise<{
         .eq('business_id', businessId)
         .in('status', ['active', 'soldout'])
         .order('sort_order', { ascending: true }),
-      admin
-        .from('product_variants')
-        .select('id, product_id, name, price_delta, sort_order')
-        .order('sort_order', { ascending: true }),
       // Option presets (işletme geneli)
       admin
         .from('option_presets')
         .select('id, name, type, required, sort_order')
         .eq('business_id', businessId)
         .order('sort_order', { ascending: true }),
-      // Preset values
-      admin
-        .from('option_preset_values')
-        .select('id, preset_id, name, price_delta, is_default, sort_order')
-        .order('sort_order', { ascending: true }),
-      // Ürün <-> preset eşleşmesi
+      // Ürün <-> preset eşleşmesi (product_id JOIN edilebilir, ama bunu sonra filtreliyoruz)
       admin
         .from('product_option_presets')
         .select('product_id, preset_id, sort_order')
@@ -353,6 +345,28 @@ export async function getPosMenu(): Promise<{
 
     if (catResp.error) return { success: false, error: catResp.error.message };
     if (prodResp.error) return { success: false, error: prodResp.error.message };
+
+    // Şimdi business'a ait product ID ve preset ID'leri elde ettiğimize göre
+    // child tabloları (variants, preset_values) güvenli ve hızlı filtreleyelim
+    const productIds = (prodResp.data || []).map((p) => p.id);
+    const presetIds = (presetResp.data || []).map((p) => p.id);
+
+    const [variantResp, valueResp] = await Promise.all([
+      productIds.length > 0
+        ? admin
+            .from('product_variants')
+            .select('id, product_id, name, price_delta, sort_order')
+            .in('product_id', productIds)
+            .order('sort_order', { ascending: true })
+        : Promise.resolve({ data: [], error: null } as const),
+      presetIds.length > 0
+        ? admin
+            .from('option_preset_values')
+            .select('id, preset_id, name, price_delta, is_default, sort_order')
+            .in('preset_id', presetIds)
+            .order('sort_order', { ascending: true })
+        : Promise.resolve({ data: [], error: null } as const),
+    ]);
 
     // Varyantları ürünlere grupla
     const variantsByProduct = new Map<
@@ -639,7 +653,7 @@ export async function createManualOrder(input: CreateManualOrderInput): Promise<
     }
 
     revalidatePath('/kasa');
-    revalidatePath('/panel/pos');
+    revalidatePath('/panel/masalar');
 
     return { success: true, orderId: order.id };
   } catch (err) {
@@ -1046,7 +1060,7 @@ export async function addItemsToOrder(input: {
     }
 
     revalidatePath('/kasa');
-    revalidatePath('/panel/pos');
+    revalidatePath('/panel/masalar');
 
     return { success: true };
   } catch (err) {
@@ -1249,7 +1263,7 @@ export async function makeItemsComplimentary(input: {
         });
 
         revalidatePath('/kasa');
-        revalidatePath('/panel/pos');
+        revalidatePath('/panel/masalar');
 
         return {
           success: true,
@@ -1308,7 +1322,7 @@ export async function makeItemsComplimentary(input: {
     }
 
     revalidatePath('/kasa');
-    revalidatePath('/panel/pos');
+    revalidatePath('/panel/masalar');
 
     return {
       success: true,
@@ -1410,28 +1424,33 @@ export async function getOrderAsDetail(orderId: string): Promise<{
     const { businessId } = await requireBusinessAccess();
     const admin = createAdminClient();
 
-    const { data: order, error: orderErr } = await admin
-      .from('orders')
-      .select(`
-        id, business_id, order_no, status, payment_status, payment_method,
-        created_at, note, table_id, subtotal, total, complimentary_total,
-        tables(name)
-      `)
-      .eq('id', orderId)
-      .maybeSingle();
+    // Order ve items paralel — sequential 2 round-trip yerine 1
+    const [orderResp, itemsResp] = await Promise.all([
+      admin
+        .from('orders')
+        .select(`
+          id, business_id, order_no, status, payment_status, payment_method,
+          created_at, note, table_id, subtotal, total, complimentary_total,
+          tables(name)
+        `)
+        .eq('id', orderId)
+        .maybeSingle(),
+      admin
+        .from('order_items')
+        .select(`
+          id, product_name, quantity, unit_price, status, note,
+          is_complimentary, complimentary_reason
+        `)
+        .eq('order_id', orderId),
+    ]);
 
+    const { data: order, error: orderErr } = orderResp;
     if (orderErr) return { success: false, error: orderErr.message };
     if (!order || order.business_id !== businessId) {
       return { success: false, error: 'Sipariş bulunamadı' };
     }
 
-    const { data: items } = await admin
-      .from('order_items')
-      .select(`
-        id, product_name, quantity, unit_price, status, note,
-        is_complimentary, complimentary_reason
-      `)
-      .eq('order_id', orderId);
+    const items = itemsResp.data;
 
     const tableJoin = order.tables as unknown as { name?: string } | { name?: string }[] | null;
     const tableName = Array.isArray(tableJoin)
@@ -1547,7 +1566,7 @@ export async function changeOrderTable(input: {
     }
 
     revalidatePath('/kasa');
-    revalidatePath('/panel/pos');
+    revalidatePath('/panel/masalar');
 
     return { success: true };
   } catch (err) {
@@ -1618,7 +1637,7 @@ export async function mergeTables(input: {
     await admin.from('tables').update({ status: 'available' }).eq('id', input.fromTableId);
 
     revalidatePath('/kasa');
-    revalidatePath('/panel/pos');
+    revalidatePath('/panel/masalar');
 
     return { success: true, movedCount: movingIds.length };
   } catch (err) {
@@ -1780,7 +1799,7 @@ export async function splitOrderItems(input: {
     }
 
     revalidatePath('/kasa');
-    revalidatePath('/panel/pos');
+    revalidatePath('/panel/masalar');
 
     return { success: true, newOrderId: newOrder.id };
   } catch (err) {
@@ -2031,7 +2050,7 @@ export async function splitItemsFromMultipleOrders(input: {
     }
 
     revalidatePath('/kasa');
-    revalidatePath('/panel/pos');
+    revalidatePath('/panel/masalar');
 
     return {
       success: true,

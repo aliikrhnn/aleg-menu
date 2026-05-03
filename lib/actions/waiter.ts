@@ -371,7 +371,7 @@ export async function markOrderDelivered(orderId: string): Promise<{
     if (error) return { success: false, error: error.message };
 
     // Panel POS ve dashboard'lar değişikliği görsün
-    revalidatePath('/panel/pos');
+    revalidatePath('/panel/masalar');
     revalidatePath('/panel/dashboard');
     revalidatePath('/panel');
 

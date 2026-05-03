@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useCashierSession } from '@/lib/cashier-session';
-import { OrdersBoard } from '@/app/panel/(shell)/pos/orders-board';
+import { OrdersBoard } from './orders-board';
 import { KasaTabs, type KasaTab } from './kasa-tabs';
 import { TablesGrid } from './tables-grid';
 import { RegisterPanel } from './register-panel';

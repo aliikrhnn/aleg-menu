@@ -1,0 +1,2 @@
+BU DOSYAYI ELLE SİL: app/panel/(shell)/pos/
+Tamamı kaldırılmalı: app/panel/(shell)/pos/page.tsx ve diğer 7 dosya
