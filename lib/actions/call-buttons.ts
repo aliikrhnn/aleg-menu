@@ -378,10 +378,14 @@ export async function submitWaiterCall(input: {
         vibrate: [200, 100, 200, 100, 200],
       });
 
-      console.log(
-        `[submitWaiterCall] Push sonuç: sent=${pushResult.sent}, failed=${pushResult.failed}, expired=${pushResult.expired}`
-      );
+      if (process.env.NODE_ENV === 'development') {
+        // eslint-disable-next-line no-console
+        console.log(
+          `[submitWaiterCall] Push sonuç: sent=${pushResult.sent}, failed=${pushResult.failed}, expired=${pushResult.expired}`
+        );
+      }
     } catch (pushErr) {
+      // eslint-disable-next-line no-console
       console.error('[submitWaiterCall] Push gönderme hatası:', pushErr);
       // Push hatası çağrı kaydını etkilemez — kullanıcıya success döneriz
     }

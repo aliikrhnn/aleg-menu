@@ -473,6 +473,7 @@ export async function takePartialPayment(input: TakePartialPaymentInput): Promis
         .from('payment_logs')
         .select('id, order_id')
         .eq('sync_client_id', input.syncClientId)
+        .eq('business_id', businessId)
         .maybeSingle();
       if (existing) {
         return { success: true, orderId: existing.order_id || undefined, paymentLogId: existing.id };
@@ -1590,8 +1591,11 @@ export async function getZReport(
 }> {
   const t0 = Date.now();
   const log = (phase: string, extra?: Record<string, unknown>) => {
-    // eslint-disable-next-line no-console
-    console.log(`[Z-REPORT] ${phase}`, { ms: Date.now() - t0, ...extra });
+    // Sadece development'ta log ver (production'da gereksiz)
+    if (process.env.NODE_ENV === 'development') {
+      // eslint-disable-next-line no-console
+      console.log(`[Z-REPORT] ${phase}`, { ms: Date.now() - t0, ...extra });
+    }
   };
 
   try {
