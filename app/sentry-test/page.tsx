@@ -46,7 +46,7 @@ export default function SentryTestPage() {
           onClick={checkClient}
           style={{ padding: 12, background: '#2563eb', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer' }}
         >
-          1. Sentry Client'ını Kontrol Et
+          1. Sentry Client&apos;ını Kontrol Et
         </button>
 
         <button
@@ -78,7 +78,7 @@ export default function SentryTestPage() {
       <p style={{ marginTop: 24, fontSize: 13, color: '#666' }}>
         Buton tıkla, sonra Sentry → Issues sayfasını kontrol et.
         <br />
-        Network tab'ı açık tutarsan ingest.sentry.io POST'unu görürsün.
+        Network tab&apos;ı açık tutarsan ingest.sentry.io POST&apos;unu görürsün.
       </p>
     </div>
   );
