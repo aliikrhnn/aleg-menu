@@ -18,7 +18,6 @@ export async function middleware(request: NextRequest) {
     url.pathname.startsWith('/static') ||
     url.pathname.startsWith('/api') ||
     url.pathname.startsWith('/monitoring') ||  // Sentry tunnel route
-    url.pathname.startsWith('/sentry-test') || // Sentry test sayfası (geçici)
     url.pathname.includes('.')
   ) {
     return NextResponse.next();

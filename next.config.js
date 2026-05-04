@@ -29,8 +29,8 @@ module.exports = sentryEnabled
       project: process.env.SENTRY_PROJECT,
       authToken: process.env.SENTRY_AUTH_TOKEN,
 
-      // Build log'unda sessizlik (CI dışında log basma) - GEÇİCİ KAPALI
-      silent: false,
+      // Build log'unda sessizlik (CI dışında log basma)
+      silent: !process.env.CI,
 
       // Browser kodunda da source map upload
       widenClientFileUpload: true,
@@ -38,8 +38,8 @@ module.exports = sentryEnabled
       // Source mapları publik yapma
       hideSourceMaps: true,
 
-      // Sentry SDK'nın iç loglarını tree-shake et - GEÇİCİ KAPALI (debug için)
-      disableLogger: false,
+      // Sentry SDK'nın iç loglarını tree-shake et (bundle boyutu)
+      disableLogger: true,
 
       // tunnelRoute KAPATILDI: Sentry istekleri doğrudan
       // ingest.sentry.io'ya gider. Ad-blocker olan kullanıcılarda
