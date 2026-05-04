@@ -7,6 +7,7 @@ const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
 if (dsn) {
   Sentry.init({
     dsn,
+    debug: true, // GEÇİCİ: Console'a init detayları yazsın - sorunu teşhis için
     tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 0,
     replaysOnErrorSampleRate: 1.0,
     replaysSessionSampleRate: 0,
