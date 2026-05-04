@@ -10,15 +10,17 @@ if (dsn) {
     environment: process.env.NODE_ENV,
     release: process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA,
     // Server-side: kullanıcı/business bilgisi otomatik eklensin
-    beforeSend(event, hint) {
+    beforeSend(event) {
       // Hassas veriyi temizle (Stripe key, password, vs.)
       if (event.request?.cookies) {
-        event.request.cookies = '<redacted>';
+        delete event.request.cookies;
       }
       if (event.request?.headers) {
         const headers = { ...event.request.headers };
         delete headers.authorization;
         delete headers.cookie;
+        delete headers.Authorization;
+        delete headers.Cookie;
         event.request.headers = headers;
       }
       return event;
