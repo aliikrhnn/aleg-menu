@@ -1,33 +1,75 @@
 ═══════════════════════════════════════════════════════════════
-  ALEG · SENTRY TYPE FIX
-  3 Mayıs 2026
+  ALEG · SENTRY CLIENT INIT FIX
+  4 Mayıs 2026
 ═══════════════════════════════════════════════════════════════
 
 ✱ NE OLDU
 ─────────
-sentry.server.config.ts'de cookies'e string atayınca TypeScript 
-hatası verdi:
-  Type 'string' is not assignable to type '{ [key: string]: string; }'
+Sentry SDK yüklü (window.__SENTRY__ var) ama init olmadı 
+(getDsn() undefined dönüyor).
 
-Sentry SDK'da event.request.cookies object tip — string yerine 
-delete kullanmak doğrusu.
+SEBEP: 
+@sentry/nextjs v8 + Next.js 14'te sentry.client.config.ts dosyası 
+ARTIK OTOMATİK YÜKLENMİYOR. Yerine Next.js'in convention'ı olan 
+instrumentation-client.ts kullanılıyor.
 
-✱ DÜZELTME
+Eski v7'de sentry.client.config.ts otomatik bundle'a eklenirdi.
+v8'de bu pattern kaldırıldı, Next'in standard instrumentation 
+sistemine taşındı.
+
+✱ ÇÖZÜM
+───────
+1) Yeni dosya: instrumentation-client.ts
+   (sentry.client.config.ts'nin tüm içeriği bu dosyaya taşındı)
+
+2) Eski dosya silinecek: sentry.client.config.ts
+   (Tutsa da çalışmaz, kafa karıştırıcı olur)
+
+✱ DOSYALAR
 ──────────
-  Önce:  event.request.cookies = '<redacted>';
-  Sonra: delete event.request.cookies;
+YENİ:
+  instrumentation-client.ts
 
-Aynı zamanda Authorization/Cookie header'ları da büyük harfli 
-versiyonlarıyla beraber silindi (case sensitivity için).
+SİLİNECEK:
+  sentry.client.config.ts
 
-✱ DOSYA (1 adet)
-─────────────────
-  sentry.server.config.ts
+DEĞİŞMEYEN (bu paketin dışında):
+  sentry.server.config.ts  (zaten doğru, instrumentation.ts'le yükleniyor)
+  sentry.edge.config.ts    (aynı şekilde)
+  instrumentation.ts       (server + edge'i otomatik yüklüyor)
+  next.config.js           (withSentryConfig sarmalı doğru)
 
 ✱ PUSH
 ──────
-  git add sentry.server.config.ts
-  git commit -m "fix(sentry): server config type error"
-  git push
+1) Eski dosyayı sil:
+   git rm sentry.client.config.ts
+
+2) Yeni dosyayı ekle:
+   git add instrumentation-client.ts
+
+3) Commit & Push:
+   git commit -m "fix(sentry): v8 client init via instrumentation-client.ts"
+   git push
+
+VEYA tek komut:
+   rm sentry.client.config.ts        (Windows: del sentry.client.config.ts)
+   git add .
+   git commit -m "fix(sentry): v8 client init via instrumentation-client.ts"
+   git push
+
+✱ DEPLOY VE TEST
+────────────────
+1) Vercel auto-deploy başlar (push'tan sonra)
+2) Bittiğinde: hard refresh (Ctrl+Shift+R)
+3) F12 → Console:
+   
+   window.__SENTRY__?.hub?.getClient()?.getDsn()
+   
+   ŞİMDİ artık DSN object'i dönmeli (undefined değil!)
+
+4) Test error fırlat:
+   throw new Error('TEST-FINAL-' + Date.now())
+
+5) 30sn içinde Sentry → Feed → hata gözükmeli
 
 ═══════════════════════════════════════════════════════════════

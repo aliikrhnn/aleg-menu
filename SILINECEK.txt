@@ -1,0 +1,2 @@
+Bu dosyayı SİL: sentry.client.config.ts
+(instrumentation-client.ts onun yerine geçti)
