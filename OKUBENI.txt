@@ -1,180 +1,33 @@
 ═══════════════════════════════════════════════════════════════
-  ALEG · PRODUCTION HAZIRLIK PAKETİ
-  Sentry + Tenant Fix + Log Temizliği
+  ALEG · SENTRY TYPE FIX
   3 Mayıs 2026
 ═══════════════════════════════════════════════════════════════
 
-✱ NE YAPILDI
+✱ NE OLDU
+─────────
+sentry.server.config.ts'de cookies'e string atayınca TypeScript 
+hatası verdi:
+  Type 'string' is not assignable to type '{ [key: string]: string; }'
 
-Yarın canlıya geçecek BAQ Coffee Lounge için sistemsel hazırlık.
-4 ayrı iş tek pakette:
+Sentry SDK'da event.request.cookies object tip — string yerine 
+delete kullanmak doğrusu.
 
-═══ 1. SENTRY ERROR TRACKING ═══
+✱ DÜZELTME
+──────────
+  Önce:  event.request.cookies = '<redacted>';
+  Sonra: delete event.request.cookies;
 
-Production'da bir yer patlarsa kim bilecek? Şimdi:
-  - User'da JS hatası → Sentry'e gider, replay video ile
-  - Server action hatası → Sentry'e gider, request bilgisi ile
-  - Edge/middleware hatası → Sentry'e gider
-  - Global error fallback ekranı (kullanıcıya hoş bir mesaj)
+Aynı zamanda Authorization/Cookie header'ları da büyük harfli 
+versiyonlarıyla beraber silindi (case sensitivity için).
 
-Yapılan değişiklikler:
-  - sentry.client.config.ts (yeni) — Browser-side Sentry
-  - sentry.server.config.ts (yeni) — Server actions için
-  - sentry.edge.config.ts (yeni) — Middleware için
-  - instrumentation.ts (yeni) — Next 14 register pattern
-  - next.config.js (değişti) — withSentryConfig sarmalı
-  - app/global-error.tsx (yeni) — Hata fallback UI
-  - package.json (değişti) — @sentry/nextjs eklendi
+✱ DOSYA (1 adet)
+─────────────────
+  sentry.server.config.ts
 
-GDPR güvenlik:
-  - Replay'de tüm metin/input maskeli (PIN/şifre sızdırmaz)
-  - Cookie/Authorization header redacted
-  - Network error/offline gibi gürültüler ignore edilir
-  - Sadece prod'da %10 trace rate (maliyet kontrol)
-
-═══ 2. TENANT İZOLASYON FİX ═══
-
-203 admin client kullanımı tarandı. 7 şüpheli sorgudan 1'i 
-gerçek bug çıktı:
-
-payments.ts:472 — payment_logs idempotency check
-  Önce: .eq('sync_client_id', X)
-  Sonra: .eq('sync_client_id', X).eq('business_id', businessId)
-
-İstismar zorluğu: UUID collision gerekli (~1 milyar yıl), pratikte
-imkansız. Ama defense-in-depth — düzeltildi.
-
-Diğer 6 şüpheli sorgu false positive:
-  - menu.ts (categoryId zaten doğrulanmış)
-  - orders.ts/reviews.ts (review duplicate check, order_id unique)
-  - tables.ts (tableId üst kısımda doğrulanmış)
-  - menu.ts deleteCategory (parent zaten validate)
-
-═══ 3. CONSOLE.LOG TEMİZLİĞİ ═══
-
-2 yer: Z-rapor performans log + waiter push log
-Şimdi: sadece NODE_ENV=development'da log basıyor.
-Production'da:
-  - Sunucu maliyeti azalır (log streaming yok)
-  - Hassas veri logging'e sızmaz (push token vs)
-  - Vercel free plan log limit'ini doldurmaz
-
-═══ 4. NEXT 14 INSTRUMENTATION ═══
-
-next.config.js'de experimental.instrumentationHook = true
-Bu Next 14'te server start'ta sentry.server.config'i otomatik 
-çalıştırır.
-
-═══════════════════════════════════════════════════════════════
-
-✱ KURULUM ADIMLARI (Push'tan ÖNCE yap)
-
-1) Sentry HESABI VE PROJE
-   - https://sentry.io adresine git
-   - Hesap aç (ücretsiz plan 5K event/ay yeterli başlangıçta)
-   - "Create Project" → Next.js seç
-   - Proje adı: aleg-production
-   - DSN'i kopyala (https://...@...ingest.sentry.io/...)
-
-2) ENVIRONMENT VARIABLES (Vercel Dashboard)
-   Vercel → Project → Settings → Environment Variables
-   
-   ZORUNLU:
-   NEXT_PUBLIC_SENTRY_DSN=https://...@....ingest.sentry.io/...
-   SENTRY_DSN=https://...@....ingest.sentry.io/...   (aynı değer)
-   
-   OPSİYONEL (source map upload için, hata izlemede satır no 
-   gözükmesi için önerilir):
-   SENTRY_ORG=senin-org-adin
-   SENTRY_PROJECT=aleg-production
-   SENTRY_AUTH_TOKEN=sntrys_xxx (Sentry → Settings → Auth Tokens)
-
-3) NPM INSTALL — UYARI: ZORUNLU!
-   Bu pakette package.json'a @sentry/nextjs ^8.0.0 eklendi.
-   Pre-push hook lint/build çalıştırırken paket eksik olursa 
-   build başarısız olur.
-   
-   git add . ÖNCESİ:
-     npm install
-   
-   Bu komut node_modules'e Sentry'i ekler. Sonra push.
-
-═══════════════════════════════════════════════════════════════
-
-✱ DOSYALAR (9 değişen + 4 yeni)
-
-YENİ:
-  sentry.client.config.ts        Browser hata tracking
-  sentry.server.config.ts        Server hata tracking
-  sentry.edge.config.ts          Middleware hata tracking
-  instrumentation.ts             Next 14 register pattern
-  app/global-error.tsx           Hata fallback ekranı
-
-DEĞİŞTİ:
-  next.config.js                 Sentry webpack plugin
-  package.json                   @sentry/nextjs dep
-  lib/actions/payments.ts        Tenant fix + console.log dev-only
-  lib/actions/call-buttons.ts    console.log dev-only
-
-═══════════════════════════════════════════════════════════════
-
-✱ NPM/MIGRATION
-NPM:        Zorunlu (npm install çalıştır push'tan önce)
-MIGRATION:  Yok
-
-✱ TEST AKIŞI
-
-KURULUM SONRASI:
-1) Vercel deploy başarılı oldu mu (build hatası yok)
-2) Sentry Dashboard → Issues → henüz boş, normal
-3) Test hatası gönder:
-   - https://baq.alegstudio.com/menu adresine git
-   - Browser console'da: Sentry.captureException(new Error('TEST'))
-   - 30 sn içinde Sentry'de "TEST" hatası gözükmeli
-4) global-error test (production'da gerçek hatada görünür)
-
-KONTROL:
-  ✓ Build başarılı (npm run build)
-  ✓ Sentry'e bir test event geliyor
-  ✓ Vercel logs'ta yeni hata uyarısı yok
-  ✓ Müşteri menüsü açılıyor
-  ✓ Kasa/Garson normal çalışıyor
-
-═══════════════════════════════════════════════════════════════
-
-✱ PUSH (Windows PowerShell)
-
-1) ÖNCE NPM INSTALL:
-     npm install
-
-2) SONRA GIT:
-     git add sentry.client.config.ts
-     git add sentry.server.config.ts  
-     git add sentry.edge.config.ts
-     git add instrumentation.ts
-     git add next.config.js
-     git add package.json
-     git add package-lock.json
-     git add app/global-error.tsx
-     git add lib/actions/payments.ts
-     git add lib/actions/call-buttons.ts
-     
-     git commit -m "feat: Sentry + tenant idempotency fix + log cleanup"
-     git push
-
-VEYA:
-     npm install
-     git add .
-     git commit -m "feat: Sentry + tenant idempotency fix + log cleanup"
-     git push
-
-═══════════════════════════════════════════════════════════════
-
-✱ ROLLBACK
-git revert HEAD
-git push
-
-(Sentry'i devre dışı bırakmak için: NEXT_PUBLIC_SENTRY_DSN'i 
-Vercel'den sil → Sentry kapanır, kod hata vermez)
+✱ PUSH
+──────
+  git add sentry.server.config.ts
+  git commit -m "fix(sentry): server config type error"
+  git push
 
 ═══════════════════════════════════════════════════════════════
