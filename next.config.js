@@ -41,7 +41,10 @@ module.exports = sentryEnabled
       // Sentry SDK'nın iç loglarını tree-shake et (bundle boyutu)
       disableLogger: true,
 
-      // Ad-blocker bypass için tunnel route
-      tunnelRoute: '/monitoring',
+      // tunnelRoute KAPATILDI: Sentry istekleri doğrudan
+      // ingest.sentry.io'ya gider. Ad-blocker olan kullanıcılarda
+      // event kaybedebilir ama (1) kafe ortamında ad-blocker az,
+      // (2) tunnel route subdomain middleware ile çakışıyordu,
+      // (3) basit kurulum daha güvenilir.
     })
   : nextConfig;
