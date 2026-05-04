@@ -1,75 +1,99 @@
 ═══════════════════════════════════════════════════════════════
-  ALEG · SENTRY CLIENT INIT FIX
+  SENTRY V8 GERÇEK FIX
   4 Mayıs 2026
 ═══════════════════════════════════════════════════════════════
 
-✱ NE OLDU
-─────────
-Sentry SDK yüklü (window.__SENTRY__ var) ama init olmadı 
-(getDsn() undefined dönüyor).
+✱ NEDEN ÖNCEKİ ÇÖZÜMLER ÇALIŞMADI
+─────────────────────────────────
 
-SEBEP: 
-@sentry/nextjs v8 + Next.js 14'te sentry.client.config.ts dosyası 
-ARTIK OTOMATİK YÜKLENMİYOR. Yerine Next.js'in convention'ı olan 
-instrumentation-client.ts kullanılıyor.
+İlk versiyonda 2 hata yaptım, sonunda buldum:
 
-Eski v7'de sentry.client.config.ts otomatik bundle'a eklenirdi.
-v8'de bu pattern kaldırıldı, Next'in standard instrumentation 
-sistemine taşındı.
+1. instrumentation-client.ts → Next.js 15+ özelliği. Next 14 
+   tanımıyor. SİLİNDİ.
+
+2. next.config.js'te withSentryConfig 3 ARGÜMAN ile çağrılmıştı:
+     withSentryConfig(nextConfig, sentryWebpackOpts, sentrySdkOpts)
+   
+   Bu Sentry V7 sözdizimi. V8'de DESTEKLENMİYOR.
+   V8 migration guide:
+   > "withSentryConfig will no longer accept 3 arguments"
+   
+   Bu yüzden SDK options yok sayıldı, build sırasında 
+   sentry.client.config.ts otomatik enjeksiyon devreye girmedi.
 
 ✱ ÇÖZÜM
 ───────
-1) Yeni dosya: instrumentation-client.ts
-   (sentry.client.config.ts'nin tüm içeriği bu dosyaya taşındı)
 
-2) Eski dosya silinecek: sentry.client.config.ts
-   (Tutsa da çalışmaz, kafa karıştırıcı olur)
+next.config.js V8 formatına çevrildi:
+  withSentryConfig(nextConfig, { 
+    org, project, authToken, silent,
+    widenClientFileUpload, hideSourceMaps, 
+    disableLogger, tunnelRoute, ... 
+  })  // TEK obje, 2 argüman
 
-✱ DOSYALAR
-──────────
-YENİ:
-  instrumentation-client.ts
+Şimdi withSentryConfig browser bundle'a sentry.client.config.ts 
+otomatik enjekte ediyor. Sentry.init() çağrılır, DSN doldurulur.
 
-SİLİNECEK:
-  sentry.client.config.ts
+✱ DOSYALAR (2 değişen + 1 silinecek)
+─────────────────────────────────────
 
-DEĞİŞMEYEN (bu paketin dışında):
-  sentry.server.config.ts  (zaten doğru, instrumentation.ts'le yükleniyor)
-  sentry.edge.config.ts    (aynı şekilde)
-  instrumentation.ts       (server + edge'i otomatik yüklüyor)
-  next.config.js           (withSentryConfig sarmalı doğru)
+DEĞİŞEN:
+  next.config.js                 V8 format - 2 argümanlı
+  sentry.client.config.ts        (Önceki versiyon silindiği için
+                                  yeniden eklendi - aynı içerik)
+
+SİLİNECEK (eğer sende varsa):
+  instrumentation-client.ts      Next 14 desteklemiyor
+  
+  Yoksa zaten silmemişsin demektir, sorun değil.
+
+DEĞİŞMEYENLER (zaten doğru):
+  sentry.server.config.ts
+  sentry.edge.config.ts
+  instrumentation.ts
+  package.json (@sentry/nextjs ^8.0.0)
 
 ✱ PUSH
 ──────
-1) Eski dosyayı sil:
-   git rm sentry.client.config.ts
+1) Eğer instrumentation-client.ts varsa SİL:
+   del instrumentation-client.ts
+   (veya: rm instrumentation-client.ts)
 
-2) Yeni dosyayı ekle:
-   git add instrumentation-client.ts
-
-3) Commit & Push:
-   git commit -m "fix(sentry): v8 client init via instrumentation-client.ts"
+2) Git'e ekle:
+   git add next.config.js
+   git add sentry.client.config.ts
+   git rm instrumentation-client.ts  (eğer git'te varsa)
+   
+   git commit -m "fix(sentry): v8 withSentryConfig 2-arg format"
    git push
 
 VEYA tek komut:
-   rm sentry.client.config.ts        (Windows: del sentry.client.config.ts)
+   del instrumentation-client.ts
    git add .
-   git commit -m "fix(sentry): v8 client init via instrumentation-client.ts"
+   git commit -m "fix(sentry): v8 withSentryConfig 2-arg format"
    git push
 
 ✱ DEPLOY VE TEST
 ────────────────
-1) Vercel auto-deploy başlar (push'tan sonra)
-2) Bittiğinde: hard refresh (Ctrl+Shift+R)
+1) Vercel auto-deploy bitince
+2) Hard refresh (Ctrl+Shift+R)
 3) F12 → Console:
-   
+
    window.__SENTRY__?.hub?.getClient()?.getDsn()
    
-   ŞİMDİ artık DSN object'i dönmeli (undefined değil!)
+   ARTIK DSN object dönmeli. undefined DEĞİL!
+   Örnek:
+   {
+     host: "o4511331240509520.ingest.us.sentry.io",
+     pathname: "/4511331240509520",
+     protocol: "https",
+     publicKey: "abc123...",
+     ...
+   }
 
 4) Test error fırlat:
-   throw new Error('TEST-FINAL-' + Date.now())
+   throw new Error('TEST-' + Date.now())
 
-5) 30sn içinde Sentry → Feed → hata gözükmeli
+5) 30sn içinde Sentry → Feed → hata gelir
 
 ═══════════════════════════════════════════════════════════════

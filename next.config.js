@@ -12,31 +12,36 @@ const nextConfig = {
     ],
   },
   experimental: {
-    // App Router is default in Next 14, no flag needed
-    instrumentationHook: true, // Sentry için gerekli
+    // App Router is default in Next 14
+    instrumentationHook: true, // Sentry server için gerekli
   },
 };
 
 // Sentry sadece DSN tanımlıysa devreye girsin (dev'de gereksiz)
 const sentryEnabled = !!(process.env.SENTRY_DSN || process.env.NEXT_PUBLIC_SENTRY_DSN);
 
+// Sentry v8: TEK obje argümanı (Webpack plugin + SDK options birleşmiş)
+// v7'deki 3 argümanlı format artık desteklenmiyor.
 module.exports = sentryEnabled
-  ? withSentryConfig(
-      nextConfig,
-      {
-        // Source map upload — production'da hatalardaki kod satırı gözüksün
-        silent: true,                 // build log'unda sessiz
-        org: process.env.SENTRY_ORG,
-        project: process.env.SENTRY_PROJECT,
-        authToken: process.env.SENTRY_AUTH_TOKEN, // sadece source map upload için
-      },
-      {
-        // Sentry runtime config
-        widenClientFileUpload: true,  // browser kodunda da source map
-        hideSourceMaps: true,         // source mapları publik yapma
-        disableLogger: true,
-        // /monitoring rotası: ad-blocker'lar Sentry'i bloklar, bu rotayla bypass
-        tunnelRoute: '/monitoring',
-      }
-    )
+  ? withSentryConfig(nextConfig, {
+      // Source map upload için (opsiyonel)
+      org: process.env.SENTRY_ORG,
+      project: process.env.SENTRY_PROJECT,
+      authToken: process.env.SENTRY_AUTH_TOKEN,
+
+      // Build log'unda sessizlik (CI dışında log basma)
+      silent: !process.env.CI,
+
+      // Browser kodunda da source map upload
+      widenClientFileUpload: true,
+
+      // Source mapları publik yapma
+      hideSourceMaps: true,
+
+      // Sentry SDK'nın iç loglarını tree-shake et (bundle boyutu)
+      disableLogger: true,
+
+      // Ad-blocker bypass için tunnel route
+      tunnelRoute: '/monitoring',
+    })
   : nextConfig;

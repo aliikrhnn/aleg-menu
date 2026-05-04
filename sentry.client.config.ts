@@ -1,5 +1,5 @@
-// Bu dosya browser'da Next.js 14 + Sentry v8 için otomatik yüklenir.
-// (sentry.client.config.ts artık otomatik yüklenmiyor; bu dosya yerine geçiyor)
+// Sentry browser-side initialization (Next.js 14 + Sentry v8)
+// Bu dosya withSentryConfig tarafından otomatik bundle'a eklenir.
 import * as Sentry from '@sentry/nextjs';
 
 const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;

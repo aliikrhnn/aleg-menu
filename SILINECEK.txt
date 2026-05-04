@@ -1,2 +1,5 @@
-Bu dosyayı SİL: sentry.client.config.ts
-(instrumentation-client.ts onun yerine geçti)
+SİLİNECEK DOSYA: instrumentation-client.ts
+
+(Eğer sende varsa - Next 14 desteklemediği için kaldırılmalı.
+sentry.client.config.ts onun yerine geçer ve withSentryConfig 
+tarafından otomatik enjekte edilir.)
