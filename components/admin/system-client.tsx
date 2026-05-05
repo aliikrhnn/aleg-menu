@@ -4,7 +4,6 @@ import {
   Eyebrow,
   SerifTitle,
   StatusDot,
-  Money,
 } from './primitives'
 import type { SystemHealth, SystemSignal } from '@/lib/actions/admin-system'
 
