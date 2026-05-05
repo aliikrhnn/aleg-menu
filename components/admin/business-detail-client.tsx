@@ -10,13 +10,13 @@ import {
   LogoTile,
   Money,
   SerifNum,
-  Sparkline,
 } from '@/components/admin/primitives';
 import {
   approveBusiness,
   suspendBusiness,
   restoreBusiness,
   updateBusinessPlan,
+  sendOwnerPasswordReset,
   type BusinessDetail,
 } from '@/lib/actions/admin-businesses';
 import {
@@ -111,8 +111,6 @@ export function BusinessDetailClient({ business: b, plans }: Props) {
 
   const isPaid = b.subscription_status === 'active';
   const mrr = isPaid ? b.plan_price : 0;
-  const totalRevenue30d = b.revenue30d.reduce((s, r) => s + r.amount, 0);
-  const totalOrders = b.orders_30d;
 
   const handleApprove = () => {
     startTransition(async () => {
@@ -167,26 +165,6 @@ export function BusinessDetailClient({ business: b, plans }: Props) {
         router.refresh();
       } else {
         alert(`Hata: ${r.error}`);
-      }
-    });
-  };
-
-  const handleImpersonate = () => {
-    startTransition(async () => {
-      try {
-        const res = await fetch('/admin/api/impersonate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ businessId: b.id }),
-        });
-        const data = await res.json();
-        if (data.success) {
-          window.open(data.redirectTo, '_blank');
-        } else {
-          alert(`Hata: ${data.error}`);
-        }
-      } catch (e) {
-        alert(`Hata: ${e instanceof Error ? e.message : 'bilinmeyen'}`);
       }
     });
   };
@@ -251,15 +229,6 @@ export function BusinessDetailClient({ business: b, plans }: Props) {
                 ✓ Onayla
               </button>
             )}
-            <button
-              onClick={handleImpersonate}
-              disabled={isPending}
-              className="h-9 px-4 rounded-[var(--r-sm)] border-2 border-super text-super font-semibold text-sm hover:bg-super-soft disabled:opacity-50"
-              style={{ fontFamily: 'var(--f-sans)' }}
-              title="Bu işletmenin paneline süper admin yetkisiyle gir"
-            >
-              ↗ Panele gir
-            </button>
           </div>
         </div>
 
@@ -281,16 +250,6 @@ export function BusinessDetailClient({ business: b, plans }: Props) {
             tone={mrr > 0 ? 'var(--ink)' : 'var(--ink-3)'}
           />
           <HeaderMetric
-            label="SİPARİŞ 30G"
-            value={
-              <span
-                style={{ fontFamily: 'var(--f-mono)', fontWeight: 600 }}
-              >
-                {totalOrders}
-              </span>
-            }
-          />
-          <HeaderMetric
             label="SON GİRİŞ"
             value={
               <span
@@ -308,23 +267,6 @@ export function BusinessDetailClient({ business: b, plans }: Props) {
             }
           />
         </div>
-
-        {/* Ciro sparkline */}
-        {totalRevenue30d > 0 && (
-          <div className="mt-5 pt-5 border-t border-line flex items-center justify-between gap-4">
-            <div>
-              <Eyebrow>SON 30 GÜN CİRO</Eyebrow>
-              <Money amount={totalRevenue30d} size={28} />
-            </div>
-            <Sparkline
-              data={b.revenue30d.map((r) => r.amount)}
-              stroke="var(--gold)"
-              width={300}
-              height={60}
-              showArea
-            />
-          </div>
-        )}
       </div>
 
       {/* ============== TAB BAR ============== */}
@@ -959,8 +901,143 @@ function TabAyarlar({
         </div>
       </Card>
 
+      <AccountManagementSection b={b} />
+
       <DangerZoneSection b={b} />
     </div>
+  );
+}
+
+// ============================================================
+// HESAP YÖNETİMİ — sadece şifre sıfırlama
+// Admin yeni şifreyi GÖREMEZ; sıfırlama email'i sahibe gider.
+// ============================================================
+function AccountManagementSection({ b }: { b: BusinessDetail }) {
+  const [isPending, startTransition] = useTransition();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [lastResult, setLastResult] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
+
+  const handleReset = () => {
+    setConfirmOpen(false);
+    startTransition(async () => {
+      const r = await sendOwnerPasswordReset(b.id);
+      if (r.success) {
+        setLastResult({
+          type: 'success',
+          message: `Şifre sıfırlama bağlantısı ${r.email} adresine gönderildi. İşletme sahibi email'inden yeni şifre belirleyebilir.`,
+        });
+      } else {
+        setLastResult({
+          type: 'error',
+          message: r.error || 'Sıfırlama gönderilemedi',
+        });
+      }
+    });
+  };
+
+  const ownerEmail = b.owner_email;
+
+  return (
+    <Card title="Hesap Yönetimi">
+      <div
+        style={{
+          padding: 20,
+          border: '1px solid var(--line)',
+          borderRadius: 'var(--r)',
+        }}
+      >
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div style={{ flex: 1, minWidth: 240 }}>
+            <Eyebrow>İŞLETME SAHİBİ ŞİFRESİ</Eyebrow>
+            <div
+              style={{
+                marginTop: 4,
+                fontSize: 14,
+                color: 'var(--ink-2)',
+              }}
+            >
+              Sıfırlama bağlantısı{' '}
+              <span style={{ fontFamily: 'var(--f-mono)', fontWeight: 600, color: 'var(--ink)' }}>
+                {ownerEmail || '—'}
+              </span>{' '}
+              adresine gönderilir.
+            </div>
+            <div
+              style={{
+                marginTop: 6,
+                fontSize: 12,
+                color: 'var(--ink-3)',
+              }}
+            >
+              Yeni şifreyi sadece işletme sahibi belirleyebilir; admin görmez.
+            </div>
+          </div>
+          <button
+            onClick={() => setConfirmOpen(true)}
+            disabled={isPending || !ownerEmail}
+            className="h-9 px-4 rounded-[var(--r-sm)] border border-line text-sm font-semibold hover:bg-paper disabled:opacity-50"
+            style={{ fontFamily: 'var(--f-sans)' }}
+          >
+            ↻ Şifre Sıfırlama Gönder
+          </button>
+        </div>
+
+        {lastResult && (
+          <div
+            style={{
+              marginTop: 16,
+              padding: 12,
+              borderRadius: 'var(--r-sm)',
+              fontSize: 13,
+              background:
+                lastResult.type === 'success'
+                  ? 'color-mix(in srgb, var(--ok) 8%, transparent)'
+                  : 'color-mix(in srgb, var(--danger) 8%, transparent)',
+              color: lastResult.type === 'success' ? 'var(--ok)' : 'var(--danger)',
+              border: `1px solid color-mix(in srgb, ${
+                lastResult.type === 'success' ? 'var(--ok)' : 'var(--danger)'
+              } 30%, transparent)`,
+            }}
+          >
+            {lastResult.message}
+          </div>
+        )}
+      </div>
+
+      {confirmOpen && (
+        <Modal onClose={() => setConfirmOpen(false)} title="Şifre sıfırlama gönderilsin mi?">
+          <div style={{ marginBottom: 16 }}>
+            <p style={{ marginBottom: 8 }}>
+              <strong>{ownerEmail}</strong> adresine sıfırlama bağlantısı gönderilecek.
+            </p>
+            <p style={{ fontSize: 13, color: 'var(--ink-2)' }}>
+              İşletme sahibi email&apos;inden yeni şifresini belirleyecek. Bu işlem
+              audit log&apos;a kaydedilir.
+            </p>
+          </div>
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => setConfirmOpen(false)}
+              className="h-9 px-4 rounded-[var(--r-sm)] border border-line text-sm font-semibold hover:bg-paper"
+              style={{ fontFamily: 'var(--f-sans)' }}
+            >
+              Vazgeç
+            </button>
+            <button
+              onClick={handleReset}
+              disabled={isPending}
+              className="h-9 px-4 rounded-[var(--r-sm)] bg-super text-card font-semibold text-sm hover:opacity-90 disabled:opacity-50"
+              style={{ fontFamily: 'var(--f-sans)' }}
+            >
+              Gönder
+            </button>
+          </div>
+        </Modal>
+      )}
+    </Card>
   );
 }
 

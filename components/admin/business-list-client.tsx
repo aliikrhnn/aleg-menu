@@ -570,7 +570,6 @@ function BusinessTable({
               <ThEy>DURUM</ThEy>
               <ThEy>PLAN</ThEy>
               <ThEy>MRR</ThEy>
-              <ThEy>SİPARİŞ 30g</ThEy>
               <ThEy>SON GİRİŞ</ThEy>
               <ThEy>KAYIT</ThEy>
               <th className="w-10" />
@@ -680,12 +679,6 @@ function BusinessTableRow({
       </td>
       <td
         className="p-3 text-sm"
-        style={{ fontFamily: 'var(--f-mono)', color: 'var(--ink-2)' }}
-      >
-        {b.orders_30d}
-      </td>
-      <td
-        className="p-3 text-sm"
         style={{
           fontFamily: 'var(--f-mono)',
           fontSize: 12,
@@ -774,20 +767,6 @@ function BusinessGrid({ items }: { items: BusinessListRow[] }) {
                   }}
                 >
                   {mrr > 0 ? `₺${mrr.toLocaleString('tr-TR')}` : '—'}
-                </div>
-              </div>
-              <div>
-                <Eyebrow>SİPARİŞ 30g</Eyebrow>
-                <div
-                  style={{
-                    fontFamily: 'var(--f-mono)',
-                    fontSize: 16,
-                    color: 'var(--ink)',
-                    marginTop: 2,
-                    fontWeight: 600,
-                  }}
-                >
-                  {b.orders_30d}
                 </div>
               </div>
               <div>

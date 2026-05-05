@@ -1,0 +1,10 @@
+SİLİNECEK DOSYA: app/admin/api/impersonate/route.ts
+
+Bu dosya impersonation güvenlik açığıydı; tamamen kaldırıldı.
+
+Komut:
+  Windows PowerShell:
+    Remove-Item -Recurse -Force 'app/admin/api/impersonate'
+  
+  Veya git ile (önerilen):
+    git rm -r app/admin/api/impersonate

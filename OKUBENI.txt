@@ -1,75 +1,222 @@
 ═══════════════════════════════════════════════════════════════
-  KASİYER (PERSONEL) KALICI SİLME
+  ADMIN PANELİ — BILLING-ONLY MOD
+  Operasyonel veri admin tarafa kapatıldı
   4 Mayıs 2026
 ═══════════════════════════════════════════════════════════════
 
-✱ DURUM
+✱ HEDEF
 ─────────
-Sidebar → "Personeller" (/kasiyerler) sayfasında kasiyer 
-silmeye çalışınca aslında SADECE PASİFLEŞTİRİLİYORDU.
-Pasif listede sürekli görünmeye devam ediyordu.
+İşletmenin operasyonel verisine (sipariş, ciro, ürün, kasiyer)
+HİÇ KİMSE erişmesin — sadece o işletmenin sahibi (email/şifresini
+bilen kişi). Sen super admin olsan bile içeri giremeyesin.
 
-✱ ÇÖZÜM
-───────
-İki adımlı kalıcı silme akışı:
-  1) Aktif kasiyer → "Pasif yap" (eski davranış)
-  2) Pasif kasiyer → "Kalıcı sil" (YENİ - DB'den kaldırır)
+Admin paneli sadece BILLING/ABONELIK yönetimi yapabilir.
 
-İki adımlı tasarım YANLIŞ silmeyi engeller (önemli kişi 
-kazara silinmez).
+✱ YAPILDI
+─────────
 
-✱ DB MIGRATION (UYGULANDI - üretimde)
-───────────────────────────────────────
-İki FK kuralı NO ACTION → SET NULL'a çevrildi:
-  - payment_logs.cashier_id
-  - cash_drawer_sessions.cashier_id
+1) DB VIEW'LARI TEMİZLENDİ (Supabase'de uygulandı)
+   - v_admin_business_list → orders_30d kolonu kaldırıldı
+   - v_admin_business_revenue_30d → DROP edildi (komple yok)
+   - v_admin_system_health → orders_24h, revenue_24h kaldırıldı
 
-Sonuç: Kasiyer silinince geçmiş ödemeler ve kasa oturumları 
-KORUNUR ama cashier_id yerine NULL olur. Yani:
-  - Z-raporlar etkilenmez (rakamlar değişmez)
-  - "Hangi kasiyer aldı" bilgisi kaybolur (silinen için)
+2) İMPERSONATION TAMAMEN KALDIRILDI
+   En önemli güvenlik açığı buydu. Kaldırılan:
+   - /admin/api/impersonate/route.ts (SİLİNECEK - dosyada da işaretli)
+   - "↗ Panele Gir" butonu (UI'dan kaldırıldı)
+   - handleImpersonate fonksiyonu (silindi)
+   - startImpersonation server action (silindi)
+   
+   NOT: Eski audit log etiket sözlüğü kaldı - geçmişte yapılmış 
+   impersonate kayıtlarını okurken doğru metin gözüksün diye.
 
-Bu Supabase'de zaten uygulandı — tekrar gerek yok.
+3) UI'DAN OPERASYONEL VERİ TEMİZLENDİ
+   İşletme listesi:
+     - "SİPARİŞ 30g" kolonu (desktop+mobile) kaldırıldı
+   İşletme detayı:
+     - "SİPARİŞ 30G" header kart kaldırıldı
+     - "Son 30 Gün Ciro" sparkline grafiği kaldırıldı
+   Sistem sağlığı:
+     - "Sipariş" kartı kaldırıldı (24 saatlik kafe siparişi)
+     - "Hasılat" kartı kaldırıldı (24 saatlik kafe hasılatı)
+     - Yerlerine: Yazıcı işi, Aktif kullanıcı, Açık destek
 
-✱ GÜVENLİK KONTROLLERİ (Backend Action)
-────────────────────────────────────────
-permanentDeleteCashier şu durumda RED eder:
-  ✗ Aktif kasiyer (önce pasif yap)
-  ✗ Açık kasa oturumu var (önce kasayı kapat)
-  ✗ Başka işletmenin kasiyeri (multi-tenant safe)
+4) ŞİFRE SIFIRLAMA MEKANİZMASI EKLENDİ
+   Admin → İşletme detay → "Hesap Yönetimi" kartı
+   - "↻ Şifre Sıfırlama Gönder" butonu
+   - Tıklayınca işletme sahibinin EMAIL adresine sıfırlama
+     bağlantısı gider
+   - ADMIN YENİ ŞİFREYİ GÖREMEZ
+   - İşletme sahibi email'inden tıklar, yeni şifre belirler
+   - Tüm işlem audit log'a yazılır:
+     'admin.password_reset_sent' action
+     meta: { admin_email, owner_email }
+
+5) BACKEND ACTION TEMİZLİĞİ
+   - BusinessListRow type'ından orders_30d kaldırıldı
+   - BusinessDetail type'ından revenue30d kaldırıldı
+   - getBusinessDetail revenue çekmiyor
+   - exportBusinessesCSV: "Sipariş 30g" kolonu yok
+   - SystemHealth interface'ten orders_24h/revenue_24h kaldırıldı
+   - sendOwnerPasswordReset fonksiyonu eklendi
+
+6) GÜVENLİK TARAMASI
+   - 9 admin action dosyası, 56 fonksiyon: hepsinde 
+     requireSuperAdmin() var ya da dolaylı (updatePlan üzerinden)
+   - Admin action'ları operasyonel tablolara (orders, products, 
+     cashier_accounts, payment_logs vb) HİÇ erişmiyor
+   - Tenant izolasyon ikinci tur: 7 şüpheli sorgu, hepsi 
+     parent ID üzerinden doğrulanmış (false positive)
+   - Sızıntı YOK
+
+✱ ŞIFRE SIFIRLAMA AKIŞI (DETAYLI)
+─────────────────────────────────
+Admin: Bir kafe sahibi şifresini unuttu
+  ↓
+Admin paneli → İşletmeler → o işletme → Ayarlar tabı
+  ↓
+"Hesap Yönetimi" kartında "↻ Şifre Sıfırlama Gönder" tıkla
+  ↓
+Onay diyaloğu açılır → Email adresini gösterir → Gönder
+  ↓
+Supabase auth.resetPasswordForEmail() çalışır
+  ↓
+İşletme sahibi mailbox'ında "Şifrenizi Sıfırlayın" emaili
+  ↓
+Sahip linke tıklar → /panel/sifre-degistir sayfası açılır
+  ↓
+Yeni şifresini belirler → girer → kaydeder
+  ↓
+Admin sayfasında "✓ Şifre sıfırlama bağlantısı gönderildi" mesajı
+  ↓
+Audit log'a yazılır: kim, ne zaman, hangi işletme için, hangi email
+
+ÖNEMLİ: Admin yeni şifreyi GÖRMEZ. Sadece "ben emeli gönderdim"
+diyebilir. Email gerçekten gitti mi audit log'da görür.
 
 ✱ DOSYALAR
 ──────────
-  lib/actions/cashiers.ts                            permanentDeleteCashier eklendi
-  app/panel/(shell)/kasiyerler/cashier-manager.tsx   UI: pasif kart "Kalıcı sil"
+
+DEĞİŞENLER (6):
+  components/admin/business-detail-client.tsx     UI temizlik + AccountManagement
+  components/admin/business-list-client.tsx       SİPARİŞ 30g kolonu çıkarıldı
+  components/admin/system-client.tsx              Kafe verisi kartları çıkarıldı
+  lib/actions/admin-businesses.ts                 type fix + sendOwnerPasswordReset
+  lib/actions/admin-dashboard.ts                  startImpersonation silindi
+  lib/actions/admin-system.ts                     SystemHealth interface temiz
+
+SİLİNECEK (1 klasör):
+  app/admin/api/impersonate/                      KOMPLE klasörü sil
+  
+REFERANS (1 - zaten uygulandı):
+  migration/admin_billing_only.sql                DB değişiklik dökümanı
 
 ✱ NPM/MIGRATION
+────────────────
 NPM:        Yok
-MIGRATION:  Üretimde uygulandı (Supabase'de yapıldı)
+MIGRATION:  ✅ Üretimde uygulandı (Supabase'de)
+            (migration/admin_billing_only.sql sadece referans)
 
-✱ PUSH (PowerShell)
-────────────────────
-  git add lib/actions/cashiers.ts
-  git add 'app/panel/(shell)/kasiyerler/cashier-manager.tsx'
-  git commit -m "feat(kasiyer): kalıcı silme - 2 adımlı akış"
-  git push
+✱ PUSH (Windows PowerShell)
+────────────────────────────
 
-VEYA:
-  git add .
-  git commit -m "feat(kasiyer): kalıcı silme"
-  git push
+1) ÖNCE impersonate klasörünü sil:
+   Remove-Item -Recurse -Force 'app/admin/api/impersonate'
 
-✱ TEST
-──────
-1) panel.alegstudio.com → Personeller
-2) Aktif bir kasiyer → menü → "Pasif yap"
-3) PASİF bölümüne kayar
-4) Pasif kart → menü → "Kalıcı sil"
-5) Onay diyaloğu açılır → "Kalıcı Sil"
-6) Liste yenilenir, kasiyer artık YOK
+2) Git'e ekle:
+   git add components/admin/business-detail-client.tsx
+   git add components/admin/business-list-client.tsx
+   git add components/admin/system-client.tsx
+   git add lib/actions/admin-businesses.ts
+   git add lib/actions/admin-dashboard.ts
+   git add lib/actions/admin-system.ts
+   git rm -r app/admin/api/impersonate
 
-Test güvenliği:
-  - Açık kasa oturumu varsa "Önce kasayı kapat" hatası
-  - Aktif kasiyeri silmeye çalışırsan "Önce pasif yap" hatası
+3) Commit & Push:
+   git commit -m "feat(admin): billing-only mode + impersonation kaldırıldı"
+   git push
+
+VEYA tek seferde:
+   Remove-Item -Recurse -Force 'app/admin/api/impersonate'
+   git add .
+   git commit -m "feat(admin): billing-only mode + impersonation kaldırıldı"
+   git push
+
+✱ TEST AKIŞI (DEPLOY BİTİNCE)
+──────────────────────────────
+
+1) İşletme listesi temiz mi?
+   admin.alegstudio.com → İşletmeler
+   ✓ Tablo header: İŞLETME, DURUM, PLAN, MRR, SON GİRİŞ, KAYIT
+   ✗ "SİPARİŞ 30g" KOLONU YOK
+   
+2) İşletme detay temiz mi?
+   Bir işletmeye tıkla
+   ✓ Header metric: PLAN, MRR, SON GİRİŞ
+   ✗ "SİPARİŞ 30G" YOK
+   ✗ "Son 30 Gün Ciro" grafik YOK
+   ✗ "↗ Panele Gir" butonu YOK
+
+3) Şifre sıfırlama çalışıyor mu?
+   İşletme detay → Ayarlar tabı (en alta scrolla)
+   "Hesap Yönetimi" kartı → "↻ Şifre Sıfırlama Gönder"
+   Onay → Gönder
+   ✓ "✓ Şifre sıfırlama bağlantısı X@email adresine gönderildi"
+   
+   İşletme sahibinin gmail'i: gerçek email gelmeli (1-2dk)
+   
+4) Sistem sağlığı temiz mi?
+   admin.alegstudio.com → Sistem
+   ✓ "Son 24 saat" bölümü: Yazıcı işi, Aktif kullanıcı, Açık destek
+   ✗ "Sipariş" YOK
+   ✗ "Hasılat" YOK
+
+5) İmpersonate yapılamıyor mu?
+   Tarayıcı konsoluna:
+     fetch('/admin/api/impersonate', { method: 'POST', body: JSON.stringify({businessId: 'X'}), headers: {'Content-Type':'application/json'} })
+   ✓ 404 Not Found dönmeli (route yok)
+
+6) Audit log'da görünüyor mu?
+   admin.alegstudio.com → Denetim/Audit
+   ✓ Şifre sıfırlama işlemi listede gözükmeli
+   ✓ Kim yaptı, kime, ne zaman bilgisi
+
+✱ ROLLBACK
+───────────
+E�er sorun çıkarsa:
+   git revert HEAD
+   git push
+
+DB view'ları geri getirmek için (acil rollback):
+   - Supabase Dashboard → SQL Editor
+   - Migration dosyasının "drop" kısımları yerine 
+     orijinal definition'ları çalıştır
+   (Ama bu super-acil bir şey değil, view'lar geri getirilmese
+    de admin paneli çalışmaya devam eder)
+
+═══════════════════════════════════════════════════════════════
+
+✱ NE KAZANDIK
+──────────────
+✓ Sen veya başka admin işletmenin operasyonel verisini GÖREMEZ
+✓ Login-as / impersonation tamamen kaldırıldı (gelecekte eklenemez
+  yapı kalsın isterseniz başka bir paket gerekir)
+✓ Şifre sıfırlama mekanizması: yardım ediyorsun ama veri görmüyorsun
+✓ Audit log: kim ne yaptı kayıt altında
+✓ Tenant izolasyon: ikinci tur tarama temiz
+
+✱ NE KAYBETTİK
+───────────────
+✗ Admin olarak "kafe ne kadar aktif?" göremezsin (ciro/sipariş
+  rakamları görünmüyor) - bu istediğin şeydi zaten
+✗ Trial bittikten sonra kafe kullanıyor mu kontrol etmek zor 
+  (sadece "son giriş" zamanı kalabilir)
+
+✱ İLERİDE EKLENEBİLİR
+─────────────────────
+- Şifre sıfırlama yerine geçici şifre üretip WhatsApp/SMS ile 
+  gönderme (email'i unutmuş olabilir)
+- "Son giriş" görünümü zaten yeterli olabilir, gerek yok
+- Audit log'a güvenlik filtresi (sadece kendi işlemlerini gör)
 
 ═══════════════════════════════════════════════════════════════

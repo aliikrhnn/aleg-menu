@@ -47,8 +47,6 @@ export interface SystemHealth {
   active_businesses: number
   total_users: number
   active_users_24h: number
-  orders_24h: number
-  revenue_24h: number
   print_jobs_24h: number
   failed_jobs_24h: number
   open_tickets: number

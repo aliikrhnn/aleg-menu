@@ -27,7 +27,6 @@ export type BusinessListRow = {
   plan_name: string | null;
   plan_slug: string | null;
   plan_price: number;
-  orders_30d: number;
   logo: string;
   owner_email: string | null;
   owner_name: string | null;
@@ -35,7 +34,6 @@ export type BusinessListRow = {
 
 export type BusinessDetail = BusinessListRow & {
   // Detay sayfası ek bilgiler
-  revenue30d: Array<{ day: string; amount: number }>;
   recentInvoices: Array<{
     id: string;
     invoice_no: string;
@@ -199,20 +197,7 @@ export async function getBusinessDetail(id: string): Promise<BusinessDetail | nu
   if (!bizRaw) return null;
   const biz = bizRaw as unknown as BusinessListRow;
 
-  // 2) Revenue 30d
-  const { data: revRaw } = await supabase
-    .from('v_admin_business_revenue_30d')
-    .select('day, amount')
-    .eq('business_id', id)
-    .order('day', { ascending: true });
-
-  type RevRow = { day: string; amount: number | string };
-  const revenue30d = ((revRaw || []) as unknown as RevRow[]).map((r) => ({
-    day: r.day,
-    amount: Number(r.amount),
-  }));
-
-  // 3) Son faturalar
+  // 2) Son faturalar
   const { data: invRaw } = await supabase
     .from('platform_invoices')
     .select('id, invoice_no, amount, status, due_at, paid_at')
@@ -295,7 +280,6 @@ export async function getBusinessDetail(id: string): Promise<BusinessDetail | nu
   return {
     ...biz,
     logo: biz.logo || '?',
-    revenue30d,
     recentInvoices,
     recentActivity,
     members,
@@ -581,7 +565,6 @@ export async function exportBusinessesCSV(): Promise<string> {
     'Plan',
     'Plan Ücreti',
     'Durum',
-    'Sipariş 30g',
     'Son Giriş',
     'Kayıt Tarihi',
   ];
@@ -595,7 +578,6 @@ export async function exportBusinessesCSV(): Promise<string> {
     b.plan_name || '',
     String(b.plan_price || 0),
     b.subscription_status,
-    String(b.orders_30d),
     b.last_login_at || '',
     b.created_at,
   ]);
@@ -671,4 +653,85 @@ export async function getCityList(): Promise<string[]> {
     if (r.city) cities.add(r.city);
   });
   return Array.from(cities).sort((a, b) => a.localeCompare(b, 'tr'));
+}
+
+// ============================================================
+// İŞLETME SAHİBİ ŞİFRE SIFIRLAMA (admin'den)
+// Admin yeni şifreyi GÖREMEZ. Sıfırlama email'i sahibe gider.
+// ============================================================
+export async function sendOwnerPasswordReset(
+  businessId: string
+): Promise<{ success: boolean; email?: string; error?: string }> {
+  try {
+    const { user: adminUser } = await requireSuperAdmin();
+    const supabase = createClient();
+
+    // İşletmeyi ve sahibinin email'ini bul
+    const { data: biz } = await supabase
+      .from('v_admin_business_list')
+      .select('id, name, slug, owner_email, owner_user_id')
+      .eq('id', businessId)
+      .maybeSingle();
+
+    if (!biz) {
+      return { success: false, error: 'İşletme bulunamadı' };
+    }
+
+    const ownerRow = biz as unknown as {
+      id: string;
+      name: string;
+      slug: string;
+      owner_email: string | null;
+      owner_user_id: string | null;
+    };
+
+    if (!ownerRow.owner_email) {
+      return { success: false, error: 'İşletme sahibinin email adresi yok' };
+    }
+
+    // Admin client ile şifre sıfırlama email'i tetikle
+    // Bu, kullanıcıya email gönderir; admin yeni şifreyi GÖRMEZ.
+    const { createAdminClient } = await import('@/lib/supabase/admin');
+    const admin = createAdminClient();
+
+    const redirectTo = process.env.NEXT_PUBLIC_APP_URL
+      ? `${process.env.NEXT_PUBLIC_APP_URL}/panel/sifre-degistir`
+      : undefined;
+
+    const { error: resetErr } = await admin.auth.resetPasswordForEmail(
+      ownerRow.owner_email,
+      redirectTo ? { redirectTo } : undefined
+    );
+
+    if (resetErr) {
+      return {
+        success: false,
+        error: `Sıfırlama gönderilemedi: ${resetErr.message}`,
+      };
+    }
+
+    // Audit log: kim, hangi işletme için, ne zaman sıfırladı
+    await (supabase.rpc as unknown as (
+      fn: string,
+      params: Record<string, unknown>,
+    ) => Promise<{ error: unknown }>)('log_audit', {
+      p_action: 'admin.password_reset_sent',
+      p_target_type: 'business',
+      p_target_id: businessId,
+      p_target_label: ownerRow.name,
+      p_business_id: businessId,
+      p_meta: {
+        admin_email: adminUser.email,
+        owner_email: ownerRow.owner_email,
+      },
+      p_tone: 'super',
+    });
+
+    return { success: true, email: ownerRow.owner_email };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Hata',
+    };
+  }
 }

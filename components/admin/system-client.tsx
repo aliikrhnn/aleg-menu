@@ -64,14 +64,7 @@ export function SystemClient({ health, signals, recentActivity }: SystemClientPr
       {/* Detaylı 24s metrikler */}
       <section className="rounded-3xl border border-[var(--ink)]/10 bg-[var(--paper)] p-6">
         <Eyebrow>Son 24 saat</Eyebrow>
-        <div className="mt-4 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          <BigStat label="Sipariş" value={String(health.orders_24h)} />
-          <BigStat
-            label="Hasılat"
-            value={
-              <Money amount={health.revenue_24h} />
-            }
-          />
+        <div className="mt-4 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           <BigStat
             label="Yazıcı işi"
             value={String(health.print_jobs_24h)}
@@ -83,6 +76,7 @@ export function SystemClient({ health, signals, recentActivity }: SystemClientPr
             tone={failureRate > 10 ? 'warn' : 'ok'}
           />
           <BigStat label="Aktif kullanıcı" value={String(health.active_users_24h)} />
+          <BigStat label="Açık destek" value={String(health.open_tickets)} />
         </div>
       </section>
 
