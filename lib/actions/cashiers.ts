@@ -400,6 +400,74 @@ export async function deleteCashier(
 }
 
 // ============================================================
+// Kasiyer KALICI sil (DB'den tamamen kaldırır)
+// FK'lar SET NULL olduğu için geçmiş siparişler/ödemeler korunur
+// ama kasiyer adı yerine null görünür.
+// ============================================================
+export async function permanentDeleteCashier(
+  id: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { businessId } = await requireBusinessAccess();
+    const admin = createAdminClient();
+
+    // Önce kasiyer bu işletmeye ait mi kontrol et
+    const { data: cashier, error: fetchErr } = await admin
+      .from('cashier_accounts')
+      .select('id, business_id, display_name, is_active')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (fetchErr) return { success: false, error: fetchErr.message };
+    if (!cashier || cashier.business_id !== businessId) {
+      return { success: false, error: 'Kasiyer bulunamadı' };
+    }
+
+    // Güvenlik: aktif kasiyeri kalıcı silme - önce pasifleştirilmeli
+    if (cashier.is_active) {
+      return {
+        success: false,
+        error: 'Önce kasiyeri pasif yap, sonra kalıcı sil',
+      };
+    }
+
+    // Açık kasa oturumu var mı kontrol et
+    const { data: openSession } = await admin
+      .from('cash_drawer_sessions')
+      .select('id')
+      .eq('cashier_id', id)
+      .eq('status', 'open')
+      .maybeSingle();
+
+    if (openSession) {
+      return {
+        success: false,
+        error: 'Bu kasiyerin açık kasa oturumu var. Önce kasayı kapat.',
+      };
+    }
+
+    // Kalıcı sil — FK SET NULL olduğu için ilişkili kayıtlar korunur
+    const { error: deleteErr } = await admin
+      .from('cashier_accounts')
+      .delete()
+      .eq('id', id)
+      .eq('business_id', businessId); // ekstra güvenlik
+
+    if (deleteErr) {
+      return { success: false, error: deleteErr.message };
+    }
+
+    revalidatePath('/panel/kasiyerler');
+    return { success: true };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Hata',
+    };
+  }
+}
+
+// ============================================================
 // PIN doğrula (kasa uygulamasından çağrılır)
 // ============================================================
 export async function verifyCashierPin(

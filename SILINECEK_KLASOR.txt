@@ -1,2 +1,8 @@
-BU DOSYAYI ELLE SİL: app/panel/(shell)/pos/
-Tamamı kaldırılmalı: app/panel/(shell)/pos/page.tsx ve diğer 7 dosya
+SİLİNECEK KLASÖR: app/sentry-test/
+
+Bu klasörün ve içindeki page.tsx'in tamamen silinmesi lazım.
+Test için geçiciydi, production'a kalmasın.
+
+Komut:
+  Windows: rmdir /S /Q app\sentry-test
+  Veya:    git rm -r app/sentry-test

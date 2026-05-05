@@ -1,99 +1,75 @@
 ═══════════════════════════════════════════════════════════════
-  SENTRY V8 GERÇEK FIX
+  KASİYER (PERSONEL) KALICI SİLME
   4 Mayıs 2026
 ═══════════════════════════════════════════════════════════════
 
-✱ NEDEN ÖNCEKİ ÇÖZÜMLER ÇALIŞMADI
-─────────────────────────────────
-
-İlk versiyonda 2 hata yaptım, sonunda buldum:
-
-1. instrumentation-client.ts → Next.js 15+ özelliği. Next 14 
-   tanımıyor. SİLİNDİ.
-
-2. next.config.js'te withSentryConfig 3 ARGÜMAN ile çağrılmıştı:
-     withSentryConfig(nextConfig, sentryWebpackOpts, sentrySdkOpts)
-   
-   Bu Sentry V7 sözdizimi. V8'de DESTEKLENMİYOR.
-   V8 migration guide:
-   > "withSentryConfig will no longer accept 3 arguments"
-   
-   Bu yüzden SDK options yok sayıldı, build sırasında 
-   sentry.client.config.ts otomatik enjeksiyon devreye girmedi.
+✱ DURUM
+─────────
+Sidebar → "Personeller" (/kasiyerler) sayfasında kasiyer 
+silmeye çalışınca aslında SADECE PASİFLEŞTİRİLİYORDU.
+Pasif listede sürekli görünmeye devam ediyordu.
 
 ✱ ÇÖZÜM
 ───────
+İki adımlı kalıcı silme akışı:
+  1) Aktif kasiyer → "Pasif yap" (eski davranış)
+  2) Pasif kasiyer → "Kalıcı sil" (YENİ - DB'den kaldırır)
 
-next.config.js V8 formatına çevrildi:
-  withSentryConfig(nextConfig, { 
-    org, project, authToken, silent,
-    widenClientFileUpload, hideSourceMaps, 
-    disableLogger, tunnelRoute, ... 
-  })  // TEK obje, 2 argüman
+İki adımlı tasarım YANLIŞ silmeyi engeller (önemli kişi 
+kazara silinmez).
 
-Şimdi withSentryConfig browser bundle'a sentry.client.config.ts 
-otomatik enjekte ediyor. Sentry.init() çağrılır, DSN doldurulur.
+✱ DB MIGRATION (UYGULANDI - üretimde)
+───────────────────────────────────────
+İki FK kuralı NO ACTION → SET NULL'a çevrildi:
+  - payment_logs.cashier_id
+  - cash_drawer_sessions.cashier_id
 
-✱ DOSYALAR (2 değişen + 1 silinecek)
-─────────────────────────────────────
+Sonuç: Kasiyer silinince geçmiş ödemeler ve kasa oturumları 
+KORUNUR ama cashier_id yerine NULL olur. Yani:
+  - Z-raporlar etkilenmez (rakamlar değişmez)
+  - "Hangi kasiyer aldı" bilgisi kaybolur (silinen için)
 
-DEĞİŞEN:
-  next.config.js                 V8 format - 2 argümanlı
-  sentry.client.config.ts        (Önceki versiyon silindiği için
-                                  yeniden eklendi - aynı içerik)
+Bu Supabase'de zaten uygulandı — tekrar gerek yok.
 
-SİLİNECEK (eğer sende varsa):
-  instrumentation-client.ts      Next 14 desteklemiyor
-  
-  Yoksa zaten silmemişsin demektir, sorun değil.
+✱ GÜVENLİK KONTROLLERİ (Backend Action)
+────────────────────────────────────────
+permanentDeleteCashier şu durumda RED eder:
+  ✗ Aktif kasiyer (önce pasif yap)
+  ✗ Açık kasa oturumu var (önce kasayı kapat)
+  ✗ Başka işletmenin kasiyeri (multi-tenant safe)
 
-DEĞİŞMEYENLER (zaten doğru):
-  sentry.server.config.ts
-  sentry.edge.config.ts
-  instrumentation.ts
-  package.json (@sentry/nextjs ^8.0.0)
+✱ DOSYALAR
+──────────
+  lib/actions/cashiers.ts                            permanentDeleteCashier eklendi
+  app/panel/(shell)/kasiyerler/cashier-manager.tsx   UI: pasif kart "Kalıcı sil"
 
-✱ PUSH
+✱ NPM/MIGRATION
+NPM:        Yok
+MIGRATION:  Üretimde uygulandı (Supabase'de yapıldı)
+
+✱ PUSH (PowerShell)
+────────────────────
+  git add lib/actions/cashiers.ts
+  git add 'app/panel/(shell)/kasiyerler/cashier-manager.tsx'
+  git commit -m "feat(kasiyer): kalıcı silme - 2 adımlı akış"
+  git push
+
+VEYA:
+  git add .
+  git commit -m "feat(kasiyer): kalıcı silme"
+  git push
+
+✱ TEST
 ──────
-1) Eğer instrumentation-client.ts varsa SİL:
-   del instrumentation-client.ts
-   (veya: rm instrumentation-client.ts)
+1) panel.alegstudio.com → Personeller
+2) Aktif bir kasiyer → menü → "Pasif yap"
+3) PASİF bölümüne kayar
+4) Pasif kart → menü → "Kalıcı sil"
+5) Onay diyaloğu açılır → "Kalıcı Sil"
+6) Liste yenilenir, kasiyer artık YOK
 
-2) Git'e ekle:
-   git add next.config.js
-   git add sentry.client.config.ts
-   git rm instrumentation-client.ts  (eğer git'te varsa)
-   
-   git commit -m "fix(sentry): v8 withSentryConfig 2-arg format"
-   git push
-
-VEYA tek komut:
-   del instrumentation-client.ts
-   git add .
-   git commit -m "fix(sentry): v8 withSentryConfig 2-arg format"
-   git push
-
-✱ DEPLOY VE TEST
-────────────────
-1) Vercel auto-deploy bitince
-2) Hard refresh (Ctrl+Shift+R)
-3) F12 → Console:
-
-   window.__SENTRY__?.hub?.getClient()?.getDsn()
-   
-   ARTIK DSN object dönmeli. undefined DEĞİL!
-   Örnek:
-   {
-     host: "o4511331240509520.ingest.us.sentry.io",
-     pathname: "/4511331240509520",
-     protocol: "https",
-     publicKey: "abc123...",
-     ...
-   }
-
-4) Test error fırlat:
-   throw new Error('TEST-' + Date.now())
-
-5) 30sn içinde Sentry → Feed → hata gelir
+Test güvenliği:
+  - Açık kasa oturumu varsa "Önce kasayı kapat" hatası
+  - Aktif kasiyeri silmeye çalışırsan "Önce pasif yap" hatası
 
 ═══════════════════════════════════════════════════════════════

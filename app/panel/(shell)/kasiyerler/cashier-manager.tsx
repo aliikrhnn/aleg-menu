@@ -7,6 +7,7 @@ import {
   createCashier,
   updateCashier,
   deleteCashier,
+  permanentDeleteCashier,
   changePin,
   listCashiers,
   type Cashier,
@@ -207,6 +208,21 @@ export function CashierManager({ initialCashiers, error: initialError }: Props) 
                       await updateCashier(c.id, { isActive: true });
                       reload();
                     }}
+                    onPermanentDelete={async () => {
+                      const ok = await confirmDialog({
+                        title: `"${c.display_name}" kalıcı silinsin mi?`,
+                        body: 'Bu işlem GERİ ALINAMAZ. Kasiyer DB\'den tamamen kaldırılacak. Geçmiş siparişler ve ödemeler korunur ancak kasiyer adı yerine boş görünür.',
+                        tone: 'danger',
+                        confirmLabel: 'Kalıcı Sil',
+                      });
+                      if (!ok) return;
+                      const result = await permanentDeleteCashier(c.id);
+                      if (!result.success) {
+                        alert(result.error || 'Silinemedi');
+                        return;
+                      }
+                      reload();
+                    }}
                   />
                 ))}
               </div>
@@ -287,6 +303,7 @@ function CashierCard({
   onChangePin,
   onDelete,
   onReactivate,
+  onPermanentDelete,
 }: {
   cashier: Cashier;
   inactive?: boolean;
@@ -294,6 +311,7 @@ function CashierCard({
   onChangePin: () => void;
   onDelete?: () => void;
   onReactivate?: () => void;
+  onPermanentDelete?: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -399,16 +417,28 @@ function CashierCard({
                   }}
                 />
                 {inactive ? (
-                  onReactivate && (
-                    <MenuItem
-                      label="Aktif yap"
-                      onClick={() => {
-                        setMenuOpen(false);
-                        onReactivate();
-                      }}
-                      color="var(--ok)"
-                    />
-                  )
+                  <>
+                    {onReactivate && (
+                      <MenuItem
+                        label="Aktif yap"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          onReactivate();
+                        }}
+                        color="var(--ok)"
+                      />
+                    )}
+                    {onPermanentDelete && (
+                      <MenuItem
+                        label="Kalıcı sil"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          onPermanentDelete();
+                        }}
+                        color="var(--danger)"
+                      />
+                    )}
+                  </>
                 ) : (
                   onDelete && (
                     <MenuItem
