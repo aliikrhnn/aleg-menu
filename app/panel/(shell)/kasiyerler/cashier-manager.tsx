@@ -321,15 +321,22 @@ function CashierCard({
 
   return (
     <div
-      className="rounded-[var(--r)] overflow-hidden relative transition-all"
+      className="rounded-[var(--r)] relative transition-all"
       style={{
         background: 'var(--card)',
         border: '1px solid var(--line)',
         opacity: inactive ? 0.6 : 1,
       }}
     >
-      {/* Renkli üst bant */}
-      <div style={{ height: 4, background: cashier.color }} />
+      {/* Renkli üst bant - karta üstten yapışık, üst köşeleri yuvarlatılmış */}
+      <div
+        style={{
+          height: 4,
+          background: cashier.color,
+          borderTopLeftRadius: 'var(--r)',
+          borderTopRightRadius: 'var(--r)',
+        }}
+      />
 
       <div className="p-4 flex items-start gap-3">
         <div
