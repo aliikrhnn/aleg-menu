@@ -1,0 +1,2735 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<title>HASHIRA (HSHR) — Sunum</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<base href="/hashira-test/" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="styles.css" />
+<script src="deck-stage.js"></script>
+<style>
+  body { background: #050609; overflow: hidden; }
+  deck-stage { background: #050609; }
+
+  /* === Ambient effects (always on, every slide) === */
+  .ambient {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    overflow: hidden;
+  }
+  .ambient .glow {
+    position: absolute;
+    width: 800px; height: 800px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(212,168,87,0.10) 0%, rgba(212,168,87,0) 65%);
+    filter: blur(40px);
+    animation: drift1 22s ease-in-out infinite;
+  }
+  .ambient .glow.g2 {
+    background: radial-gradient(circle, rgba(74,111,165,0.08) 0%, rgba(74,111,165,0) 65%);
+    animation: drift2 28s ease-in-out infinite;
+  }
+  @keyframes drift1 {
+    0%,100% { transform: translate(-20%, -20%); }
+    50%     { transform: translate(60%, 30%); }
+  }
+  @keyframes drift2 {
+    0%,100% { transform: translate(80%, 70%); }
+    50%     { transform: translate(10%, 20%); }
+  }
+  .ambient .scan {
+    display: none;
+  }
+  @keyframes scan {
+    0% { top: -2%; }
+    100% { top: 102%; }
+  }
+  .ambient .grain {
+    position: absolute; inset: 0;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' seed='4'/><feColorMatrix values='0 0 0 0 0.83 0 0 0 0 0.66 0 0 0 0 0.34 0 0 0 0.04 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+    mix-blend-mode: screen;
+    opacity: 0.5;
+    animation: grainshift 1.6s steps(8) infinite;
+  }
+  @keyframes grainshift {
+    0%,100% { transform: translate(0,0); }
+    20%     { transform: translate(-2%, 1%); }
+    40%     { transform: translate(1%, -2%); }
+    60%     { transform: translate(-1%, 2%); }
+    80%     { transform: translate(2%, -1%); }
+  }
+  .ambient .particles span {
+    position: absolute;
+    width: 3px; height: 3px;
+    background: var(--gold);
+    border-radius: 50%;
+    opacity: 0.45;
+    box-shadow: 0 0 8px var(--gold);
+    animation: float 16s linear infinite;
+  }
+  @keyframes float {
+    0%   { transform: translateY(120vh) translateX(0); opacity: 0; }
+    10%  { opacity: 0.55; }
+    90%  { opacity: 0.55; }
+    100% { transform: translateY(-20vh) translateX(40px); opacity: 0; }
+  }
+  /* Marquee ticker — bottom of every slide */
+  .ticker-strip {
+    position: absolute;
+    bottom: 88px; left: 0; right: 0;
+    height: 26px;
+    overflow: hidden;
+    z-index: 4;
+    pointer-events: none;
+    border-top: 1px solid rgba(255,255,255,0.04);
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    background: rgba(0,0,0,0.4);
+  }
+  .ticker-strip .track {
+    display: flex; align-items: center; height: 100%;
+    white-space: nowrap;
+    animation: ticker 70s linear infinite;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.32em;
+    color: rgba(212,168,87,0.65);
+    text-transform: uppercase;
+  }
+  .ticker-strip .track span { padding: 0 60px; display: inline-block; }
+  .ticker-strip .track .x { color: rgba(255,255,255,0.18); }
+  @keyframes ticker {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-50%); }
+  }
+  /* Glow pulse for accents */
+  @keyframes goldPulse {
+    0%,100% { box-shadow: 0 0 0 rgba(212,168,87,0); }
+    50%     { box-shadow: 0 0 32px rgba(212,168,87,0.5); }
+  }
+  .pulse-gold { animation: goldPulse 3.5s ease-in-out infinite; }
+
+  /* slow rotating diamond accent */
+  @keyframes spinSlow { to { transform: rotate(360deg); } }
+  .spin-slow { animation: spinSlow 30s linear infinite; }
+
+  /* shimmer underline for headlines */
+  @keyframes shimmerLine {
+    0% { background-position: -300px 0; }
+    100% { background-position: 300px 0; }
+  }
+  .shimmer-rule {
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+    background-size: 300px 100%;
+    background-repeat: no-repeat;
+    animation: shimmerLine 4s ease-in-out infinite;
+  }
+
+  /* on-active extra: subtle zoom-in */
+  section[data-deck-active] .pad { animation: padIn 1.1s cubic-bezier(0.2,0.8,0.2,1) both; }
+  @keyframes padIn { from { opacity: 0.0; transform: scale(0.985); } to { opacity: 1; transform: scale(1); } }
+
+  /* counter-up effect for big numbers (purely visual via gradient sweep) */
+  @keyframes goldSheen {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+  .sheen {
+    background: linear-gradient(90deg, var(--ink-0) 0%, var(--gold-2) 50%, var(--ink-0) 100%);
+    background-size: 200% 100%;
+    -webkit-background-clip: text; background-clip: text;
+    color: transparent;
+    animation: goldSheen 6s linear infinite;
+  }
+
+  /* loop dots travelling */
+  @keyframes dotTravel {
+    0% { transform: translateX(0); opacity: 0; }
+    10% { opacity: 1; }
+    90% { opacity: 1; }
+    100% { transform: translateX(100%); opacity: 0; }
+  }
+
+  section {
+    width: 1920px; height: 1080px;
+    background: var(--bg-0);
+    color: var(--ink-1);
+    position: relative;
+    overflow: hidden;
+    font-family: var(--font-body);
+  }
+
+  /* Common chrome */
+  .chrome {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    z-index: 5;
+  }
+  .chrome .top, .chrome .bot {
+    position: absolute; left: 64px; right: 64px;
+    display: flex; justify-content: space-between; align-items: center;
+    color: var(--ink-3);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+  .chrome .top { top: 40px; }
+  .chrome .bot { bottom: 40px; }
+  .chrome .brand { color: var(--ink-2); font-family: var(--font-display); font-weight: 600; letter-spacing: 0.32em; }
+  .chrome .brand-wrap { display: inline-flex; align-items: center; gap: 14px; }
+  .chrome .brand-logo { width: 38px; height: 38px; object-fit: contain; display: block; filter: drop-shadow(0 2px 6px rgba(212,168,87,0.35)); }
+  .chrome .dot { width: 6px; height: 6px; background: var(--gold); border-radius: 50%; display:inline-block; margin: 0 10px; vertical-align: middle; }
+
+  /* Type system */
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: var(--gold);
+  }
+  .h1 {
+    font-family: var(--font-display);
+    font-weight: 300;
+    font-size: 128px;
+    line-height: 0.95;
+    letter-spacing: -0.03em;
+    color: var(--ink-0);
+    margin: 0;
+  }
+  .h1 strong { font-weight: 700; }
+  .h2 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 84px;
+    line-height: 1;
+    letter-spacing: -0.025em;
+    color: var(--ink-0);
+    margin: 0;
+  }
+  .h3 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 44px;
+    line-height: 1.1;
+    letter-spacing: -0.015em;
+    color: var(--ink-0);
+    margin: 0;
+  }
+  .lead {
+    font-family: var(--font-display);
+    font-weight: 300;
+    font-size: 36px;
+    line-height: 1.35;
+    color: var(--ink-1);
+    margin: 0;
+    text-wrap: pretty;
+  }
+  .body {
+    font-size: 26px;
+    line-height: 1.5;
+    color: var(--ink-2);
+    text-wrap: pretty;
+  }
+  .label {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+
+  /* === Slide 01 — Title === */
+  .s01 .stage { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+  .s01 .torii-art {
+    position: absolute; left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    width: 1200px; height: 700px;
+  }
+  .s01 .pillar {
+    position: absolute; bottom: 0;
+    width: 36px;
+    background: linear-gradient(to top, var(--gold) 0%, rgba(212,168,87,0.0) 100%);
+    transform-origin: bottom;
+    animation: pillarRise 1.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  @keyframes pillarRise { from { transform: scaleY(0); opacity: 0; } to { transform: scaleY(1); opacity: 1; } }
+  .s01 .titleblock {
+    position: relative; z-index: 3;
+    text-align: center;
+    animation: rise 1.2s cubic-bezier(0.2,0.8,0.2,1) 0.4s both;
+  }
+  @keyframes rise { from { opacity:0; transform: translateY(40px); } to { opacity:1; transform: translateY(0); } }
+  .s01 .ticker { color: var(--gold); font-family: var(--font-mono); font-size: 18px; letter-spacing: 0.4em; }
+  .s01 h1 {
+    font-family: var(--font-display);
+    font-weight: 200;
+    font-size: 220px;
+    line-height: 0.9;
+    letter-spacing: -0.04em;
+    margin: 24px 0 0;
+    color: var(--ink-0);
+  }
+  .s01 h1 strong { font-weight: 700; background: linear-gradient(90deg, var(--gold-2), var(--gold)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .s01 .sub {
+    margin-top: 28px;
+    font-family: var(--font-display);
+    font-weight: 300;
+    font-size: 36px;
+    color: var(--ink-2);
+    letter-spacing: 0.04em;
+  }
+  .s01 .meta {
+    margin-top: 56px;
+    display: flex; gap: 40px; justify-content: center;
+    color: var(--ink-3);
+    font-family: var(--font-mono);
+    font-size: 14px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+  }
+  .s01 .meta b { color: var(--gold); font-weight: 500; }
+
+  /* Sweep beams */
+  .beam {
+    position: absolute; left: 50%; bottom: 0;
+    width: 2px; height: 100%;
+    background: linear-gradient(to top, rgba(212,168,87,0.5), rgba(212,168,87,0));
+    transform-origin: bottom;
+  }
+
+  /* === Generic slide chrome === */
+  .pad { position: absolute; inset: 96px 96px 96px 96px; }
+
+  /* Section divider slides */
+  .divider {
+    background: var(--bg-1);
+  }
+  .divider .num {
+    font-family: var(--font-display);
+    font-weight: 200;
+    font-size: 380px;
+    line-height: 0.9;
+    color: transparent;
+    -webkit-text-stroke: 1px var(--gold);
+    letter-spacing: -0.05em;
+  }
+  .divider .h2 { color: var(--ink-0); }
+  .divider .lead { max-width: 1100px; margin-top: 28px; }
+
+  /* Bullet style */
+  ul.clean { list-style: none; padding: 0; margin: 0; }
+  ul.clean li {
+    position: relative;
+    padding: 18px 0 18px 56px;
+    border-bottom: 1px solid var(--line);
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: 32px;
+    color: var(--ink-1);
+    letter-spacing: -0.005em;
+  }
+  ul.clean li::before {
+    content: ''; position: absolute;
+    left: 0; top: 32px;
+    width: 28px; height: 1px;
+    background: var(--gold);
+  }
+  ul.clean.tight li { padding: 14px 0 14px 56px; font-size: 28px; }
+  ul.clean.tight li::before { top: 28px; }
+
+  /* Cards */
+  .card {
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    padding: 40px;
+    border-radius: 4px;
+    position: relative;
+    overflow: hidden;
+  }
+  .card .corner {
+    position: absolute; top: 0; right: 0;
+    width: 56px; height: 56px;
+    background: linear-gradient(135deg, transparent 50%, var(--gold-soft) 50%);
+  }
+  .card .ix {
+    font-family: var(--font-mono);
+    color: var(--gold);
+    font-size: 14px;
+    letter-spacing: 0.3em;
+  }
+  .card h4 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 36px;
+    line-height: 1.1;
+    margin: 16px 0 14px;
+    color: var(--ink-0);
+    letter-spacing: -0.015em;
+  }
+  .card p { margin: 0; font-size: 20px; line-height: 1.5; color: var(--ink-2); }
+
+  /* Animated reveal helpers (deck-stage adds [data-deck-active] to current section) */
+  section .anim { opacity: 0; transform: translateY(24px); transition: opacity 0.8s ease, transform 0.8s cubic-bezier(0.2,0.8,0.2,1); }
+  section[data-deck-active] .anim { opacity: 1; transform: translateY(0); }
+  section .anim.d1 { transition-delay: 0.1s; }
+  section .anim.d2 { transition-delay: 0.25s; }
+  section .anim.d3 { transition-delay: 0.4s; }
+  section .anim.d4 { transition-delay: 0.55s; }
+  section .anim.d5 { transition-delay: 0.7s; }
+  section .anim.d6 { transition-delay: 0.85s; }
+  section .anim.d7 { transition-delay: 1.0s; }
+  section .anim.d8 { transition-delay: 1.15s; }
+
+  /* line draw */
+  .draw { stroke-dasharray: 2000; stroke-dashoffset: 2000; transition: stroke-dashoffset 1.4s ease 0.3s; }
+  section[data-deck-active] .draw { stroke-dashoffset: 0; }
+
+  /* Pillars motif on dividers */
+  .pillars-motif {
+    position: absolute; right: 96px; top: 96px; bottom: 96px;
+    width: 460px;
+    display: flex; align-items: flex-end; gap: 14px;
+  }
+  .pillars-motif span {
+    flex: 1;
+    background: linear-gradient(to top, var(--gold) 0%, rgba(212,168,87,0) 100%);
+    transform-origin: bottom;
+    transform: scaleY(0);
+    transition: transform 1.2s cubic-bezier(0.2,0.8,0.2,1);
+  }
+  section[data-deck-active] .pillars-motif span { transform: scaleY(1); }
+  .pillars-motif span:nth-child(1) { transition-delay: 0.1s; height: 60%; }
+  .pillars-motif span:nth-child(2) { transition-delay: 0.18s; height: 80%; }
+  .pillars-motif span:nth-child(3) { transition-delay: 0.26s; height: 45%; }
+  .pillars-motif span:nth-child(4) { transition-delay: 0.34s; height: 95%; }
+  .pillars-motif span:nth-child(5) { transition-delay: 0.42s; height: 70%; }
+  .pillars-motif span:nth-child(6) { transition-delay: 0.5s; height: 88%; }
+  .pillars-motif span:nth-child(7) { transition-delay: 0.58s; height: 55%; }
+  .pillars-motif span:nth-child(8) { transition-delay: 0.66s; height: 75%; }
+
+  /* Layer pillars — 4 ana katman */
+  .four-pillars {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 24px;
+    height: 720px;
+  }
+  .four-pillars .pcol {
+    position: relative;
+    background: linear-gradient(to bottom, var(--bg-2) 0%, var(--bg-1) 100%);
+    border: 1px solid var(--line);
+    padding: 36px 32px;
+    overflow: hidden;
+    transform-origin: bottom;
+    transform: scaleY(0.02);
+    opacity: 0;
+    transition: transform 1.1s cubic-bezier(0.2, 0.85, 0.25, 1), opacity 0.6s ease;
+  }
+  section[data-deck-active] .four-pillars .pcol { transform: scaleY(1); opacity: 1; }
+  .four-pillars .pcol:nth-child(1) { transition-delay: 0.1s; }
+  .four-pillars .pcol:nth-child(2) { transition-delay: 0.25s; }
+  .four-pillars .pcol:nth-child(3) { transition-delay: 0.4s; }
+  .four-pillars .pcol:nth-child(4) { transition-delay: 0.55s; }
+  .four-pillars .pcol::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0;
+    height: 4px; background: var(--gold);
+  }
+  .four-pillars .pcol .pidx {
+    font-family: var(--font-mono); font-size: 13px; letter-spacing: 0.3em;
+    color: var(--gold); margin-top: 8px;
+  }
+  .four-pillars .pcol h4 {
+    font-family: var(--font-display); font-weight: 700;
+    font-size: 38px; line-height: 1.05; margin: 14px 0 8px;
+    color: var(--ink-0); letter-spacing: -0.02em;
+  }
+  .four-pillars .pcol .role {
+    font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.22em;
+    text-transform: uppercase; color: var(--ink-3);
+    margin-bottom: 22px;
+  }
+  .four-pillars .pcol p { font-size: 19px; line-height: 1.55; color: var(--ink-2); margin: 0 0 24px; }
+  .four-pillars .pcol ul { list-style: none; padding: 0; margin: 0; }
+  .four-pillars .pcol ul li {
+    font-size: 17px; line-height: 1.5; color: var(--ink-2);
+    padding: 10px 0; border-top: 1px dashed var(--line);
+  }
+  .four-pillars .pcol ul li:first-child { border-top: 0; }
+  .four-pillars .pcol .footer {
+    position: absolute; left: 32px; right: 32px; bottom: 32px;
+    padding-top: 22px;
+    border-top: 1px solid var(--line);
+    font-family: var(--font-mono); font-size: 13px;
+    color: var(--gold); letter-spacing: 0.18em; text-transform: uppercase;
+  }
+
+  /* Token donut */
+  .donut-wrap { display: flex; align-items: center; gap: 80px; }
+  .donut { width: 640px; height: 640px; position: relative; flex-shrink: 0; }
+  .donut svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .donut .center {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center;
+  }
+  .donut .center .total {
+    font-family: var(--font-display); font-weight: 200;
+    font-size: 88px; color: var(--ink-0); letter-spacing: -0.03em;
+    line-height: 1;
+  }
+  .donut .center .lab { color: var(--ink-3); font-family: var(--font-mono); font-size: 14px; letter-spacing: 0.3em; text-transform: uppercase; margin-top: 12px; }
+  .donut .center .sup { color: var(--gold); font-family: var(--font-mono); font-size: 13px; letter-spacing: 0.3em; margin-top: 18px; }
+
+  .legend { flex: 1; display: grid; grid-template-columns: 1fr; gap: 0; }
+  .legend .row {
+    display: grid;
+    grid-template-columns: 22px 1fr 120px 80px;
+    gap: 20px; align-items: center;
+    padding: 18px 0;
+    border-bottom: 1px solid var(--line);
+    font-family: var(--font-display);
+  }
+  .legend .row .sw { width: 14px; height: 14px; }
+  .legend .row .name { font-size: 22px; font-weight: 500; color: var(--ink-0); }
+  .legend .row .amt { font-family: var(--font-mono); font-size: 18px; color: var(--ink-2); text-align: right; }
+  .legend .row .pct { font-family: var(--font-mono); font-size: 18px; color: var(--gold); text-align: right; }
+
+  /* Loop diagram */
+  .loop {
+    position: relative;
+    width: 1500px; height: 540px;
+    margin: 40px auto 0;
+  }
+  .loop .step {
+    position: absolute;
+    width: 200px; height: 200px;
+    border-radius: 50%;
+    background: var(--bg-2);
+    border: 1px solid var(--line-2);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    text-align: center;
+    color: var(--ink-0);
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 26px;
+  }
+  .loop .step .num {
+    font-family: var(--font-mono);
+    font-size: 12px; color: var(--gold);
+    letter-spacing: 0.3em; margin-bottom: 8px;
+  }
+
+  /* Big stats */
+  .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .stat { padding: 48px 32px; border-right: 1px solid var(--line); }
+  .stat:last-child { border-right: 0; }
+  .stat .lab { font-family: var(--font-mono); font-size: 13px; letter-spacing: 0.28em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 16px; }
+  .stat .val { font-family: var(--font-display); font-weight: 200; font-size: 96px; line-height: 1; color: var(--gold); letter-spacing: -0.03em; }
+  .stat .val small { font-size: 32px; color: var(--ink-2); margin-left: 8px; font-weight: 300; }
+  .stat .desc { font-size: 18px; color: var(--ink-2); margin-top: 12px; }
+
+  /* End slide */
+  .endmark {
+    font-family: var(--font-display);
+    font-weight: 200;
+    font-size: 240px;
+    color: var(--ink-0);
+    letter-spacing: -0.04em;
+    line-height: 0.9;
+  }
+
+  /* slide 11 - staking flow */
+  .stake-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 64px; }
+  .stake-list { list-style: none; padding: 0; margin: 0; }
+  .stake-list li {
+    display: grid; grid-template-columns: 56px 1fr;
+    gap: 24px; padding: 26px 0;
+    border-bottom: 1px solid var(--line);
+    align-items: center;
+  }
+  .stake-list li .n {
+    width: 44px; height: 44px;
+    border: 1px solid var(--gold);
+    color: var(--gold);
+    font-family: var(--font-mono);
+    font-size: 14px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%;
+  }
+  .stake-list li .t { font-family: var(--font-display); font-size: 28px; color: var(--ink-0); font-weight: 500; }
+  .stake-list li .d { font-size: 17px; color: var(--ink-2); margin-top: 4px; }
+
+  /* slide 12 - deflasyon */
+  .triangle-flow {
+    display: grid; grid-template-columns: 1fr auto 1fr auto 1fr;
+    align-items: center; gap: 0;
+    padding: 60px 0;
+  }
+  .tri-node {
+    border: 1px solid var(--line-2);
+    background: var(--bg-2);
+    padding: 36px;
+    text-align: center;
+  }
+  .tri-node .glyph { font-family: var(--font-display); font-weight: 700; font-size: 22px; letter-spacing: 0.2em; color: var(--gold); }
+  .tri-node .txt { font-family: var(--font-display); font-size: 24px; color: var(--ink-1); margin-top: 14px; }
+  .tri-arr {
+    color: var(--gold); font-family: var(--font-mono);
+    font-size: 24px; padding: 0 24px;
+  }
+
+  /* === Slide 02 - intro === */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; }
+
+  /* === Problem chips === */
+  .prob-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; }
+  .prob-chip {
+    border: 1px solid var(--line);
+    background: var(--bg-2);
+    padding: 36px;
+    position: relative;
+  }
+  .prob-chip .x {
+    position: absolute; top: 28px; right: 28px;
+    color: var(--crimson-2); font-family: var(--font-mono); font-size: 22px;
+  }
+  .prob-chip .t { font-family: var(--font-display); font-weight: 600; font-size: 30px; color: var(--ink-0); line-height: 1.15; }
+
+  /* Token utility list */
+  .utility-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; }
+  .util {
+    border: 1px solid var(--line);
+    background: var(--bg-2);
+    padding: 28px;
+    position: relative; min-height: 320px;
+  }
+  .util .ix { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.28em; color: var(--gold); }
+  .util h5 { font-family: var(--font-display); font-weight: 600; font-size: 24px; color: var(--ink-0); margin: 14px 0 12px; line-height: 1.15; letter-spacing: -0.01em; }
+  .util p { font-size: 15px; line-height: 1.55; color: var(--ink-2); margin: 0; }
+
+  /* Token detail rows */
+  .alloc-detail { display: grid; grid-template-columns: repeat(2, 1fr); gap: 28px; }
+  .alloc-card {
+    border: 1px solid var(--line);
+    background: var(--bg-2);
+    padding: 28px 32px;
+    display: grid;
+    grid-template-columns: 130px 1fr;
+    gap: 24px;
+  }
+  .alloc-card .pct {
+    font-family: var(--font-display);
+    font-weight: 200; font-size: 56px;
+    color: var(--gold); line-height: 1;
+    letter-spacing: -0.03em;
+  }
+  .alloc-card .pct small { font-size: 22px; color: var(--ink-3); }
+  .alloc-card h6 { font-family: var(--font-display); font-weight: 600; font-size: 22px; color: var(--ink-0); margin: 0 0 4px; }
+  .alloc-card .qty { font-family: var(--font-mono); font-size: 14px; color: var(--gold); letter-spacing: 0.18em; }
+  .alloc-card .desc { font-size: 14px; color: var(--ink-2); margin-top: 10px; line-height: 1.5; }
+
+  /* Vision targets */
+  .target-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 0; border-top: 1px solid var(--line); }
+  .target { padding: 56px 28px 36px 0; border-right: 1px solid var(--line); }
+  .target:last-child { border-right: 0; padding-right: 0; }
+  .target .n { font-family: var(--font-mono); font-size: 13px; color: var(--gold); letter-spacing: 0.3em; }
+  .target .t { font-family: var(--font-display); font-weight: 500; font-size: 26px; color: var(--ink-0); margin-top: 18px; line-height: 1.2; letter-spacing: -0.01em; }
+
+  /* Final flow strip */
+  .flow-strip {
+    display: flex; align-items: stretch; gap: 0;
+    margin-top: 40px;
+    border: 1px solid var(--line);
+  }
+  .flow-cell {
+    flex: 1;
+    padding: 36px 28px;
+    border-right: 1px solid var(--line);
+    background: var(--bg-2);
+    text-align: center;
+  }
+  .flow-cell:last-child { border-right: 0; }
+  .flow-cell .lab { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.3em; color: var(--gold); }
+  .flow-cell .v { font-family: var(--font-display); font-weight: 600; font-size: 38px; color: var(--ink-0); margin-top: 14px; letter-spacing: -0.02em; }
+  .flow-cell .arr { color: var(--gold); font-family: var(--font-mono); font-size: 16px; }
+
+  /* ============== ROADMAP STYLES ============== */
+  .torii-deco { position: absolute; pointer-events: none; color: var(--gold); opacity: 0.10; z-index: 1; }
+  .torii-deco.tr { top: 80px; right: 60px; width: 280px; height: 200px; opacity: 0.08; }
+  .torii-deco.tl { top: 90px; left: 80px; width: 220px; height: 160px; opacity: 0.07; }
+  .torii-deco.br { bottom: 120px; right: 80px; width: 320px; height: 220px; opacity: 0.07; }
+  .torii-deco.bl { bottom: 140px; left: 100px; width: 260px; height: 180px; opacity: 0.06; }
+  .torii-deco.center-faded { left: 50%; top: 50%; transform: translate(-50%, -50%); width: 900px; height: 600px; opacity: 0.04; }
+  .torii-deco.giant { left: 50%; top: 40%; transform: translate(-50%, -50%); width: 1400px; height: 900px; opacity: 0.04; }
+
+  /* === Roadmap path layout (timeline as winding path) === */
+  .roadmap-path-stage { position: relative; margin-top: 40px; height: 720px; }
+  .roadmap-svg-bg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .rm-station { position: absolute; width: 270px; }
+  .rm-station .conn { width: 84px; height: 84px; border-radius: 50%; background: radial-gradient(circle, var(--gold-soft), transparent 70%); border: 2px solid var(--gold); display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 6px #050609, 0 0 28px rgba(212,168,87,0.4); position: relative; z-index: 3; margin: 0 auto; }
+  .rm-station .conn .num { font-family: var(--font-display); font-weight: 600; font-size: 34px; color: var(--gold); letter-spacing: -0.02em; }
+  .rm-station.active .conn { background: radial-gradient(circle, var(--gold), var(--gold-2)); }
+  .rm-station.active .conn .num { color: #050609; }
+  .rm-station .panel { background: var(--bg-1); border: 1px solid var(--line); border-left: 2px solid var(--gold); padding: 22px 26px; margin-top: 26px; position: relative; z-index: 2; }
+  .rm-station .panel .dur { font-family: var(--font-mono); font-size: 13px; letter-spacing: 0.22em; color: var(--gold); text-transform: uppercase; }
+  .rm-station .panel .ttl { margin-top: 10px; font-family: var(--font-display); font-weight: 600; font-size: 22px; color: var(--ink-0); line-height: 1.25; }
+  .rm-station .panel .desc { margin-top: 8px; font-size: 16px; color: var(--ink-2); line-height: 1.5; }
+
+  /* === Phase detail layout === */
+  .roadmap-stage { display: grid; grid-template-columns: 0.42fr 0.58fr; gap: 64px; margin-top: 40px; align-items: flex-start; }
+  .phase-id { display: flex; align-items: center; gap: 24px; margin-bottom: 14px; }
+  .phase-num { font-family: var(--font-display); font-weight: 200; font-size: 220px; line-height: 0.85; letter-spacing: -0.04em; color: var(--gold); opacity: 0.55; }
+  .phase-meta .lbl { font-family: var(--font-mono); font-size: 15px; letter-spacing: 0.32em; color: var(--gold); text-transform: uppercase; }
+  .phase-meta .duration { margin-top: 12px; font-family: var(--font-mono); font-size: 18px; color: var(--ink-2); letter-spacing: 0.08em; }
+  .phase-title { font-family: var(--font-display); font-weight: 300; font-size: 64px; line-height: 1.04; letter-spacing: -0.02em; color: var(--ink-0); margin: 18px 0 18px; }
+  .phase-title strong { font-weight: 700; color: var(--gold); }
+  .phase-target { padding: 26px 30px; background: var(--gold-soft); border-left: 2px solid var(--gold); margin-top: 24px; }
+  .phase-target .ix { font-family: var(--font-mono); font-size: 13px; letter-spacing: 0.28em; color: var(--gold); text-transform: uppercase; }
+  .phase-target .text { margin-top: 10px; font-family: var(--font-display); font-size: 26px; line-height: 1.4; color: var(--ink-0); font-weight: 400; }
+
+  .phase-section { margin-bottom: 28px; }
+  .phase-section .label-bar { font-family: var(--font-mono); font-size: 14px; letter-spacing: 0.28em; color: var(--ink-3); text-transform: uppercase; padding-bottom: 12px; border-bottom: 1px solid var(--line); margin-bottom: 18px; display: flex; align-items: center; gap: 10px; }
+  .phase-section .label-bar.gold { color: var(--gold); }
+  .phase-section ul { list-style: none; padding: 0; margin: 0; }
+  .phase-section li { padding: 11px 0 11px 26px; color: var(--ink-1); font-size: 22px; line-height: 1.5; position: relative; border-bottom: 1px dashed var(--line); }
+  .phase-section li:last-child { border-bottom: none; }
+  .phase-section li::before { content: ''; position: absolute; left: 0; top: 23px; width: 14px; height: 1px; background: var(--gold); }
+  .phase-section li strong { color: var(--gold); font-weight: 600; }
+
+  .impact-grid { display: grid; gap: 12px; }
+  .impact-row { display: grid; grid-template-columns: 32px 1fr; gap: 16px; padding: 13px 20px; background: var(--bg-1); border-left: 2px solid var(--gold); align-items: center; }
+  .impact-row .arrow { color: var(--gold); font-family: var(--font-mono); font-size: 22px; }
+  .impact-row .text { color: var(--ink-1); font-size: 21px; line-height: 1.4; }
+  .impact-row .text strong { color: var(--gold); font-weight: 600; }
+  .impact-row.critical { border-color: var(--gold-2); background: var(--gold-soft); }
+  .impact-row.critical .text { color: var(--ink-0); font-weight: 500; }
+
+  /* Strategy cascade */
+  .strat-cascade { display: grid; gap: 14px; margin-top: 32px; }
+  .strat-step { display: grid; grid-template-columns: 90px 1fr; gap: 28px; align-items: center; padding: 24px 32px; background: var(--bg-1); border: 1px solid var(--line); border-left: 3px solid var(--gold); }
+  .strat-step .num { font-family: var(--font-display); font-weight: 200; font-size: 64px; color: var(--gold); line-height: 1; letter-spacing: -0.02em; }
+  .strat-step .label { font-family: var(--font-display); font-weight: 500; font-size: 32px; color: var(--ink-0); }
+  .strat-step .label strong { color: var(--gold); font-weight: 700; }
+
+  /* ============== CINEMATIC FLAME SCENE ============== */
+  .flame-stage { background: radial-gradient(ellipse at 75% 90%, #1a0a04 0%, #0a0608 35%, #050609 70%); position: relative; overflow: hidden; }
+
+  .flame-bg { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+  .flame-bg .ember-glow {
+    position: absolute; right: 5%; bottom: -10%;
+    width: 1100px; height: 800px;
+    background: radial-gradient(ellipse 60% 80% at 50% 90%, rgba(255, 130, 40, 0.32), rgba(212, 70, 20, 0.16) 35%, transparent 65%);
+    filter: blur(20px);
+    animation: emberPulse 3.5s ease-in-out infinite alternate;
+  }
+  .flame-bg .ember-glow.eg2 {
+    width: 700px; height: 550px;
+    right: 8%;
+    background: radial-gradient(ellipse 50% 70% at 50% 90%, rgba(255, 200, 80, 0.38), rgba(255, 130, 40, 0.12) 50%, transparent 70%);
+    animation-duration: 2.4s;
+    animation-delay: -0.8s;
+  }
+  .flame-bg .ember-glow.eg3 {
+    width: 450px; height: 380px;
+    right: 12%;
+    background: radial-gradient(ellipse 50% 70% at 50% 95%, rgba(255, 240, 180, 0.5), rgba(255, 180, 80, 0.15) 50%, transparent 75%);
+    animation-duration: 1.8s;
+    animation-delay: -0.3s;
+  }
+  @keyframes emberPulse {
+    0% { opacity: 0.7; }
+    100% { opacity: 1; transform: scaleY(1.06); }
+  }
+
+  .sparks { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+  .sparks span {
+    position: absolute; bottom: 12%;
+    width: 3px; height: 3px; border-radius: 50%;
+    background: #ffd47a;
+    box-shadow: 0 0 8px 2px rgba(255, 200, 80, 0.7);
+    animation: spark 4.2s linear infinite;
+    opacity: 0;
+  }
+  @keyframes spark {
+    0% { transform: translate(0, 0) scale(0.6); opacity: 0; }
+    10% { opacity: 1; }
+    50% { transform: translate(-12px, -380px) scale(1); opacity: 0.9; }
+    80% { transform: translate(8px, -640px) scale(0.5); opacity: 0.4; }
+    100% { transform: translate(-4px, -780px) scale(0.2); opacity: 0; }
+  }
+
+  .flame-wrap {
+    position: absolute;
+    right: 8%; bottom: 80px;
+    width: 360px; height: 560px;
+    z-index: 4;
+    filter: drop-shadow(0 0 60px rgba(255, 130, 40, 0.5)) drop-shadow(0 0 120px rgba(255, 80, 20, 0.3));
+    pointer-events: none;
+  }
+  .flame-wrap svg { width: 100%; height: 100%; }
+  .flame-wrap .flame-outer { animation: flameFlickerOuter 2.6s ease-in-out infinite alternate; transform-origin: 50% 100%; }
+  .flame-wrap .flame-mid { animation: flameFlickerMid 1.9s ease-in-out infinite alternate; transform-origin: 50% 100%; }
+  .flame-wrap .flame-core { animation: flameFlickerCore 1.3s ease-in-out infinite alternate; transform-origin: 50% 100%; }
+
+  @keyframes flameFlickerOuter {
+    0%   { transform: scaleY(1) scaleX(1) skewX(0deg); opacity: 0.92; }
+    25%  { transform: scaleY(1.04) scaleX(0.98) skewX(-1.5deg); opacity: 0.96; }
+    55%  { transform: scaleY(0.97) scaleX(1.03) skewX(1deg); opacity: 0.88; }
+    80%  { transform: scaleY(1.06) scaleX(0.97) skewX(-0.8deg); opacity: 1; }
+    100% { transform: scaleY(1.02) scaleX(1.01) skewX(0.5deg); opacity: 0.94; }
+  }
+  @keyframes flameFlickerMid {
+    0%   { transform: scaleY(1) scaleX(1) skewX(0deg); }
+    35%  { transform: scaleY(1.05) scaleX(0.96) skewX(2deg); }
+    65%  { transform: scaleY(0.96) scaleX(1.04) skewX(-2deg); }
+    100% { transform: scaleY(1.03) scaleX(0.99) skewX(1deg); }
+  }
+  @keyframes flameFlickerCore {
+    0%   { transform: scaleY(1) scaleX(1); opacity: 0.92; }
+    40%  { transform: scaleY(1.08) scaleX(0.94); opacity: 1; }
+    70%  { transform: scaleY(0.94) scaleX(1.06); opacity: 0.85; }
+    100% { transform: scaleY(1.05) scaleX(0.97); opacity: 0.95; }
+  }
+
+  /* Section splash */
+  section.section-splash .pad { display:flex; align-items:center; justify-content: flex-start; height: 100%; }
+  .splash-num { font-family: var(--font-mono); font-size: 14px; letter-spacing: 0.32em; color: var(--gold); text-transform: uppercase; }
+  .splash-title { font-family: var(--font-display); font-weight: 200; font-size: 200px; line-height: 0.9; letter-spacing: -0.03em; color: var(--ink-0); margin: 18px 0 0; }
+  .splash-title strong { font-weight: 700; color: var(--gold); }
+  .splash-sub { margin-top: 32px; font-family: var(--font-display); font-weight: 300; font-size: 32px; color: var(--ink-2); max-width: 1100px; line-height: 1.4; }
+
+</style>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="torii" viewBox="0 0 200 140">
+    <g stroke="currentColor" stroke-width="1.5" fill="none">
+      <path d="M10 28 L190 28" />
+      <path d="M30 14 Q100 -2 170 14" />
+      <path d="M30 14 L30 28" />
+      <path d="M170 14 L170 28" />
+      <path d="M40 48 L160 48" />
+      <path d="M50 28 L50 140" />
+      <path d="M150 28 L150 140" />
+      <path d="M50 78 L150 78" />
+    </g>
+  </symbol>
+  <symbol id="torii-full" viewBox="0 0 1200 700">
+    <g stroke="currentColor" stroke-width="2" fill="none">
+      <path d="M40 140 L1160 140" />
+      <path d="M120 90 Q600 -10 1080 90" />
+      <path d="M120 90 L120 140" />
+      <path d="M1080 90 L1080 140" />
+      <path d="M180 220 L1020 220" />
+      <path d="M260 140 L260 700" />
+      <path d="M940 140 L940 700" />
+      <path d="M260 320 L940 320" />
+    </g>
+  </symbol>
+</svg>
+</head>
+<body>
+<deck-stage>
+
+<!-- ============== 01 TITLE ============== -->
+<section class="s01" data-screen-label="01 Title">
+  <div class="ambient" aria-hidden="true">
+    <div class="glow"></div>
+    <div class="glow g2"></div>
+    <div class="scan"></div>
+    <div class="particles">
+      <span style="left:8%;  animation-delay:0s;"></span>
+      <span style="left:18%; animation-delay:-3s;"></span>
+      <span style="left:28%; animation-delay:-6s;"></span>
+      <span style="left:38%; animation-delay:-9s;"></span>
+      <span style="left:48%; animation-delay:-12s;"></span>
+      <span style="left:58%; animation-delay:-2s;"></span>
+      <span style="left:68%; animation-delay:-5s;"></span>
+      <span style="left:78%; animation-delay:-8s;"></span>
+      <span style="left:88%; animation-delay:-11s;"></span>
+      <span style="left:94%; animation-delay:-14s;"></span>
+    </div>
+    <div class="grain"></div>
+  </div>
+  <div class="grid-bg" style="position:absolute; inset:0; opacity:0.6;"></div>
+  <div class="noise"></div>
+
+  <!-- pillars rising -->
+  <div style="position:absolute; left:0; right:0; bottom:0; height:280px; display:flex; align-items:flex-end; justify-content:center; gap:28px; opacity:0.55;">
+    <div class="pillar" style="height:120px; animation-delay:0.1s"></div>
+    <div class="pillar" style="height:180px; animation-delay:0.2s"></div>
+    <div class="pillar" style="height:90px;  animation-delay:0.3s"></div>
+    <div class="pillar" style="height:240px; animation-delay:0.4s"></div>
+    <div class="pillar" style="height:160px; animation-delay:0.5s"></div>
+    <div class="pillar" style="height:280px; animation-delay:0.6s; width:48px"></div>
+    <div class="pillar" style="height:160px; animation-delay:0.7s"></div>
+    <div class="pillar" style="height:240px; animation-delay:0.8s"></div>
+    <div class="pillar" style="height:90px;  animation-delay:0.9s"></div>
+    <div class="pillar" style="height:180px; animation-delay:1.0s"></div>
+    <div class="pillar" style="height:120px; animation-delay:1.1s"></div>
+  </div>
+
+  <!-- Torii gate behind -->
+  <svg class="torii-art" viewBox="0 0 1200 700" fill="none" style="opacity:0.18;">
+    <g stroke="#d4a857" stroke-width="2">
+      <path class="draw" d="M40 140 L1160 140" />
+      <path class="draw" d="M120 90 Q600 -10 1080 90" />
+      <path class="draw" d="M120 90 L120 140" />
+      <path class="draw" d="M1080 90 L1080 140" />
+      <path class="draw" d="M180 220 L1020 220" />
+      <path class="draw" d="M260 140 L260 700" />
+      <path class="draw" d="M940 140 L940 700" />
+      <path class="draw" d="M260 320 L940 320" />
+    </g>
+  </svg>
+
+  <div class="stage">
+    <div class="titleblock">
+      <div class="ticker">— HSHR / WHITEPAPER · V1.0 —</div>
+      <h1>HASH<strong>IRA</strong></h1>
+      <div class="sub">Finansal Altyapının Yeni Sütunları</div>
+      <div class="meta">
+        <span>SYMBOL · <b>HSHR</b></span>
+        <span>SUPPLY · <b>15,000,000</b></span>
+        <span>VERSİYON · <b>1.0</b></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="chrome">
+    <div class="top"><span class="brand-wrap"><img class="brand-logo" src="logo.png" alt="HSHR"><span class="brand">HASHIRA</span></span><span>HSHR<span class="dot"></span>WHITEPAPER</span></div>
+    <div class="bot"><span>EKOSİSTEM TOKENİ</span><span>2026 — V1.0</span></div>
+  </div>
+
+  <div class="ticker-strip" aria-hidden="true">
+    <div class="track">
+      <span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span>
+    </div>
+  </div>
+  </section>
+
+<!-- ============== 02 GİRİŞ ============== -->
+<section data-screen-label="02 Giriş">
+  <div class="ambient" aria-hidden="true">
+    <div class="glow"></div>
+    <div class="glow g2"></div>
+    <div class="scan"></div>
+    <div class="particles">
+      <span style="left:8%;  animation-delay:0s;"></span>
+      <span style="left:18%; animation-delay:-3s;"></span>
+      <span style="left:28%; animation-delay:-6s;"></span>
+      <span style="left:38%; animation-delay:-9s;"></span>
+      <span style="left:48%; animation-delay:-12s;"></span>
+      <span style="left:58%; animation-delay:-2s;"></span>
+      <span style="left:68%; animation-delay:-5s;"></span>
+      <span style="left:78%; animation-delay:-8s;"></span>
+      <span style="left:88%; animation-delay:-11s;"></span>
+      <span style="left:94%; animation-delay:-14s;"></span>
+    </div>
+    <div class="grain"></div>
+  </div>
+  <div class="chrome">
+    <div class="top"><span class="brand-wrap"><img class="brand-logo" src="logo.png" alt="HSHR"><span class="brand">HASHIRA</span></span><span>01 / GİRİŞ</span></div>
+    <div class="bot"><span>HSHR · WHITEPAPER V1.0</span><span>02</span></div>
+  </div>
+  <div class="pad" style="display:grid; grid-template-columns: 1fr 1fr; gap: 96px;">
+    <div>
+      <div class="eyebrow anim">§ 1 — Giriş</div>
+      <h2 class="h1 anim d1" style="margin-top:24px; font-size:118px; line-height:1.18; letter-spacing:-0.015em;">Küresel<br/>finansal<br/>sistemler<br/>dönüşüm<br/>geçiriyor</h2>
+    </div>
+    <div style="display:flex; flex-direction:column; justify-content:center; gap:32px;">
+      <p class="lead anim d2">Bankacılık, ödeme sistemleri, dijital varlıklar ve merkeziyetsiz finans giderek birleşirken, bu sistemleri ortak bir ekonomik yapı altında birleştirecek <strong style="color:var(--ink-0)">yeni nesil altyapılara</strong> olan ihtiyaç hızla artmaktadır.</p>
+      <p class="lead anim d3" style="font-size:30px; color:var(--ink-2);">Hashira (HSHR), bu ihtiyaca cevap vermek amacıyla geliştirilmiştir.</p>
+      <div class="anim d4" style="border-left: 2px solid var(--gold); padding: 12px 0 12px 28px; margin-top: 12px;">
+        <div class="label" style="margin-bottom:10px;">Hashira nedir</div>
+        <p class="body" style="font-size:24px; color:var(--ink-1); margin:0;">Ödeme altyapıları, white-label bankacılık çözümleri, dijital borsa teknolojileri ve topluluk temelli finans yapılarının <strong style="color:var(--gold)">tek bir ekonomik model</strong> altında birleşmesini sağlayan bir ekosistem tokenidir.</p>
+      </div>
+      <div class="anim d5" style="margin-top:24px; font-family: var(--font-display); font-weight:300; font-size:32px; color:var(--ink-0);">
+        Hashira yalnızca bir token değildir.<br/>
+        <span style="color:var(--gold); font-weight:600;">Bir finansal omurga katmanıdır.</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="ticker-strip" aria-hidden="true">
+    <div class="track">
+      <span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span>
+    </div>
+  </div>
+  </section>
+
+<!-- ============== 03 VİZYON ============== -->
+<section data-screen-label="03 Vizyon">
+  <div class="ambient" aria-hidden="true">
+    <div class="glow"></div>
+    <div class="glow g2"></div>
+    <div class="scan"></div>
+    <div class="particles">
+      <span style="left:8%;  animation-delay:0s;"></span>
+      <span style="left:18%; animation-delay:-3s;"></span>
+      <span style="left:28%; animation-delay:-6s;"></span>
+      <span style="left:38%; animation-delay:-9s;"></span>
+      <span style="left:48%; animation-delay:-12s;"></span>
+      <span style="left:58%; animation-delay:-2s;"></span>
+      <span style="left:68%; animation-delay:-5s;"></span>
+      <span style="left:78%; animation-delay:-8s;"></span>
+      <span style="left:88%; animation-delay:-11s;"></span>
+      <span style="left:94%; animation-delay:-14s;"></span>
+    </div>
+    <div class="grain"></div>
+  </div>
+  <div class="chrome">
+    <div class="top"><span class="brand-wrap"><img class="brand-logo" src="logo.png" alt="HSHR"><span class="brand">HASHIRA</span></span><span>02 / VİZYON</span></div>
+    <div class="bot"><span>HSHR · WHITEPAPER V1.0</span><span>03</span></div>
+  </div>
+  <div class="pad">
+    <div class="eyebrow anim">§ 2 — Vizyon</div>
+    <h2 class="h2 anim d1" style="margin-top:18px; max-width:1500px;">Merkeziyetsiz finans ile kurumsal finans altyapılarını <em style="font-style:normal; color:var(--gold);">aynı ekosistem içerisinde</em> buluşturmak</h2>
+    <p class="lead anim d2" style="margin-top:24px; max-width:1300px; font-size:30px; color:var(--ink-2);">Ölçeklenebilir dijital ekonomik sütunlar inşa etmek.</p>
+
+    <div style="margin-top:80px;">
+      <div class="label anim d3">— Hedefler</div>
+      <div class="target-grid anim d4" style="margin-top:24px;">
+        <div class="target"><div class="n">01</div><div class="t">Yeni nesil finansal altyapılar için ortak değer katmanı olmak</div></div>
+        <div class="target"><div class="n">02</div><div class="t">Çoklu platformları tek ekonomik model altında birleştirmek</div></div>
+        <div class="target"><div class="n">03</div><div class="t">Gelir destekli sürdürülebilir token ekonomisi kurmak</div></div>
+        <div class="target"><div class="n">04</div><div class="t">Küresel ölçekte dijital finans ekosistemi oluşturmak</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="pillars-motif" style="right:96px; top:96px; bottom:auto; height:180px; width:380px; opacity:0.4;">
+    <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+  </div>
+
+  <div class="ticker-strip" aria-hidden="true">
+    <div class="track">
+      <span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span>
+    </div>
+  </div>
+  </section>
+
+<!-- ============== 04 PROBLEM ============== -->
+<section data-screen-label="04 Problem">
+  <div class="ambient" aria-hidden="true">
+    <div class="glow"></div>
+    <div class="glow g2"></div>
+    <div class="scan"></div>
+    <div class="particles">
+      <span style="left:8%;  animation-delay:0s;"></span>
+      <span style="left:18%; animation-delay:-3s;"></span>
+      <span style="left:28%; animation-delay:-6s;"></span>
+      <span style="left:38%; animation-delay:-9s;"></span>
+      <span style="left:48%; animation-delay:-12s;"></span>
+      <span style="left:58%; animation-delay:-2s;"></span>
+      <span style="left:68%; animation-delay:-5s;"></span>
+      <span style="left:78%; animation-delay:-8s;"></span>
+      <span style="left:88%; animation-delay:-11s;"></span>
+      <span style="left:94%; animation-delay:-14s;"></span>
+    </div>
+    <div class="grain"></div>
+  </div>
+  <div class="chrome">
+    <div class="top"><span class="brand-wrap"><img class="brand-logo" src="logo.png" alt="HSHR"><span class="brand">HASHIRA</span></span><span>03 / PROBLEM</span></div>
+    <div class="bot"><span>HSHR · WHITEPAPER V1.0</span><span>04</span></div>
+  </div>
+  <div class="pad" style="display:flex; flex-direction:column; justify-content:center;">
+    <div style="text-align:center; max-width: 1100px; margin: 0 auto 48px;">
+      <div class="eyebrow anim">§ 3 — Problem</div>
+      <h2 class="h2 anim d1" style="margin-top:18px; font-size:72px;">Günümüz finansal altyapılarında</h2>
+      <p class="lead anim d2" style="margin-top:20px; font-size:26px; color:var(--ink-2);">Sistem; parçalı, kopuk ve teşvik açısından sınırlıdır.</p>
+    </div>
+
+    <div class="prob-grid anim d3" style="grid-template-columns: 1fr 1fr; gap: 24px; max-width: 1280px; margin: 0 auto; width:100%;">
+      <div class="prob-chip anim d3"><span class="x">×</span><div class="t">Sistemler parçalıdır</div></div>
+      <div class="prob-chip anim d4"><span class="x">×</span><div class="t">Platformlar arasında ortak ekonomik model yoktur</div></div>
+      <div class="prob-chip anim d5"><span class="x">×</span><div class="t">Kullanıcı ve yatırımcı teşvikleri sınırlıdır</div></div>
+      <div class="prob-chip anim d6"><span class="x">×</span><div class="t">Gelir üreten yapılar ile token ekonomileri çoğunlukla kopuktur</div></div>
+    </div>
+
+    <div class="anim d7" style="margin: 56px auto 0; padding:28px 44px; border:1px solid var(--gold); background: var(--gold-soft); max-width: 900px; text-align:center;">
+      <div class="label" style="color:var(--gold);">— Sonuç</div>
+      <div style="font-family:var(--font-display); font-size:32px; color:var(--ink-0); margin-top:12px; line-height:1.3;">Bu verimsizlik <strong>Hashira</strong> ile çözülmektedir.</div>
+    </div>
+  </div>
+
+  <div class="ticker-strip" aria-hidden="true">
+    <div class="track">
+      <span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span>
+    </div>
+  </div>
+  </section>
+
+<!-- ============== 05 ÇÖZÜM ============== -->
+<section data-screen-label="05 Çözüm">
+  <div class="ambient" aria-hidden="true">
+    <div class="glow"></div>
+    <div class="glow g2"></div>
+    <div class="scan"></div>
+    <div class="particles">
+      <span style="left:8%;  animation-delay:0s;"></span>
+      <span style="left:18%; animation-delay:-3s;"></span>
+      <span style="left:28%; animation-delay:-6s;"></span>
+      <span style="left:38%; animation-delay:-9s;"></span>
+      <span style="left:48%; animation-delay:-12s;"></span>
+      <span style="left:58%; animation-delay:-2s;"></span>
+      <span style="left:68%; animation-delay:-5s;"></span>
+      <span style="left:78%; animation-delay:-8s;"></span>
+      <span style="left:88%; animation-delay:-11s;"></span>
+      <span style="left:94%; animation-delay:-14s;"></span>
+    </div>
+    <div class="grain"></div>
+  </div>
+  <div class="chrome">
+    <div class="top"><span class="brand-wrap"><img class="brand-logo" src="logo.png" alt="HSHR"><span class="brand">HASHIRA</span></span><span>04 / ÇÖZÜM</span></div>
+    <div class="bot"><span>HSHR · WHITEPAPER V1.0</span><span>05</span></div>
+  </div>
+  <div class="pad" style="display:grid; grid-template-columns: 1fr 1fr; gap:96px; align-items:center;">
+    <div>
+      <div class="eyebrow anim">§ 4 — Çözüm</div>
+      <h2 class="h2 anim d1" style="margin-top:18px; font-size:88px;">Hashira <span style="color:var(--gold);">Ekosistemi</span></h2>
+      <p class="lead anim d2" style="margin-top:32px; font-size:30px; color:var(--ink-2); max-width:680px;">Birbirinden bağımsız sistemler değil, tek bir ekonomik döngü içinde çalışan entegre katmanlardan oluşur.</p>
+    </div>
+    <div>
+      <div class="label anim d2">— Bu yapı</div>
+      <div class="anim d3" style="margin-top:24px;">
+        <div class="loop-step" style="display:grid; grid-template-columns: 60px 1fr; align-items:center; gap:24px; padding: 26px 0; border-bottom: 1px solid var(--line);">
+          <div style="font-family: var(--font-mono); color:var(--gold); font-size:18px;">→</div>
+          <div style="font-family:var(--font-display); font-size:34px; color:var(--ink-0); font-weight:500;">Talep üretir</div>
+        </div>
+        <div class="loop-step" style="display:grid; grid-template-columns: 60px 1fr; align-items:center; gap:24px; padding: 26px 0; border-bottom: 1px solid var(--line);">
+          <div style="font-family: var(--font-mono); color:var(--gold); font-size:18px;">→</div>
+          <div style="font-family:var(--font-display); font-size:34px; color:var(--ink-0); font-weight:500;">Ürüne dönüşür</div>
+        </div>
+        <div class="loop-step" style="display:grid; grid-template-columns: 60px 1fr; align-items:center; gap:24px; padding: 26px 0; border-bottom: 1px solid var(--line);">
+          <div style="font-family: var(--font-mono); color:var(--gold); font-size:18px;">→</div>
+          <div style="font-family:var(--font-display); font-size:34px; color:var(--ink-0); font-weight:500;">Gelir oluşturur</div>
+        </div>
+        <div class="loop-step" style="display:grid; grid-template-columns: 60px 1fr; align-items:center; gap:24px; padding: 26px 0; border-bottom: 1px solid var(--line);">
+          <div style="font-family: var(--font-mono); color:var(--gold); font-size:18px;">→</div>
+          <div style="font-family:var(--font-display); font-size:34px; color:var(--ink-0); font-weight:500;">Değeri sürdürülebilir şekilde büyütür</div>
+        </div>
+      </div>
+      <p class="anim d6" style="margin-top:36px; font-family:var(--font-display); font-weight:300; font-size:28px; color:var(--ink-1);">
+        Ekosistem, <strong style="color:var(--gold);">4 ana katman mimarisi</strong> ile çalışır.
+      </p>
+    </div>
+  </div>
+
+  <div class="ticker-strip" aria-hidden="true">
+    <div class="track">
+      <span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span>
+    </div>
+  </div>
+  </section>
+
+<!-- ============== 06 4 KATMAN MİMARİSİ - OVERVIEW ============== -->
+<section data-screen-label="06 Mimari Genel">
+  <div class="ambient" aria-hidden="true">
+    <div class="glow"></div>
+    <div class="glow g2"></div>
+    <div class="scan"></div>
+    <div class="particles">
+      <span style="left:8%;  animation-delay:0s;"></span>
+      <span style="left:18%; animation-delay:-3s;"></span>
+      <span style="left:28%; animation-delay:-6s;"></span>
+      <span style="left:38%; animation-delay:-9s;"></span>
+      <span style="left:48%; animation-delay:-12s;"></span>
+      <span style="left:58%; animation-delay:-2s;"></span>
+      <span style="left:68%; animation-delay:-5s;"></span>
+      <span style="left:78%; animation-delay:-8s;"></span>
+      <span style="left:88%; animation-delay:-11s;"></span>
+      <span style="left:94%; animation-delay:-14s;"></span>
+    </div>
+    <div class="grain"></div>
+  </div>
+  <div class="chrome">
+    <div class="top"><span class="brand-wrap"><img class="brand-logo" src="logo.png" alt="HSHR"><span class="brand">HASHIRA</span></span><span>05 / EKOSİSTEM MİMARİSİ</span></div>
+    <div class="bot"><span>HSHR · WHITEPAPER V1.0</span><span>06</span></div>
+  </div>
+  <div class="pad" style="display:flex; flex-direction:column;">
+    <div>
+      <div class="eyebrow anim">§ 5 — Hashira Ekosistem Mimarisi</div>
+      <h2 class="h2 anim d1" style="margin-top:14px; font-size:68px;">Dört sütun · Tek ekonomik döngü</h2>
+    </div>
+
+    <div class="four-pillars" style="margin-top:48px;">
+      <div class="pcol">
+        <div class="pidx">◆ SÜTUN 01</div>
+        <h4>Değer Sütunu</h4>
+        <div class="role">Akidemy — Akidemian</div>
+        <p>Ekosistemin başlangıç noktası. Talep burada doğar, topluluk burada şekillenir. Ekosistemin büyüme motorudur.</p>
+        <ul>
+          <li>Kullanıcı kazanımı ve büyüme</li>
+          <li>Eğitim ve finansal bilinç (Akidemy)</li>
+          <li>Affiliate bazlı dağıtım</li>
+          <li>İlk likidite girişi</li>
+        </ul>
+        <div class="footer">Değeri yayar</div>
+      </div>
+      <div class="pcol">
+        <div class="pidx">⚙ SÜTUN 02</div>
+        <h4>Teknoloji Sütunu</h4>
+        <div class="role">Üretim Motoru</div>
+        <p>Talep burada ürüne dönüşür. Ekosistemin teknik omurgasını üretir.</p>
+        <ul>
+          <li>Yazılım Ar-Ge ve ürün geliştirme</li>
+          <li>Ödeme altyapıları</li>
+          <li>Blockchain & akıllı kontratlar</li>
+          <li>Dijital exchange altyapıları</li>
+          <li>HashiraChain</li>
+        </ul>
+        <div class="footer">Talebi ürüne çevirir</div>
+      </div>
+      <div class="pcol">
+        <div class="pidx">▲ SÜTUN 03</div>
+        <h4>Dağıtım Sütunu</h4>
+        <div class="role">Pazara Açılım</div>
+        <p>Ürünlerin pazara açıldığı ve ölçeklendiği sütundur.</p>
+        <ul>
+          <li>Lisans satış modelleri</li>
+          <li>Affiliate dağıtım sistemleri</li>
+          <li>Global partner yapıları</li>
+          <li>B2B iş birlikleri</li>
+          <li>Satış performans yönetimi</li>
+        </ul>
+        <div class="footer">Ürünü gelire çevirir</div>
+      </div>
+      <div class="pcol">
+        <div class="pidx">$ SÜTUN 04</div>
+        <h4>Finans Sütunu</h4>
+        <div class="role">Gelir Yönetimi</div>
+        <p>Tüm gelir bu sütunda toplanır, yönetilir ve yeniden dağıtılır.</p>
+        <ul>
+          <li>Treasury yönetimi</li>
+          <li>Likidite kontrolü</li>
+          <li>Proje finansmanı</li>
+          <li>Ekosistem yatırımları</li>
+          <li>Staking & Buyback / Burn</li>
+        </ul>
+        <div class="footer">Değeri korur ve artırır</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ticker-strip" aria-hidden="true">
+    <div class="track">
+      <span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span>
+    </div>
+  </div>
+  </section>
+
+<!-- ============== 07 KATMAN 1 — Değer ============== -->
+<section data-screen-label="07 Katman 01 Değer">
+  <div class="ambient" aria-hidden="true">
+    <div class="glow"></div>
+    <div class="glow g2"></div>
+    <div class="particles">
+      <span style="left:8%;  animation-delay:0s;"></span>
+      <span style="left:18%; animation-delay:-3s;"></span>
+      <span style="left:28%; animation-delay:-6s;"></span>
+      <span style="left:38%; animation-delay:-9s;"></span>
+      <span style="left:48%; animation-delay:-12s;"></span>
+      <span style="left:58%; animation-delay:-2s;"></span>
+      <span style="left:68%; animation-delay:-5s;"></span>
+      <span style="left:78%; animation-delay:-8s;"></span>
+      <span style="left:88%; animation-delay:-11s;"></span>
+      <span style="left:94%; animation-delay:-14s;"></span>
+    </div>
+    <div class="grain"></div>
+  </div>
+  <div class="chrome">
+    <div class="top"><span class="brand-wrap"><img class="brand-logo" src="logo.png" alt="HSHR"><span class="brand">HASHIRA</span></span><span>05.1 / DEĞER SÜTUNU</span></div>
+    <div class="bot"><span>HSHR · WHITEPAPER V1.0</span><span>07</span></div>
+  </div>
+  <div class="pad" style="display:grid; grid-template-columns: 0.9fr 1.1fr; gap:96px;">
+    <div>
+      <div class="eyebrow anim" style="color:var(--gold);">◆ Sütun 01</div>
+      <h2 class="h1 anim d1" style="font-size:96px; margin-top:18px;">Değer<br/>Sütunu</h2>
+      <p class="lead anim d2" style="margin-top:32px; font-size:30px; color:var(--ink-2);">Akidemy — Akidemian</p>
+      <p class="body anim d3" style="margin-top:32px; font-size:24px; max-width:560px;">Ekosistemin başlangıç noktasıdır. Talep burada doğar, topluluk burada şekillenir. Aynı zamanda <strong style="color:var(--ink-0)">ekosistemin büyüme motorudur</strong>.</p>
+      <p class="body anim d4" style="margin-top:18px; font-size:22px; max-width:560px;">Akidemy değer üretim merkezidir. Akidemian ise bu yapının aktif katılımcılarını temsil eder.</p>
+    </div>
+    <div>
+      <div class="label anim d2">— Görevleri</div>
+      <ul class="clean anim d3" style="margin-top:18px;">
+        <li>Kullanıcı kazanımı ve büyüme</li>
+        <li>Akidemy ile eğitim ve finansal bilinç oluşturma</li>
+        <li>Affiliate bazlı dağıtım yapısı</li>
+        <li>Ekosisteme ilk likidite girişinin sağlanması</li>
+      </ul>
+      <div class="label anim d5" style="margin-top:48px;">— Rolü</div>
+      <div class="anim d6" style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:18px;">
+        <div style="border:1px solid var(--line); padding:22px; background:var(--bg-2);"><span style="color:var(--gold); font-family:var(--font-mono); font-size:14px;">→</span><div style="font-size:22px; color:var(--ink-0); margin-top:6px;">Kullanıcı kazandırır</div></div>
+        <div style="border:1px solid var(--line); padding:22px; background:var(--bg-2);"><span style="color:var(--gold); font-family:var(--font-mono); font-size:14px;">→</span><div style="font-size:22px; color:var(--ink-0); margin-top:6px;">Likidite oluşturur</div></div>
+        <div style="border:1px solid var(--line); padding:22px; background:var(--bg-2);"><span style="color:var(--gold); font-family:var(--font-mono); font-size:14px;">→</span><div style="font-size:22px; color:var(--ink-0); margin-top:6px;">Talep ve büyüme üretir</div></div>
+        <div style="border:1px solid var(--line); padding:22px; background:var(--bg-2);"><span style="color:var(--gold); font-family:var(--font-mono); font-size:14px;">→</span><div style="font-size:22px; color:var(--ink-0); margin-top:6px;">Değerin yayılmasını sağlar</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ticker-strip" aria-hidden="true">
+    <div class="track">
+      <span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span>
+    </div>
+  </div>
+  </section>
+
+<!-- ============== 08 KATMAN 2 — Teknoloji ============== -->
+<section data-screen-label="08 Katman 02 Teknoloji">
+  <div class="ambient" aria-hidden="true">
+    <div class="glow"></div>
+    <div class="glow g2"></div>
+    <div class="scan"></div>
+    <div class="particles">
+      <span style="left:8%;  animation-delay:0s;"></span>
+      <span style="left:18%; animation-delay:-3s;"></span>
+      <span style="left:28%; animation-delay:-6s;"></span>
+      <span style="left:38%; animation-delay:-9s;"></span>
+      <span style="left:48%; animation-delay:-12s;"></span>
+      <span style="left:58%; animation-delay:-2s;"></span>
+      <span style="left:68%; animation-delay:-5s;"></span>
+      <span style="left:78%; animation-delay:-8s;"></span>
+      <span style="left:88%; animation-delay:-11s;"></span>
+      <span style="left:94%; animation-delay:-14s;"></span>
+    </div>
+    <div class="grain"></div>
+  </div>
+  <div class="chrome">
+    <div class="top"><span class="brand-wrap"><img class="brand-logo" src="logo.png" alt="HSHR"><span class="brand">HASHIRA</span></span><span>05.2 / TEKNOLOJİ SÜTUNU</span></div>
+    <div class="bot"><span>HSHR · WHITEPAPER V1.0</span><span>08</span></div>
+  </div>
+  <div class="pad" style="display:grid; grid-template-columns: 0.9fr 1.1fr; gap:96px;">
+    <div>
+      <div class="eyebrow anim" style="color:var(--gold);">⚙ Sütun 02</div>
+      <h2 class="h1 anim d1" style="font-size:96px; margin-top:18px;">Teknoloji<br/>Sütunu</h2>
+      <p class="lead anim d2" style="margin-top:32px; font-size:30px; color:var(--ink-2);">Üretim Motoru</p>
+      <p class="body anim d3" style="margin-top:32px; font-size:24px; max-width:560px;">Talep burada ürüne dönüşür. Bu sütun ekosistemin <strong style="color:var(--ink-0)">üretim motorudur</strong>.</p>
+    </div>
+    <div>
+      <div class="label anim d2">— Odak Alanları</div>
+      <ul class="clean anim d3" style="margin-top:18px;">
+        <li>Yazılım Ar-Ge ve ürün geliştirme</li>
+        <li>Ödeme altyapıları ve finansal entegrasyon sistemleri</li>
+        <li>Blockchain çözümleri ve akıllı kontratlar</li>
+        <li>Dijital exchange altyapıları</li>
+        <li>HashiraChain</li>
+      </ul>
+      <div class="label anim d6" style="margin-top:48px;">— Rolü</div>
+      <div class="anim d7" style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:14px; margin-top:18px;">
+        <div style="border:1px solid var(--line); padding:22px; background:var(--bg-2);"><span style="color:var(--gold); font-family:var(--font-mono); font-size:14px;">→</span><div style="font-size:20px; color:var(--ink-0); margin-top:6px;">Talebi ürüne çevirir</div></div>
+        <div style="border:1px solid var(--line); padding:22px; background:var(--bg-2);"><span style="color:var(--gold); font-family:var(--font-mono); font-size:14px;">→</span><div style="font-size:20px; color:var(--ink-0); margin-top:6px;">Finansal altyapıyı üretir</div></div>
+        <div style="border:1px solid var(--line); padding:22px; background:var(--bg-2);"><span style="color:var(--gold); font-family:var(--font-mono); font-size:14px;">→</span><div style="font-size:20px; color:var(--ink-0); margin-top:6px;">Teknik omurgayı oluşturur</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ticker-strip" aria-hidden="true">
+    <div class="track">
+      <span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span>
+    </div>
+  </div>
+  </section>
+
+<!-- ============== 09 KATMAN 3 — Dağıtım ============== -->
+<section data-screen-label="09 Katman 03 Dağıtım">
+  <div class="ambient" aria-hidden="true">
+    <div class="glow"></div>
+    <div class="glow g2"></div>
+    <div class="scan"></div>
+    <div class="particles">
+      <span style="left:8%;  animation-delay:0s;"></span>
+      <span style="left:18%; animation-delay:-3s;"></span>
+      <span style="left:28%; animation-delay:-6s;"></span>
+      <span style="left:38%; animation-delay:-9s;"></span>
+      <span style="left:48%; animation-delay:-12s;"></span>
+      <span style="left:58%; animation-delay:-2s;"></span>
+      <span style="left:68%; animation-delay:-5s;"></span>
+      <span style="left:78%; animation-delay:-8s;"></span>
+      <span style="left:88%; animation-delay:-11s;"></span>
+      <span style="left:94%; animation-delay:-14s;"></span>
+    </div>
+    <div class="grain"></div>
+  </div>
+  <div class="chrome">
+    <div class="top"><span class="brand-wrap"><img class="brand-logo" src="logo.png" alt="HSHR"><span class="brand">HASHIRA</span></span><span>05.3 / DAĞITIM SÜTUNU</span></div>
+    <div class="bot"><span>HSHR · WHITEPAPER V1.0</span><span>09</span></div>
+  </div>
+  <div class="pad" style="display:grid; grid-template-columns: 0.9fr 1.1fr; gap:96px;">
+    <div>
+      <div class="eyebrow anim" style="color:var(--gold);">▲ Sütun 03</div>
+      <h2 class="h1 anim d1" style="font-size:96px; margin-top:18px;">Dağıtım<br/>Sütunu</h2>
+      <p class="lead anim d2" style="margin-top:32px; font-size:30px; color:var(--ink-2);">Pazara Açılım & Ölçek</p>
+      <p class="body anim d3" style="margin-top:32px; font-size:24px; max-width:560px;">Ürünlerin pazara açıldığı ve ölçeklendiği sütundur.</p>
+    </div>
+    <div>
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:48px;">
+        <div>
+          <div class="label anim d2">— Görevleri</div>
+          <ul class="clean tight anim d3" style="margin-top:18px;">
+            <li>Pazarlama ve satış dönüşümü</li>
+            <li>Kullanıcı onboarding süreçleri</li>
+            <li>Global büyüme stratejileri</li>
+          </ul>
+        </div>
+        <div>
+          <div class="label anim d4">— Odak</div>
+          <ul class="clean tight anim d5" style="margin-top:18px;">
+            <li>Lisans satış modelleri</li>
+            <li>Affiliate dağıtım sistemleri</li>
+            <li>Global partner yapıları</li>
+            <li>B2B iş birlikleri</li>
+            <li>Satış performans yönetimi</li>
+          </ul>
+        </div>
+      </div>
+      <div class="label anim d6" style="margin-top:48px;">— Rolü</div>
+      <div class="anim d7" style="display:grid; grid-template-columns: 1fr 1fr; gap:14px; margin-top:18px;">
+        <div style="border:1px solid var(--line); padding:22px; background:var(--bg-2);"><span style="color:var(--gold); font-family:var(--font-mono); font-size:14px;">→</span><div style="font-size:22px; color:var(--ink-0); margin-top:6px;">Ürünü gelire çevirir</div></div>
+        <div style="border:1px solid var(--line); padding:22px; background:var(--bg-2);"><span style="color:var(--gold); font-family:var(--font-mono); font-size:14px;">→</span><div style="font-size:22px; color:var(--ink-0); margin-top:6px;">Ekosistemi büyütür</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ticker-strip" aria-hidden="true">
+    <div class="track">
+      <span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span>
+    </div>
+  </div>
+  </section>
+
+<!-- ============== 10 KATMAN 4 — Finans ============== -->
+<section data-screen-label="10 Katman 04 Finans">
+  <div class="ambient" aria-hidden="true">
+    <div class="glow"></div>
+    <div class="glow g2"></div>
+    <div class="scan"></div>
+    <div class="particles">
+      <span style="left:8%;  animation-delay:0s;"></span>
+      <span style="left:18%; animation-delay:-3s;"></span>
+      <span style="left:28%; animation-delay:-6s;"></span>
+      <span style="left:38%; animation-delay:-9s;"></span>
+      <span style="left:48%; animation-delay:-12s;"></span>
+      <span style="left:58%; animation-delay:-2s;"></span>
+      <span style="left:68%; animation-delay:-5s;"></span>
+      <span style="left:78%; animation-delay:-8s;"></span>
+      <span style="left:88%; animation-delay:-11s;"></span>
+      <span style="left:94%; animation-delay:-14s;"></span>
+    </div>
+    <div class="grain"></div>
+  </div>
+  <div class="chrome">
+    <div class="top"><span class="brand-wrap"><img class="brand-logo" src="logo.png" alt="HSHR"><span class="brand">HASHIRA</span></span><span>05.4 / FİNANS SÜTUNU</span></div>
+    <div class="bot"><span>HSHR · WHITEPAPER V1.0</span><span>10</span></div>
+  </div>
+  <div class="pad" style="display:grid; grid-template-columns: 0.9fr 1.1fr; gap:96px;">
+    <div>
+      <div class="eyebrow anim" style="color:var(--gold);">$ Sütun 04</div>
+      <h2 class="h1 anim d1" style="font-size:96px; margin-top:18px;">Finans<br/>Sütunu</h2>
+      <p class="lead anim d2" style="margin-top:32px; font-size:30px; color:var(--ink-2);">Gelir & Treasury</p>
+      <p class="body anim d3" style="margin-top:32px; font-size:24px; max-width:560px;">Tüm gelir bu sütunda <strong style="color:var(--ink-0);">toplanır, yönetilir ve yeniden dağıtılır</strong>.</p>
+    </div>
+    <div>
+      <div style="display:grid; grid-template-columns: 1fr 1.4fr; gap:48px;">
+        <div>
+          <div class="label anim d2">— Görevleri</div>
+          <ul class="clean tight anim d3" style="margin-top:18px;">
+            <li>Gelir yönetimi</li>
+            <li>Kaynak dağıtımı</li>
+            <li>Ekosistem finansmanı</li>
+          </ul>
+        </div>
+        <div>
+          <div class="label anim d4">— Odak</div>
+          <ul class="clean tight anim d5" style="margin-top:18px;">
+            <li>Treasury yönetimi</li>
+            <li>Likidite kontrolü</li>
+            <li>Proje finansmanı</li>
+            <li>Ekosistem yatırımları</li>
+            <li>Staking mekanizmaları</li>
+            <li>Buyback &amp; burn stratejileri</li>
+          </ul>
+        </div>
+      </div>
+      <div class="label anim d6" style="margin-top:48px;">— Rolü</div>
+      <div class="anim d7" style="display:grid; grid-template-columns: repeat(3,1fr); gap:14px; margin-top:18px;">
+        <div style="border:1px solid var(--line); padding:22px; background:var(--bg-2);"><span style="color:var(--gold); font-family:var(--font-mono); font-size:14px;">→</span><div style="font-size:20px; color:var(--ink-0); margin-top:6px;">Geliri yönetir</div></div>
+        <div style="border:1px solid var(--line); padding:22px; background:var(--bg-2);"><span style="color:var(--gold); font-family:var(--font-mono); font-size:14px;">→</span><div style="font-size:20px; color:var(--ink-0); margin-top:6px;">Değeri korur ve artırır</div></div>
+        <div style="border:1px solid var(--line); padding:22px; background:var(--bg-2);"><span style="color:var(--gold); font-family:var(--font-mono); font-size:14px;">→</span><div style="font-size:20px; color:var(--ink-0); margin-top:6px;">Ekosistemi finanse eder</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ticker-strip" aria-hidden="true">
+    <div class="track">
+      <span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span>
+    </div>
+  </div>
+  </section>
+
+<!-- ============== 11 TOKEN UTILITY ============== -->
+<section data-screen-label="11 Token Utility">
+  <div class="ambient" aria-hidden="true">
+    <div class="glow"></div>
+    <div class="glow g2"></div>
+    <div class="scan"></div>
+    <div class="particles">
+      <span style="left:8%;  animation-delay:0s;"></span>
+      <span style="left:18%; animation-delay:-3s;"></span>
+      <span style="left:28%; animation-delay:-6s;"></span>
+      <span style="left:38%; animation-delay:-9s;"></span>
+      <span style="left:48%; animation-delay:-12s;"></span>
+      <span style="left:58%; animation-delay:-2s;"></span>
+      <span style="left:68%; animation-delay:-5s;"></span>
+      <span style="left:78%; animation-delay:-8s;"></span>
+      <span style="left:88%; animation-delay:-11s;"></span>
+      <span style="left:94%; animation-delay:-14s;"></span>
+    </div>
+    <div class="grain"></div>
+  </div>
+  <div class="chrome">
+    <div class="top"><span class="brand-wrap"><img class="brand-logo" src="logo.png" alt="HSHR"><span class="brand">HASHIRA</span></span><span>06 / TOKEN UTILITY</span></div>
+    <div class="bot"><span>HSHR · WHITEPAPER V1.0</span><span>11</span></div>
+  </div>
+  <div class="pad">
+    <div class="eyebrow anim">§ 6 — TOKEN UTILITY · Kullanım Alanları</div>
+    <h2 class="h2 anim d1" style="margin-top:14px; font-size:68px;">Hashira (HSHR), <span style="color:var(--gold);">çok yönlü</span> bir dijital varlıktır</h2>
+    <p class="lead anim d2" style="margin-top:18px; font-size:26px; color:var(--ink-2); max-width:1500px;">Ekosistem içinde gerçek kullanım senaryolarına sahiptir.</p>
+
+    <div class="utility-grid anim d3" style="margin-top:54px;">
+      <div class="util">
+        <div class="ix">U.01</div>
+        <h5>Ödeme aracı</h5>
+        <p>Lisanslar, yazılım çözümleri, ürünler ve hizmetler için temel ödeme birimi olarak kullanılır.</p>
+      </div>
+      <div class="util">
+        <div class="ix">U.02</div>
+        <h5>Ekosistem içi işlem birimi</h5>
+        <p>Platformlar arası transferlerde, işlem ücretlerinde ve sistem içi değer akışında aktif rol oynar.</p>
+      </div>
+      <div class="util">
+        <div class="ix">U.03</div>
+        <h5>Staking ve ödül mekanizması</h5>
+        <p>Kullanıcılar tokenlerini stake ederek ekosistem gelirlerinden pay alır ve uzun vadeli teşvik sağlanır.</p>
+      </div>
+      <div class="util">
+        <div class="ix">U.04</div>
+        <h5>Affiliate teşvikleri</h5>
+        <p>Kullanıcı kazanımı ve büyüme süreçlerinde performans bazlı ödüller HSHR ile dağıtılır.</p>
+      </div>
+      <div class="util">
+        <div class="ix">U.05</div>
+        <h5>Finansal teminat ve katılım aracı</h5>
+        <p>Staking ve finansman mekanizmaları kapsamında projelere katılım ve değer üretiminde kullanılır.</p>
+      </div>
+    </div>
+
+    <div class="anim d6" style="margin-top:54px; padding: 28px 32px; border-left: 2px solid var(--gold); font-family:var(--font-display); font-size: 26px; color:var(--ink-1); max-width: 1700px;">
+      Hashira, yalnızca alınıp satılan bir varlık değildir; <strong style="color:var(--gold)">kullanıldıkça değer kazanan</strong> ve ekosistemi besleyen aktif bir finansal araçtır.
+    </div>
+  </div>
+
+  <div class="ticker-strip" aria-hidden="true">
+    <div class="track">
+      <span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span>
+    </div>
+  </div>
+  </section>
+
+<!-- ============== 12 STAKING DEĞER DÖNGÜSÜ ============== -->
+<section data-screen-label="12 Staking">
+  <div class="ambient" aria-hidden="true">
+    <div class="glow"></div>
+    <div class="glow g2"></div>
+    <div class="scan"></div>
+    <div class="particles">
+      <span style="left:8%;  animation-delay:0s;"></span>
+      <span style="left:18%; animation-delay:-3s;"></span>
+      <span style="left:28%; animation-delay:-6s;"></span>
+      <span style="left:38%; animation-delay:-9s;"></span>
+      <span style="left:48%; animation-delay:-12s;"></span>
+      <span style="left:58%; animation-delay:-2s;"></span>
+      <span style="left:68%; animation-delay:-5s;"></span>
+      <span style="left:78%; animation-delay:-8s;"></span>
+      <span style="left:88%; animation-delay:-11s;"></span>
+      <span style="left:94%; animation-delay:-14s;"></span>
+    </div>
+    <div class="grain"></div>
+  </div>
+  <div class="chrome">
+    <div class="top"><span class="brand-wrap"><img class="brand-logo" src="logo.png" alt="HSHR"><span class="brand">HASHIRA</span></span><span>07 / STAKING & DEĞER DÖNGÜSÜ</span></div>
+    <div class="bot"><span>HSHR · WHITEPAPER V1.0</span><span>12</span></div>
+  </div>
+  <div class="pad">
+    <div class="eyebrow anim">§ 7 — STAKING ile Entegre Değer Döngüsü</div>
+    <h2 class="h2 anim d1" style="margin-top:14px; font-size:62px;">Staking yalnızca ödül sistemi değil — <span style="color:var(--gold);">sistemin finansal motorudur</span></h2>
+
+    <div class="stake-grid anim d3" style="margin-top:44px;">
+      <div>
+        <div class="label">— Staking Modeli</div>
+        <ul class="stake-list" style="margin-top:14px;">
+          <li><div class="n">01</div><div><div class="t">Tokenler belirli sürelerle kilitlenir</div></div></li>
+          <li><div class="n">02</div><div><div class="t">Süre arttıkça ödül artar</div></div></li>
+          <li><div class="n">03</div><div><div class="t">Erken çıkışlarda denge mekanizması uygulanır</div></div></li>
+        </ul>
+
+        <div class="label" style="margin-top:32px;">— Finansman Mekanizması</div>
+        <ul class="stake-list" style="margin-top:14px;">
+          <li><div class="n">A</div><div><div class="t">Yeni projelerin finansmanı</div></div></li>
+          <li><div class="n">B</div><div><div class="t">Teknoloji geliştirme</div></div></li>
+          <li><div class="n">C</div><div><div class="t">Ekosistem yatırımları</div></div></li>
+        </ul>
+      </div>
+
+      <div>
+        <div class="card" style="background: linear-gradient(160deg, #14181f, #0c0e14);">
+          <div class="ix">$ Gelir Destekli Ödül Yapısı</div>
+          <h4 style="margin-top:14px;">Staking ödülleri gerçek gelirlerle desteklenir.</h4>
+          <ul class="clean tight" style="margin-top:14px;">
+            <li>Lisans satışları</li>
+            <li>Ödeme altyapı gelirleri</li>
+            <li>Exchange gelirleri</li>
+            <li>White-label bankacılık gelirleri</li>
+          </ul>
+        </div>
+        <div class="card anim d5" style="margin-top:18px; border-color: var(--gold); background: var(--gold-soft);">
+          <div class="ix" style="color: var(--gold);">⇄ Sonuç</div>
+          <h4 style="margin-top:10px; font-size: 28px;">Likidite + finansman + bağlılık aynı anda sağlanır.</h4>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ticker-strip" aria-hidden="true">
+    <div class="track">
+      <span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span>
+    </div>
+  </div>
+  </section>
+
+<!-- ============== 13 DEFLASYON MODELİ ============== -->
+<section data-screen-label="13 Deflasyon">
+  <div class="ambient" aria-hidden="true">
+    <div class="glow"></div>
+    <div class="glow g2"></div>
+    <div class="scan"></div>
+    <div class="particles">
+      <span style="left:8%;  animation-delay:0s;"></span>
+      <span style="left:18%; animation-delay:-3s;"></span>
+      <span style="left:28%; animation-delay:-6s;"></span>
+      <span style="left:38%; animation-delay:-9s;"></span>
+      <span style="left:48%; animation-delay:-12s;"></span>
+      <span style="left:58%; animation-delay:-2s;"></span>
+      <span style="left:68%; animation-delay:-5s;"></span>
+      <span style="left:78%; animation-delay:-8s;"></span>
+      <span style="left:88%; animation-delay:-11s;"></span>
+      <span style="left:94%; animation-delay:-14s;"></span>
+    </div>
+    <div class="grain"></div>
+  </div>
+  <div class="chrome">
+    <div class="top"><span class="brand-wrap"><img class="brand-logo" src="logo.png" alt="HSHR"><span class="brand">HASHIRA</span></span><span>08 / DEFLASYONİST MODEL</span></div>
+    <div class="bot"><span>HSHR · WHITEPAPER V1.0</span><span>13</span></div>
+  </div>
+  <div class="pad">
+    <div class="eyebrow anim">§ 8 — Arz ve Değer Dengesi</div>
+    <h2 class="h2 anim d1" style="margin-top:14px; font-size:80px;">Deflasyonist <span style="color:var(--gold);">üçlü mekanizma</span></h2>
+
+    <div class="triangle-flow anim d3" style="margin-top: 60px;">
+      <div class="tri-node">
+        <div class="glyph">STAKING</div>
+        <div class="txt">Dolaşımdaki arzı azaltır</div>
+      </div>
+      <div class="tri-arr">━━━▶</div>
+      <div class="tri-node">
+        <div class="glyph">BUYBACK</div>
+        <div class="txt">Piyasadan token toplar</div>
+      </div>
+      <div class="tri-arr">━━━▶</div>
+      <div class="tri-node" style="border-color: var(--gold); background: var(--gold-soft);">
+        <div class="glyph" style="color: var(--gold);">BURN</div>
+        <div class="txt">Arzı kalıcı olarak düşürür</div>
+      </div>
+    </div>
+
+    <div class="stat-grid anim d6" style="margin-top: 80px;">
+      <div class="stat"><div class="lab">→ Sonuç #1</div><div class="val" style="font-size:64px;">Arzı<br/>azaltır</div></div>
+      <div class="stat"><div class="lab">→ Sonuç #2</div><div class="val" style="font-size:64px;">Talebi<br/>destekler</div></div>
+      <div class="stat"><div class="lab">→ Sonuç #3</div><div class="val" style="font-size:64px;">Uzun vadeli<br/>değer artışı</div></div>
+    </div>
+  </div>
+
+  <div class="ticker-strip" aria-hidden="true">
+    <div class="track">
+      <span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span>
+    </div>
+  </div>
+  </section>
+
+<!-- ============== 14 TOKENOMICS — DONUT ============== -->
+<section data-screen-label="14 Tokenomics Donut">
+  <div class="ambient" aria-hidden="true">
+    <div class="glow"></div>
+    <div class="glow g2"></div>
+    <div class="scan"></div>
+    <div class="particles">
+      <span style="left:8%;  animation-delay:0s;"></span>
+      <span style="left:18%; animation-delay:-3s;"></span>
+      <span style="left:28%; animation-delay:-6s;"></span>
+      <span style="left:38%; animation-delay:-9s;"></span>
+      <span style="left:48%; animation-delay:-12s;"></span>
+      <span style="left:58%; animation-delay:-2s;"></span>
+      <span style="left:68%; animation-delay:-5s;"></span>
+      <span style="left:78%; animation-delay:-8s;"></span>
+      <span style="left:88%; animation-delay:-11s;"></span>
+      <span style="left:94%; animation-delay:-14s;"></span>
+    </div>
+    <div class="grain"></div>
+  </div>
+  <div class="chrome">
+    <div class="top"><span class="brand-wrap"><img class="brand-logo" src="logo.png" alt="HSHR"><span class="brand">HASHIRA</span></span><span>09 / TOKENOMICS — FINAL</span></div>
+    <div class="bot"><span>HSHR · WHITEPAPER V1.0</span><span>14</span></div>
+  </div>
+  <div class="pad">
+    <div class="eyebrow anim">§ 9 — Hashira (HSHR) Tokenomics — Final</div>
+    <h2 class="h2 anim d1" style="margin-top:14px; font-size:68px;">Toplam Arz: <span style="color:var(--gold);">15,000,000 HSHR</span> <span style="color:var(--ink-3); font-size:30px; font-weight:300;">(Sabit Arz)</span></h2>
+
+    <div class="donut-wrap anim d3" style="margin-top:60px;">
+      <div class="donut">
+        <svg viewBox="0 0 100 100">
+          <!-- segments computed from percentages.
+               Total 100. Use circumference-based stroke-dasharray on circle r=40.
+               C = 2*pi*40 ≈ 251.327 -->
+          <circle cx="50" cy="50" r="40" stroke="#1a1d26" stroke-width="14" fill="none" />
+          <!-- 33.3% -->
+          <circle class="seg" cx="50" cy="50" r="40" stroke="#d4a857" stroke-width="14" fill="none"
+                  stroke-dasharray="83.69 167.64" stroke-dashoffset="0"></circle>
+          <!-- 20% offset -83.69 -->
+          <circle class="seg" cx="50" cy="50" r="40" stroke="#c0413a" stroke-width="14" fill="none"
+                  stroke-dasharray="50.27 201.06" stroke-dashoffset="-83.69"></circle>
+          <!-- 12% offset -(83.69+50.27)=-133.96 -->
+          <circle class="seg" cx="50" cy="50" r="40" stroke="#4a6fa5" stroke-width="14" fill="none"
+                  stroke-dasharray="30.16 221.17" stroke-dashoffset="-133.96"></circle>
+          <!-- 10% -164.12 -->
+          <circle class="seg" cx="50" cy="50" r="40" stroke="#4fa5a0" stroke-width="14" fill="none"
+                  stroke-dasharray="25.13 226.20" stroke-dashoffset="-164.12"></circle>
+          <!-- 8% -189.25 -->
+          <circle class="seg" cx="50" cy="50" r="40" stroke="#6c8fc7" stroke-width="14" fill="none"
+                  stroke-dasharray="20.11 231.22" stroke-dashoffset="-189.25"></circle>
+          <!-- 7% -209.36 -->
+          <circle class="seg" cx="50" cy="50" r="40" stroke="#8a8579" stroke-width="14" fill="none"
+                  stroke-dasharray="17.59 233.74" stroke-dashoffset="-209.36"></circle>
+          <!-- 5% -226.95 -->
+          <circle class="seg" cx="50" cy="50" r="40" stroke="#5fa86a" stroke-width="14" fill="none"
+                  stroke-dasharray="12.57 238.76" stroke-dashoffset="-226.95"></circle>
+          <!-- 4.7% -239.51 -->
+          <circle class="seg" cx="50" cy="50" r="40" stroke="#e85a52" stroke-width="14" fill="none"
+                  stroke-dasharray="11.81 239.52" stroke-dashoffset="-239.51"></circle>
+        </svg>
+        <div class="center">
+          <div class="lab">Toplam arz</div>
+          <div class="total">15M</div>
+          <div class="sup">HSHR · SABİT</div>
+        </div>
+      </div>
+
+      <div class="legend">
+        <div class="row"><div class="sw" style="background:#d4a857;"></div><div class="name">Ana Rezerv</div><div class="amt">5,000,000</div><div class="pct">33.3%</div></div>
+        <div class="row"><div class="sw" style="background:#c0413a;"></div><div class="name">Topluluk &amp; Affiliate</div><div class="amt">3,000,000</div><div class="pct">20%</div></div>
+        <div class="row"><div class="sw" style="background:#4a6fa5;"></div><div class="name">Ekosistem Gelişim</div><div class="amt">1,800,000</div><div class="pct">12%</div></div>
+        <div class="row"><div class="sw" style="background:#4fa5a0;"></div><div class="name">Ön Satış</div><div class="amt">1,500,000</div><div class="pct">10%</div></div>
+        <div class="row"><div class="sw" style="background:#6c8fc7;"></div><div class="name">Likidite &amp; Borsa</div><div class="amt">1,200,000</div><div class="pct">8%</div></div>
+        <div class="row"><div class="sw" style="background:#8a8579;"></div><div class="name">Takım &amp; Kurucu</div><div class="amt">1,050,000</div><div class="pct">7%</div></div>
+        <div class="row"><div class="sw" style="background:#5fa86a;"></div><div class="name">Pazarlama</div><div class="amt">750,000</div><div class="pct">5%</div></div>
+        <div class="row"><div class="sw" style="background:#e85a52;"></div><div class="name">Buyback &amp; Burn</div><div class="amt">700,000</div><div class="pct">4.7%</div></div>
+      </div>
+    </div>
+  </div>
+  <style>
+    section[data-screen-label="14 Tokenomics Donut"] .donut .seg {
+      stroke-dasharray: 0 251.33;
+      transition: stroke-dasharray 1.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    section[data-screen-label="14 Tokenomics Donut"][data-deck-active] .donut .seg:nth-of-type(2) { stroke-dasharray: 83.69 167.64; transition-delay: 0.1s; }
+    section[data-screen-label="14 Tokenomics Donut"][data-deck-active] .donut .seg:nth-of-type(3) { stroke-dasharray: 50.27 201.06; transition-delay: 0.25s; }
+    section[data-screen-label="14 Tokenomics Donut"][data-deck-active] .donut .seg:nth-of-type(4) { stroke-dasharray: 30.16 221.17; transition-delay: 0.4s; }
+    section[data-screen-label="14 Tokenomics Donut"][data-deck-active] .donut .seg:nth-of-type(5) { stroke-dasharray: 25.13 226.20; transition-delay: 0.55s; }
+    section[data-screen-label="14 Tokenomics Donut"][data-deck-active] .donut .seg:nth-of-type(6) { stroke-dasharray: 20.11 231.22; transition-delay: 0.7s; }
+    section[data-screen-label="14 Tokenomics Donut"][data-deck-active] .donut .seg:nth-of-type(7) { stroke-dasharray: 17.59 233.74; transition-delay: 0.85s; }
+    section[data-screen-label="14 Tokenomics Donut"][data-deck-active] .donut .seg:nth-of-type(8) { stroke-dasharray: 12.57 238.76; transition-delay: 1.0s; }
+    section[data-screen-label="14 Tokenomics Donut"][data-deck-active] .donut .seg:nth-of-type(9) { stroke-dasharray: 11.81 239.52; transition-delay: 1.15s; }
+  </style>
+
+  <div class="ticker-strip" aria-hidden="true">
+    <div class="track">
+      <span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span>
+    </div>
+  </div>
+  </section>
+
+<!-- ============== 15 ALLOCATION DETAY 1 ============== -->
+<section data-screen-label="15 Allocation Detay 1">
+  <div class="ambient" aria-hidden="true">
+    <div class="glow"></div>
+    <div class="glow g2"></div>
+    <div class="scan"></div>
+    <div class="particles">
+      <span style="left:8%;  animation-delay:0s;"></span>
+      <span style="left:18%; animation-delay:-3s;"></span>
+      <span style="left:28%; animation-delay:-6s;"></span>
+      <span style="left:38%; animation-delay:-9s;"></span>
+      <span style="left:48%; animation-delay:-12s;"></span>
+      <span style="left:58%; animation-delay:-2s;"></span>
+      <span style="left:68%; animation-delay:-5s;"></span>
+      <span style="left:78%; animation-delay:-8s;"></span>
+      <span style="left:88%; animation-delay:-11s;"></span>
+      <span style="left:94%; animation-delay:-14s;"></span>
+    </div>
+    <div class="grain"></div>
+  </div>
+  <div class="chrome">
+    <div class="top"><span class="brand-wrap"><img class="brand-logo" src="logo.png" alt="HSHR"><span class="brand">HASHIRA</span></span><span>09.1 / DETAYLI YAPI</span></div>
+    <div class="bot"><span>HSHR · WHITEPAPER V1.0</span><span>15</span></div>
+  </div>
+  <div class="pad">
+    <div class="eyebrow anim">§ 9.1 — Detaylı Tokenomics Yapısı (1 / 2)</div>
+    <h2 class="h2 anim d1" style="margin-top:14px; font-size:62px;">Ana kalemler ve dağıtım modeli</h2>
+
+    <div class="alloc-detail anim d3" style="margin-top:48px;">
+      <div class="alloc-card">
+        <div class="pct">33.3<small>%</small></div>
+        <div>
+          <h6>Ana Rezerv</h6>
+          <div class="qty">5,000,000 HSHR</div>
+          <div class="desc">Ekosistemin finansal kontrol katmanı. Stratejik ortaklıklar, finansman ve likidite yönetimi, ekosistem yatırımları. <strong style="color:var(--ink-1)">Multi-sig kontrollü kullanım.</strong></div>
+        </div>
+      </div>
+      <div class="alloc-card">
+        <div class="pct">20<small>%</small></div>
+        <div>
+          <h6>Topluluk &amp; Affiliate</h6>
+          <div class="qty">3,000,000 HSHR</div>
+          <div class="desc">Büyümenin ana motoru. Affiliate ödülleri, staking getirileri, kullanım teşvikleri. <strong style="color:var(--ink-1)">Performans ve hacim bazlı dağıtım.</strong></div>
+        </div>
+      </div>
+      <div class="alloc-card">
+        <div class="pct">12<small>%</small></div>
+        <div>
+          <h6>Ekosistem Gelişim</h6>
+          <div class="qty">1,800,000 HSHR</div>
+          <div class="desc">Hashira'nın teknoloji üretim merkezi. Hashira Chain (Blockchain), Ödeme Sistemleri (kart, POS, fiat geçişleri), Kripto Exchange, White Label Kripto Bank. <strong style="color:var(--ink-1)">Finansal altyapı üretim katmanı.</strong></div>
+        </div>
+      </div>
+      <div class="alloc-card">
+        <div class="pct">10<small>%</small></div>
+        <div>
+          <h6>Ön Satış</h6>
+          <div class="qty">1,500,000 HSHR</div>
+          <div class="desc">İlk finansman ve topluluk oluşturma. <strong style="color:var(--ink-1)">Vesting:</strong> 12 – 15 ay kilit, sonrasında aylık %10 serbest bırakım. Kontrollü arz &amp; uzun vadeli yatırımcı.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ticker-strip" aria-hidden="true">
+    <div class="track">
+      <span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span>
+    </div>
+  </div>
+  </section>
+
+<!-- ============== 16 ALLOCATION DETAY 2 ============== -->
+<section data-screen-label="16 Allocation Detay 2">
+  <div class="ambient" aria-hidden="true">
+    <div class="glow"></div>
+    <div class="glow g2"></div>
+    <div class="scan"></div>
+    <div class="particles">
+      <span style="left:8%;  animation-delay:0s;"></span>
+      <span style="left:18%; animation-delay:-3s;"></span>
+      <span style="left:28%; animation-delay:-6s;"></span>
+      <span style="left:38%; animation-delay:-9s;"></span>
+      <span style="left:48%; animation-delay:-12s;"></span>
+      <span style="left:58%; animation-delay:-2s;"></span>
+      <span style="left:68%; animation-delay:-5s;"></span>
+      <span style="left:78%; animation-delay:-8s;"></span>
+      <span style="left:88%; animation-delay:-11s;"></span>
+      <span style="left:94%; animation-delay:-14s;"></span>
+    </div>
+    <div class="grain"></div>
+  </div>
+  <div class="chrome">
+    <div class="top"><span class="brand-wrap"><img class="brand-logo" src="logo.png" alt="HSHR"><span class="brand">HASHIRA</span></span><span>09.2 / DETAYLI YAPI</span></div>
+    <div class="bot"><span>HSHR · WHITEPAPER V1.0</span><span>16</span></div>
+  </div>
+  <div class="pad">
+    <div class="eyebrow anim">§ 9.2 — Detaylı Tokenomics Yapısı (2 / 2)</div>
+    <h2 class="h2 anim d1" style="margin-top:14px; font-size:62px;">Likidite, ekip ve deflasyon kalemleri</h2>
+
+    <div class="alloc-detail anim d3" style="margin-top:48px;">
+      <div class="alloc-card">
+        <div class="pct">8<small>%</small></div>
+        <div>
+          <h6>Likidite &amp; Borsa</h6>
+          <div class="qty">1,200,000 HSHR</div>
+          <div class="desc">Piyasa dengesi ve sürdürülebilir fiyat: CEX / DEX likidite, market maker, listeleme süreçleri.</div>
+        </div>
+      </div>
+      <div class="alloc-card">
+        <div class="pct">7<small>%</small></div>
+        <div>
+          <h6>Takım &amp; Kurucu</h6>
+          <div class="qty">1,050,000 HSHR</div>
+          <div class="desc">Şeffaf ve öngörülebilir ekip modeli. <strong style="color:var(--ink-1)">Vesting:</strong> kilit yok, 24 ay lineer dağıtım. <strong style="color:var(--gold)">Aylık 43,750 HSHR.</strong> Kullanım: maaşlar, operasyon, geliştirme.</div>
+        </div>
+      </div>
+      <div class="alloc-card">
+        <div class="pct">5<small>%</small></div>
+        <div>
+          <h6>Pazarlama &amp; Büyüme</h6>
+          <div class="qty">750,000 HSHR</div>
+          <div class="desc">Global büyüme katmanı. Dijital pazarlama, influencer iş birlikleri, bölgesel genişleme.</div>
+        </div>
+      </div>
+      <div class="alloc-card" style="border-color: var(--gold); background: linear-gradient(140deg, var(--gold-soft), var(--bg-2));">
+        <div class="pct">4.7<small>%</small></div>
+        <div>
+          <h6>Buyback &amp; Burn</h6>
+          <div class="qty">700,000 HSHR</div>
+          <div class="desc"><strong style="color:var(--ink-1)">Deflasyon mekanizması.</strong> Kaynak: internal swap ücretleri, platform içi işlemler, likidite geçişleri, finans katmanı komisyonları. <strong style="color:var(--gold)">Burn Pool'da toplanır.</strong></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ticker-strip" aria-hidden="true">
+    <div class="track">
+      <span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span>
+    </div>
+  </div>
+  </section>
+
+<!-- ============== 17 BUYBACK & BURN AKIŞI ============== -->
+<section data-screen-label="17 Buyback Burn">
+  <div class="ambient" aria-hidden="true">
+    <div class="glow"></div>
+    <div class="glow g2"></div>
+    <div class="scan"></div>
+    <div class="particles">
+      <span style="left:8%;  animation-delay:0s;"></span>
+      <span style="left:18%; animation-delay:-3s;"></span>
+      <span style="left:28%; animation-delay:-6s;"></span>
+      <span style="left:38%; animation-delay:-9s;"></span>
+      <span style="left:48%; animation-delay:-12s;"></span>
+      <span style="left:58%; animation-delay:-2s;"></span>
+      <span style="left:68%; animation-delay:-5s;"></span>
+      <span style="left:78%; animation-delay:-8s;"></span>
+      <span style="left:88%; animation-delay:-11s;"></span>
+      <span style="left:94%; animation-delay:-14s;"></span>
+    </div>
+    <div class="grain"></div>
+  </div>
+  <div class="chrome">
+    <div class="top"><span class="brand-wrap"><img class="brand-logo" src="logo.png" alt="HSHR"><span class="brand">HASHIRA</span></span><span>10 / BUYBACK &amp; BURN</span></div>
+    <div class="bot"><span>HSHR · WHITEPAPER V1.0</span><span>17</span></div>
+  </div>
+  <div class="pad">
+    <div class="eyebrow anim">§ 10 — Buyback &amp; Burn Süreci ve Etkisi</div>
+    <h2 class="h2 anim d1" style="margin-top:14px; font-size:72px;">Üç adımda <span style="color:var(--gold);">deflasyon</span></h2>
+
+    <div class="anim d3" style="margin-top:60px; display:grid; grid-template-columns: repeat(3, 1fr); gap:32px;">
+      <div class="card" style="text-align:left;">
+        <div class="ix">SÜREÇ · 01</div>
+        <h4>Havuz birikir</h4>
+        <p>Internal swap ücretleri, platform içi işlemler, likidite geçişleri ve finans katmanı komisyonları Burn Pool'da toplanır.</p>
+      </div>
+      <div class="card" style="text-align:left;">
+        <div class="ix">SÜREÇ · 02</div>
+        <h4>Marketten alım yapılır</h4>
+        <p>Pool kaynakları piyasada HSHR alımı için kullanılır. Bu, doğrudan talep oluşturan bir alım baskısıdır.</p>
+      </div>
+      <div class="card" style="text-align:left; border-color: var(--gold); background: var(--gold-soft);">
+        <div class="ix" style="color:var(--gold);">SÜREÇ · 03</div>
+        <h4>Token yakılır</h4>
+        <p>Alınan tokenler kalıcı olarak yakılır. Toplam arz geri dönülemez şekilde azalır.</p>
+      </div>
+    </div>
+
+    <div class="anim d6" style="margin-top:48px;">
+      <div class="label">— Etki</div>
+      <div style="margin-top:18px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px;">
+        <div style="padding: 28px 32px; background: var(--bg-1); border-left: 2px solid var(--gold);">
+          <div class="lab" style="font-family:var(--font-mono); font-size:12px; color:var(--ink-3); letter-spacing:0.22em; text-transform:uppercase;">Etki #1</div>
+          <div style="font-family:var(--font-display); font-weight:300; font-size:46px; color:var(--gold); line-height:1.1; margin-top:14px;">Kullanım ↑<br/>= Yakım ↑</div>
+        </div>
+        <div style="padding: 28px 32px; background: var(--bg-1); border-left: 2px solid var(--gold);">
+          <div class="lab" style="font-family:var(--font-mono); font-size:12px; color:var(--ink-3); letter-spacing:0.22em; text-transform:uppercase;">Etki #2</div>
+          <div style="font-family:var(--font-display); font-weight:300; font-size:46px; color:var(--gold); line-height:1.1; margin-top:14px;">Arz ↓</div>
+        </div>
+        <div style="padding: 28px 32px; background: var(--bg-1); border-left: 2px solid var(--gold);">
+          <div class="lab" style="font-family:var(--font-mono); font-size:12px; color:var(--ink-3); letter-spacing:0.22em; text-transform:uppercase;">Etki #3</div>
+          <div style="font-family:var(--font-display); font-weight:300; font-size:46px; color:var(--gold); line-height:1.1; margin-top:14px;">Fiyat doğal<br/>destek</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ticker-strip" aria-hidden="true">
+    <div class="track">
+      <span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span>
+    </div>
+  </div>
+  </section>
+
+<!-- ============== 18 EKONOMİK DÖNGÜ ============== -->
+<section data-screen-label="18 Ekonomik Döngü">
+  <div class="ambient" aria-hidden="true">
+    <div class="glow"></div>
+    <div class="glow g2"></div>
+    <div class="scan"></div>
+    <div class="particles">
+      <span style="left:8%;  animation-delay:0s;"></span>
+      <span style="left:18%; animation-delay:-3s;"></span>
+      <span style="left:28%; animation-delay:-6s;"></span>
+      <span style="left:38%; animation-delay:-9s;"></span>
+      <span style="left:48%; animation-delay:-12s;"></span>
+      <span style="left:58%; animation-delay:-2s;"></span>
+      <span style="left:68%; animation-delay:-5s;"></span>
+      <span style="left:78%; animation-delay:-8s;"></span>
+      <span style="left:88%; animation-delay:-11s;"></span>
+      <span style="left:94%; animation-delay:-14s;"></span>
+    </div>
+    <div class="grain"></div>
+  </div>
+  <div class="chrome">
+    <div class="top"><span class="brand-wrap"><img class="brand-logo" src="logo.png" alt="HSHR"><span class="brand">HASHIRA</span></span><span>11 / EKONOMİK DÖNGÜ</span></div>
+    <div class="bot"><span>HSHR · WHITEPAPER V1.0</span><span>18</span></div>
+  </div>
+  <div class="pad">
+    <div class="eyebrow anim">§ 11 — Ekonomik Döngü</div>
+    <h2 class="h2 anim d1" style="margin-top:14px; font-size:88px;">Tek bir <span style="color:var(--gold);">kapalı döngü</span></h2>
+    <p class="lead anim d2" style="margin-top:24px; font-size:30px; color:var(--ink-2); max-width:1500px;">Fiat girişinden token yakımına kadar her adım ekosistemi besler.</p>
+
+    <div class="flow-strip anim d3">
+      <div class="flow-cell"><div class="lab">01</div><div class="v">FIAT</div></div>
+      <div class="flow-cell" style="flex:0 0 80px; padding: 36px 0;"><div class="arr">━▶</div></div>
+      <div class="flow-cell"><div class="lab">02</div><div class="v">HSHR</div></div>
+      <div class="flow-cell" style="flex:0 0 80px; padding: 36px 0;"><div class="arr">━▶</div></div>
+      <div class="flow-cell"><div class="lab">03</div><div class="v">KULLANIM</div></div>
+      <div class="flow-cell" style="flex:0 0 80px; padding: 36px 0;"><div class="arr">━▶</div></div>
+      <div class="flow-cell"><div class="lab">04</div><div class="v">GELİR</div></div>
+      <div class="flow-cell" style="flex:0 0 80px; padding: 36px 0;"><div class="arr">━▶</div></div>
+      <div class="flow-cell"><div class="lab">05</div><div class="v">BUYBACK</div></div>
+      <div class="flow-cell" style="flex:0 0 80px; padding: 36px 0;"><div class="arr">━▶</div></div>
+      <div class="flow-cell" style="background: var(--gold-soft); border-color: var(--gold);"><div class="lab" style="color:var(--gold);">06</div><div class="v" style="color: var(--gold);">BURN</div></div>
+    </div>
+
+    <div class="anim d6" style="margin-top:64px; display:grid; grid-template-columns: repeat(3, 1fr); gap:32px;">
+      <div class="card">
+        <div class="ix">↑ TALEP</div>
+        <h4>Kullanım talebi büyür</h4>
+        <p>Lisanslar, ödemeler, exchange ve white-label bankacılık geliri yaratır.</p>
+      </div>
+      <div class="card">
+        <div class="ix">↻ DÖNÜŞÜM</div>
+        <h4>Gelir buyback'e döner</h4>
+        <p>Ekosistem geliri Burn Pool'a akar; piyasadan token toplanır.</p>
+      </div>
+      <div class="card" style="border-color: var(--gold);">
+        <div class="ix" style="color: var(--gold);">↓ ARZ</div>
+        <h4>Arz kalıcı olarak azalır</h4>
+        <p>Yakım sürdükçe değer artışı sürdürülebilir hale gelir.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="ticker-strip" aria-hidden="true">
+    <div class="track">
+      <span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span>
+    </div>
+  </div>
+  </section>
+
+<!-- ============================================================ -->
+<!-- ============== ROADMAP SECTION (10 slides) ================== -->
+<!-- ============================================================ -->
+
+<!-- ============== ROADMAP — SECTION SPLASH ============== -->
+<section class="section-splash" data-screen-label="R0 Roadmap Splash">
+  <div class="ambient" aria-hidden="true">
+    <div class="glow"></div>
+    <div class="glow g2"></div>
+    <div class="scan"></div>
+    <div class="particles">
+      <span style="left:8%;  animation-delay:0s;"></span>
+      <span style="left:18%; animation-delay:-3s;"></span>
+      <span style="left:38%; animation-delay:-9s;"></span>
+      <span style="left:58%; animation-delay:-2s;"></span>
+      <span style="left:78%; animation-delay:-8s;"></span>
+      <span style="left:94%; animation-delay:-14s;"></span>
+    </div>
+    <div class="grain"></div>
+  </div>
+  <svg class="torii-deco giant"><use href="#torii-full"/></svg>
+  <div class="chrome">
+    <div class="top"><span class="brand-wrap"><img class="brand-logo" src="logo.png" alt="HSHR"><span class="brand">HASHIRA</span></span><span>12 / ROADMAP</span></div>
+    <div class="bot"><span>HSHR · WHITEPAPER V1.0</span><span>19</span></div>
+  </div>
+  <div class="pad">
+    <div>
+      <div class="splash-num anim">— BÖLÜM 12 · YOL HARİTASI · FINAL</div>
+      <h2 class="splash-title anim d1">Hashira<br/><strong>Roadmap</strong></h2>
+      <p class="splash-sub anim d2">5 fazda küresel finansal altyapıya geçiş — 0'dan kurumsal banking lisansına 18+ aylık inşa süreci.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============== ROADMAP — WINDING PATH OVERVIEW ============== -->
+<section data-screen-label="R0b Roadmap Path">
+  <div class="ambient" aria-hidden="true">
+    <div class="glow"></div>
+    <div class="glow g2"></div>
+    <div class="scan"></div>
+    <div class="grain"></div>
+  </div>
+  <svg class="torii-deco tr"><use href="#torii"/></svg>
+  <svg class="torii-deco bl"><use href="#torii"/></svg>
+  <div class="chrome">
+    <div class="top"><span class="brand-wrap"><img class="brand-logo" src="logo.png" alt="HSHR"><span class="brand">HASHIRA</span></span><span>12.0 / 5 FAZ · YOL HARİTASI</span></div>
+    <div class="bot"><span>HSHR · WHITEPAPER V1.0</span><span>20</span></div>
+  </div>
+
+  <div class="pad">
+    <div class="eyebrow anim">— Genel Bakış</div>
+    <h2 class="h1 anim d1" style="margin-top:14px; font-size:80px;">5 Faz · <strong>Tek Yol</strong></h2>
+    <p class="lead anim d2" style="margin-top:20px; max-width:1300px; font-size:24px;">Her faz, bir öncekinin yarattığı değeri kullanarak ekosistemi sonraki seviyeye taşır.</p>
+
+    <div class="roadmap-path-stage">
+      <!-- Connection path SVG -->
+      <svg class="roadmap-svg-bg" viewBox="0 0 1760 720" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="pathGrad" x1="0" x2="1" y1="0" y2="0">
+            <stop offset="0%" stop-color="#d4a857" stop-opacity="0.3"/>
+            <stop offset="50%" stop-color="#d4a857" stop-opacity="0.7"/>
+            <stop offset="100%" stop-color="#f0c674" stop-opacity="0.9"/>
+          </linearGradient>
+        </defs>
+        <!-- horizontal connectors top row (stations 01→02→03 at top: 60, conn center ~y=105) -->
+        <path d="M 220 110 Q 340 60, 510 110" stroke="url(#pathGrad)" stroke-width="2" stroke-dasharray="6 6" fill="none"/>
+        <path d="M 605 110 Q 720 60, 855 110" stroke="url(#pathGrad)" stroke-width="2" stroke-dasharray="6 6" fill="none"/>
+        <!-- diagonal down to phase 4 (left:1080, top:320, conn center ~y=365) -->
+        <path d="M 950 110 Q 1060 250, 1195 360" stroke="url(#pathGrad)" stroke-width="2" stroke-dasharray="6 6" fill="none"/>
+        <!-- horizontal connector bottom row (04 → 05) -->
+        <path d="M 1305 365 Q 1420 320, 1545 365" stroke="url(#pathGrad)" stroke-width="2" stroke-dasharray="6 6" fill="none"/>
+      </svg>
+
+      <!-- Stations -->
+      <div class="rm-station anim d3" style="left: 30px; top: 60px;">
+        <div class="conn"><div class="num">01</div></div>
+        <div class="panel">
+          <div class="dur">— 0 – 3 Ay</div>
+          <div class="ttl">Temel Oluşum<br/>Akidemy &amp; Gelir</div>
+          <div class="desc">İlk kullanıcı kazanımı, ilk gelir akışı, sistemin aktif hale gelmesi.</div>
+        </div>
+      </div>
+
+      <div class="rm-station anim d4" style="left: 380px; top: 60px;">
+        <div class="conn"><div class="num">02</div></div>
+        <div class="panel">
+          <div class="dur">— 3 – 6 Ay</div>
+          <div class="ttl">Ödeme Sistemleri<br/>&amp; Genişleme</div>
+          <div class="desc">Gerçek kullanım ve işlem hacmi, bölgesel genişleme.</div>
+        </div>
+      </div>
+
+      <div class="rm-station anim d5" style="left: 730px; top: 60px;">
+        <div class="conn"><div class="num">03</div></div>
+        <div class="panel">
+          <div class="dur">— 6 – 9 Ay</div>
+          <div class="ttl">Exchange &amp;<br/>Finansal Derinlik</div>
+          <div class="desc">Likiditeyi kontrol eden yapı kurmak, derin finans altyapısı.</div>
+        </div>
+      </div>
+
+      <div class="rm-station anim d6" style="left: 1080px; top: 320px;">
+        <div class="conn"><div class="num">04</div></div>
+        <div class="panel">
+          <div class="dur">— 9 – 12+ Ay</div>
+          <div class="ttl">Hashira Chain</div>
+          <div class="desc">Bağımsız blockchain altyapısına geçiş, dışa bağımlılık biter.</div>
+        </div>
+      </div>
+
+      <div class="rm-station active anim d7" style="left: 1430px; top: 320px;">
+        <div class="conn"><div class="num">05</div></div>
+        <div class="panel" style="border-left-color: var(--gold-2); background: var(--gold-soft);">
+          <div class="dur">— 12 – 18 Ay</div>
+          <div class="ttl">White Label Bank<br/>&amp; Global Ölçek</div>
+          <div class="desc">Kurumsal finansal altyapı sağlayıcısı statüsüne ulaşmak.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============== ROADMAP — FAZ 1 ============== -->
+<section data-screen-label="R1 Faz 1">
+  <div class="ambient" aria-hidden="true"><div class="glow"></div><div class="grain"></div></div>
+  <svg class="torii-deco br"><use href="#torii"/></svg>
+  <div class="chrome">
+    <div class="top"><span class="brand-wrap"><img class="brand-logo" src="logo.png" alt="HSHR"><span class="brand">HASHIRA</span></span><span>12.1 / FAZ 01</span></div>
+    <div class="bot"><span>HSHR · WHITEPAPER V1.0</span><span>21</span></div>
+  </div>
+
+  <div class="pad">
+    <div class="eyebrow anim">🚀 — FAZ 01</div>
+
+    <div class="roadmap-stage">
+      <div>
+        <div class="phase-id anim d1">
+          <div class="phase-num">01</div>
+          <div class="phase-meta">
+            <div class="lbl">— 0 – 3 Ay</div>
+            <div class="duration">İlk Çeyrek</div>
+          </div>
+        </div>
+
+        <h2 class="phase-title anim d2">Temel Oluşum<br/>Akidemy &amp;<br/><strong>Gelir Aktivasyonu</strong></h2>
+
+        <p class="lead anim d3" style="font-size:18px; color:var(--ink-2); margin-top: 14px; max-width:520px;">Ekosistemin ilk kez çalıştığı ve gelir üretmeye başladığı aşama.</p>
+
+        <div class="phase-target anim d4">
+          <div class="ix">— Hedef</div>
+          <div class="text">İlk kullanıcı kazanımı, ilk gelir akışı ve sistemin aktif hale gelmesi.</div>
+        </div>
+      </div>
+
+      <div>
+        <div class="phase-section anim d4">
+          <div class="label-bar">⚙ Yapılacaklar</div>
+          <ul>
+            <li>Whitepaper &amp; Tokenomics finalizasyonu</li>
+            <li>Web sitesi &amp; backoffice kurulumu</li>
+            <li>Ön satış (Private / Seed) başlatılması</li>
+            <li>Affiliate sisteminin aktif edilmesi</li>
+            <li>Internal swap altyapısının kurulması</li>
+          </ul>
+        </div>
+
+        <div class="phase-section anim d5">
+          <div class="label-bar">💰 İlk Gelir Kaynakları</div>
+          <ul>
+            <li><strong>Akidemy</strong> — Eğitim paketleri</li>
+            <li>Lisans satışları</li>
+            <li>Platform içi işlem gelirleri</li>
+          </ul>
+        </div>
+
+        <div class="phase-section anim d6">
+          <div class="label-bar gold">🔥 Kritik Etki</div>
+          <div class="impact-grid">
+            <div class="impact-row critical"><span class="arrow">→</span><span class="text"><strong>İlk Burn Pool</strong> oluşumu başlar</span></div>
+            <div class="impact-row"><span class="arrow">→</span><span class="text">Listeleme öncesi gelir üretimi sağlanır</span></div>
+            <div class="impact-row"><span class="arrow">→</span><span class="text">Ekosistem büyümesi temellendirilir</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============== ROADMAP — AKIDEMY KATMANI ============== -->
+<section data-screen-label="R1b Akidemy Katmanı">
+  <div class="ambient" aria-hidden="true"><div class="glow"></div><div class="glow g2"></div><div class="grain"></div></div>
+  <svg class="torii-deco tl"><use href="#torii"/></svg>
+  <div class="chrome">
+    <div class="top"><span class="brand-wrap"><img class="brand-logo" src="logo.png" alt="HSHR"><span class="brand">HASHIRA</span></span><span>12.1.1 / AKIDEMY KATMANI</span></div>
+    <div class="bot"><span>HSHR · WHITEPAPER V1.0</span><span>22</span></div>
+  </div>
+
+  <div class="pad">
+    <div class="eyebrow anim">🧠 — Faz 01 · Alt Katman</div>
+    <h2 class="h1 anim d1" style="margin-top:14px; font-size:84px;"><strong>Akidemy</strong> / Akidemian Katmanı</h2>
+    <p class="lead anim d2" style="margin-top:18px; font-size:26px;">Ekosistemin <strong style="color:var(--gold)">giriş kapısı</strong> ve <strong style="color:var(--gold)">büyüme motoru</strong>.</p>
+
+    <div style="margin-top:50px; display:grid; grid-template-columns: 1fr 1fr; gap:80px;">
+      <div class="phase-section anim d3">
+        <div class="label-bar">⚙ Yapılacaklar</div>
+        <ul>
+          <li><strong>Akidemy</strong> eğitim platformunun kurulumu</li>
+          <li>Temel <strong>Akidemy</strong> içeriklerinin ücretsiz sunulması</li>
+          <li>Premium <strong>Akidemy</strong> paketlerinin aktif edilmesi</li>
+          <li><strong>Akidemy</strong> + kazanç modelinin entegrasyonu</li>
+          <li>Affiliate sistem ile <strong>Akidemy</strong> satışlarının bağlanması</li>
+        </ul>
+      </div>
+
+      <div class="anim d4">
+        <div class="label-bar gold">💰 Etki</div>
+        <div style="margin-top: 14px; display:grid; gap:12px;">
+          <div class="impact-row"><span class="arrow">→</span><span class="text">Kullanıcıyı sisteme çekmek</span></div>
+          <div class="impact-row"><span class="arrow">→</span><span class="text">İlk gelir akışını başlatmak</span></div>
+          <div class="impact-row critical"><span class="arrow">→</span><span class="text"><strong>Sürdürülebilir kullanıcı büyüme mekanizmasını</strong> oluşturmak</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============== ROADMAP — FAZ 2 ============== -->
+<section data-screen-label="R2 Faz 2">
+  <div class="ambient" aria-hidden="true"><div class="glow"></div><div class="grain"></div></div>
+  <svg class="torii-deco tr"><use href="#torii"/></svg>
+  <div class="chrome">
+    <div class="top"><span class="brand-wrap"><img class="brand-logo" src="logo.png" alt="HSHR"><span class="brand">HASHIRA</span></span><span>12.2 / FAZ 02</span></div>
+    <div class="bot"><span>HSHR · WHITEPAPER V1.0</span><span>23</span></div>
+  </div>
+
+  <div class="pad">
+    <div class="eyebrow anim">⚙️ — FAZ 02</div>
+
+    <div class="roadmap-stage">
+      <div>
+        <div class="phase-id anim d1">
+          <div class="phase-num">02</div>
+          <div class="phase-meta">
+            <div class="lbl">— 3 – 6 Ay</div>
+            <div class="duration">İkinci Çeyrek</div>
+          </div>
+        </div>
+
+        <h2 class="phase-title anim d2">Ödeme Sistemleri<br/>&amp; <strong>Genişleme</strong></h2>
+
+        <div class="phase-target anim d3">
+          <div class="ix">— Hedef</div>
+          <div class="text">Gerçek kullanım ve işlem hacmi oluşturmak.</div>
+        </div>
+      </div>
+
+      <div>
+        <div class="phase-section anim d4">
+          <div class="label-bar">⚙ Yapılacaklar</div>
+          <ul>
+            <li>Kripto kart entegrasyonu</li>
+            <li>Fiat on/off ramp altyapısı</li>
+            <li>POS &amp; ödeme sistemleri entegrasyonu</li>
+            <li>Affiliate büyüme kampanyaları</li>
+            <li>Bölgesel genişleme <strong>(Türkiye, EU, MENA)</strong></li>
+            <li>Otomatik komisyon sistemleri</li>
+          </ul>
+        </div>
+
+        <div class="phase-section anim d5">
+          <div class="label-bar gold">💰 Etki</div>
+          <div class="impact-grid">
+            <div class="impact-row"><span class="arrow">→</span><span class="text">İşlem hacmi <strong>artar</strong></span></div>
+            <div class="impact-row"><span class="arrow">→</span><span class="text">Gelir akışları <strong>çeşitlenir</strong></span></div>
+            <div class="impact-row critical"><span class="arrow">→</span><span class="text"><strong>Buyback &amp; Burn</strong> mekanizması güçlenir</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============== ROADMAP — FAZ 3 ============== -->
+<section data-screen-label="R3 Faz 3">
+  <div class="ambient" aria-hidden="true"><div class="glow"></div><div class="grain"></div></div>
+  <svg class="torii-deco bl"><use href="#torii"/></svg>
+  <div class="chrome">
+    <div class="top"><span class="brand-wrap"><img class="brand-logo" src="logo.png" alt="HSHR"><span class="brand">HASHIRA</span></span><span>12.3 / FAZ 03</span></div>
+    <div class="bot"><span>HSHR · WHITEPAPER V1.0</span><span>24</span></div>
+  </div>
+
+  <div class="pad">
+    <div class="eyebrow anim">🏦 — FAZ 03</div>
+
+    <div class="roadmap-stage">
+      <div>
+        <div class="phase-id anim d1">
+          <div class="phase-num">03</div>
+          <div class="phase-meta">
+            <div class="lbl">— 6 – 9 Ay</div>
+            <div class="duration">Üçüncü Çeyrek</div>
+          </div>
+        </div>
+
+        <h2 class="phase-title anim d2">Exchange &amp;<br/><strong>Finansal Derinlik</strong></h2>
+
+        <div class="phase-target anim d3">
+          <div class="ix">— Hedef</div>
+          <div class="text">Likiditeyi kontrol eden yapı kurmak.</div>
+        </div>
+      </div>
+
+      <div>
+        <div class="phase-section anim d4">
+          <div class="label-bar">⚙ Yapılacaklar</div>
+          <ul>
+            <li>Kripto Exchange (Beta) lansmanı</li>
+            <li>Trade engine devreye alınması</li>
+            <li>Likidite altyapısı kurulumu</li>
+            <li>İlk token listelemeleri</li>
+            <li>Gelişmiş staking ve finans modelleri</li>
+          </ul>
+        </div>
+
+        <div class="phase-section anim d5">
+          <div class="label-bar gold">💰 Etki</div>
+          <div class="impact-grid">
+            <div class="impact-row"><span class="arrow">→</span><span class="text">Komisyon gelirleri <strong>artar</strong></span></div>
+            <div class="impact-row"><span class="arrow">→</span><span class="text">Ekosistem içi likidite <strong>oluşur</strong></span></div>
+            <div class="impact-row critical"><span class="arrow">→</span><span class="text"><strong>Buyback hacmi</strong> büyür</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============== ROADMAP — FAZ 4 ============== -->
+<section data-screen-label="R4 Faz 4">
+  <div class="ambient" aria-hidden="true"><div class="glow"></div><div class="glow g2"></div><div class="grain"></div></div>
+  <svg class="torii-deco tl"><use href="#torii"/></svg>
+  <div class="chrome">
+    <div class="top"><span class="brand-wrap"><img class="brand-logo" src="logo.png" alt="HSHR"><span class="brand">HASHIRA</span></span><span>12.4 / FAZ 04</span></div>
+    <div class="bot"><span>HSHR · WHITEPAPER V1.0</span><span>25</span></div>
+  </div>
+
+  <div class="pad">
+    <div class="eyebrow anim">🌐 — FAZ 04</div>
+
+    <div class="roadmap-stage">
+      <div>
+        <div class="phase-id anim d1">
+          <div class="phase-num">04</div>
+          <div class="phase-meta">
+            <div class="lbl">— 9 – 12+ Ay</div>
+            <div class="duration">Dördüncü Çeyrek</div>
+          </div>
+        </div>
+
+        <h2 class="phase-title anim d2">Hashira<br/><strong>Chain</strong></h2>
+
+        <div class="phase-target anim d3">
+          <div class="ix">— Hedef</div>
+          <div class="text">Bağımsız blockchain altyapısına geçiş.</div>
+        </div>
+      </div>
+
+      <div>
+        <div class="phase-section anim d4">
+          <div class="label-bar">⚙ Yapılacaklar</div>
+          <ul>
+            <li>Hashira Chain geliştirme</li>
+            <li>Testnet yayını</li>
+            <li>Node &amp; validator yapısı</li>
+            <li>Smart contract altyapısının genişletilmesi</li>
+            <li>Sistemlerin chain entegrasyonu</li>
+          </ul>
+        </div>
+
+        <div class="phase-section anim d5">
+          <div class="label-bar gold">💰 Etki</div>
+          <div class="impact-grid">
+            <div class="impact-row"><span class="arrow">→</span><span class="text">Dışa bağımlılık <strong>azalır</strong></span></div>
+            <div class="impact-row"><span class="arrow">→</span><span class="text">Ekosistem kontrolü <strong>artar</strong></span></div>
+            <div class="impact-row critical"><span class="arrow">→</span><span class="text"><strong>Teknik değer</strong> yükselir</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============== ROADMAP — FAZ 5 ============== -->
+<section data-screen-label="R5 Faz 5">
+  <div class="ambient" aria-hidden="true"><div class="glow"></div><div class="grain"></div></div>
+  <svg class="torii-deco br"><use href="#torii"/></svg>
+  <div class="chrome">
+    <div class="top"><span class="brand-wrap"><img class="brand-logo" src="logo.png" alt="HSHR"><span class="brand">HASHIRA</span></span><span>12.5 / FAZ 05 · FİNAL</span></div>
+    <div class="bot"><span>HSHR · WHITEPAPER V1.0</span><span>26</span></div>
+  </div>
+
+  <div class="pad">
+    <div class="eyebrow anim">🏛 — FAZ 05 · FİNAL</div>
+
+    <div class="roadmap-stage">
+      <div>
+        <div class="phase-id anim d1">
+          <div class="phase-num">05</div>
+          <div class="phase-meta">
+            <div class="lbl">— 12 – 18 Ay</div>
+            <div class="duration">Final Aşama</div>
+          </div>
+        </div>
+
+        <h2 class="phase-title anim d2">White Label<br/><strong>Kripto Bank</strong> &amp;<br/>Global Ölçek</h2>
+
+        <div class="phase-target anim d3">
+          <div class="ix">— Hedef</div>
+          <div class="text">Kurumsal finansal altyapı sağlayıcısına dönüşmek.</div>
+        </div>
+      </div>
+
+      <div>
+        <div class="phase-section anim d4">
+          <div class="label-bar">⚙ Yapılacaklar</div>
+          <ul>
+            <li>White Label Kripto Bank lansmanı</li>
+            <li>Kurumsal müşteri onboarding</li>
+            <li>Lisans &amp; regülasyon süreçleri</li>
+            <li>Global ortaklıklar</li>
+            <li>Bankacılık ürünleri <strong>(hesap, kart, finans çözümleri)</strong></li>
+          </ul>
+        </div>
+
+        <div class="phase-section anim d5">
+          <div class="label-bar gold">💰 Etki</div>
+          <div class="impact-grid">
+            <div class="impact-row"><span class="arrow">→</span><span class="text">Büyük ölçekli gelir <strong>başlar</strong></span></div>
+            <div class="impact-row"><span class="arrow">→</span><span class="text">Ekosistem <strong>kurumsallaşır</strong></span></div>
+            <div class="impact-row critical"><span class="arrow">→</span><span class="text"><strong>Buyback etkisi</strong> katlanır</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============== ROADMAP — GENEL STRATEJİ ============== -->
+<section data-screen-label="R6 Genel Strateji">
+  <div class="ambient" aria-hidden="true"><div class="glow"></div><div class="glow g2"></div><div class="grain"></div></div>
+  <svg class="torii-deco center-faded"><use href="#torii"/></svg>
+  <div class="chrome">
+    <div class="top"><span class="brand-wrap"><img class="brand-logo" src="logo.png" alt="HSHR"><span class="brand">HASHIRA</span></span><span>12.6 / GENEL STRATEJİ</span></div>
+    <div class="bot"><span>HSHR · WHITEPAPER V1.0</span><span>27</span></div>
+  </div>
+
+  <div class="pad">
+    <div class="eyebrow anim">🎯 — Roadmap'in Özü</div>
+    <h2 class="h1 anim d1" style="margin-top:14px; font-size:84px;">Genel <strong>Strateji</strong></h2>
+    <p class="lead anim d2" style="margin-top:20px; max-width:1300px; font-size:24px;">Her faz, bir öncekinin yarattığı değeri kullanarak ekosistemi sonraki seviyeye taşır.</p>
+
+    <div class="strat-cascade">
+      <div class="strat-step anim d3">
+        <div class="num">01</div>
+        <div class="label">Gelir <strong>oluştur</strong></div>
+      </div>
+      <div class="strat-step anim d4">
+        <div class="num">02</div>
+        <div class="label">Kullanımı <strong>büyüt</strong></div>
+      </div>
+      <div class="strat-step anim d5">
+        <div class="num">03</div>
+        <div class="label">Likiditeyi <strong>kontrol et</strong></div>
+      </div>
+      <div class="strat-step anim d6">
+        <div class="num">04</div>
+        <div class="label">Altyapıyı <strong>sahiplen</strong></div>
+      </div>
+      <div class="strat-step anim d7">
+        <div class="num">05</div>
+        <div class="label">Kurumsal seviyeye <strong>çık</strong></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============== ROADMAP — SON MESAJ ============== -->
+<section data-screen-label="R7 Son Mesaj" class="flame-stage">
+  <div class="ambient" aria-hidden="true"><div class="grain"></div></div>
+
+  <!-- Heat glow background -->
+  <div class="flame-bg" aria-hidden="true">
+    <div class="ember-glow"></div>
+    <div class="ember-glow eg2"></div>
+    <div class="ember-glow eg3"></div>
+  </div>
+
+  <!-- Rising sparks -->
+  <div class="sparks" aria-hidden="true">
+    <span style="left:62%; animation-delay:0s;"></span>
+    <span style="left:66%; animation-delay:-1.4s;"></span>
+    <span style="left:70%; animation-delay:-2.8s;"></span>
+    <span style="left:74%; animation-delay:-0.7s;"></span>
+    <span style="left:78%; animation-delay:-2.1s;"></span>
+    <span style="left:82%; animation-delay:-3.5s;"></span>
+    <span style="left:86%; animation-delay:-1s;"></span>
+    <span style="left:90%; animation-delay:-2.4s;"></span>
+    <span style="left:68%; animation-delay:-0.4s;"></span>
+    <span style="left:76%; animation-delay:-3.1s;"></span>
+    <span style="left:84%; animation-delay:-1.7s;"></span>
+    <span style="left:88%; animation-delay:-2.7s;"></span>
+  </div>
+
+  <svg class="torii-deco center-faded"><use href="#torii-full"/></svg>
+
+  <div class="chrome">
+    <div class="top"><span class="brand-wrap"><img class="brand-logo" src="logo.png" alt="HSHR"><span class="brand">HASHIRA</span></span><span>12.7 / SON MESAJ</span></div>
+    <div class="bot"><span>HSHR · WHITEPAPER V1.0</span><span>28</span></div>
+  </div>
+
+  <!-- The flame -->
+  <div class="flame-wrap anim" aria-hidden="true">
+    <svg viewBox="0 0 200 320" preserveAspectRatio="xMidYMax meet">
+      <defs>
+        <radialGradient id="flame-outer" cx="50%" cy="78%" r="55%">
+          <stop offset="0%" stop-color="#ffd87a" stop-opacity="0.95"/>
+          <stop offset="35%" stop-color="#ff9533" stop-opacity="0.85"/>
+          <stop offset="70%" stop-color="#d44a2a" stop-opacity="0.6"/>
+          <stop offset="100%" stop-color="#7a1d12" stop-opacity="0"/>
+        </radialGradient>
+        <radialGradient id="flame-mid" cx="50%" cy="80%" r="45%">
+          <stop offset="0%" stop-color="#fff4c2" stop-opacity="1"/>
+          <stop offset="40%" stop-color="#ffb84d" stop-opacity="0.95"/>
+          <stop offset="80%" stop-color="#ff6a1a" stop-opacity="0.7"/>
+          <stop offset="100%" stop-color="#c43317" stop-opacity="0"/>
+        </radialGradient>
+        <radialGradient id="flame-core" cx="50%" cy="82%" r="35%">
+          <stop offset="0%" stop-color="#fffce8" stop-opacity="1"/>
+          <stop offset="50%" stop-color="#ffe89a" stop-opacity="0.95"/>
+          <stop offset="100%" stop-color="#ffb547" stop-opacity="0"/>
+        </radialGradient>
+        <filter id="flame-blur" x="-30%" y="-30%" width="160%" height="160%">
+          <feGaussianBlur stdDeviation="2.4"/>
+        </filter>
+        <filter id="flame-blur-soft" x="-30%" y="-30%" width="160%" height="160%">
+          <feGaussianBlur stdDeviation="0.8"/>
+        </filter>
+      </defs>
+
+      <!-- Outer flame body — wide, soft -->
+      <path class="flame-outer" filter="url(#flame-blur)"
+            d="M 100 310
+               C 70 305, 38 290, 32 250
+               C 26 215, 50 195, 50 165
+               C 50 130, 30 115, 50 78
+               C 56 92, 70 96, 72 78
+               C 76 50, 60 35, 80 12
+               C 88 32, 102 38, 96 64
+               C 94 84, 110 88, 118 70
+               C 124 52, 116 38, 132 24
+               C 138 50, 152 60, 144 92
+               C 142 112, 158 120, 158 148
+               C 158 178, 178 196, 168 240
+               C 162 282, 130 308, 100 310 Z"
+            fill="url(#flame-outer)"/>
+
+      <!-- Mid flame — more defined -->
+      <path class="flame-mid" filter="url(#flame-blur-soft)"
+            d="M 100 308
+               C 78 302, 56 286, 54 250
+               C 52 220, 72 202, 70 174
+               C 68 146, 56 128, 72 98
+               C 78 110, 88 112, 88 96
+               C 88 72, 78 56, 92 36
+               C 100 54, 110 60, 106 84
+               C 104 100, 116 104, 122 88
+               C 128 72, 122 60, 134 46
+               C 140 68, 148 80, 142 106
+               C 140 128, 152 138, 150 168
+               C 150 198, 162 218, 152 250
+               C 144 286, 124 304, 100 308 Z"
+            fill="url(#flame-mid)"/>
+
+      <!-- Inner core — bright -->
+      <path class="flame-core"
+            d="M 100 305
+               C 84 298, 72 282, 74 252
+               C 76 224, 90 208, 90 180
+               C 90 154, 82 138, 92 110
+               C 96 122, 102 124, 102 110
+               C 102 90, 94 76, 104 56
+               C 110 72, 116 80, 114 100
+               C 113 116, 120 118, 124 104
+               C 128 90, 124 78, 132 66
+               C 136 86, 140 96, 134 116
+               C 132 134, 140 144, 140 168
+               C 140 192, 148 210, 142 238
+               C 134 280, 116 300, 100 305 Z"
+            fill="url(#flame-core)"/>
+
+      <!-- White hot center -->
+      <ellipse cx="100" cy="270" rx="14" ry="22" fill="#fffef5" opacity="0.85" filter="url(#flame-blur-soft)"/>
+
+      <!-- Coal base -->
+      <ellipse cx="100" cy="312" rx="65" ry="6" fill="#3a1006" opacity="0.6"/>
+      <ellipse cx="100" cy="312" rx="40" ry="3" fill="#ff5a1a" opacity="0.7"/>
+    </svg>
+  </div>
+
+  <div class="pad" style="display:flex; flex-direction:column; justify-content:center; height:100%; position:relative; z-index:5;">
+    <div class="anim d2" style="margin-top: 80px; font-family:var(--font-mono); font-size:14px; letter-spacing:0.4em; color:var(--gold); text-transform:uppercase; opacity:0.85;">— ATEŞ YANIYOR · İNŞA SÜRÜYOR</div>
+    <h2 class="h1 anim d3" style="margin-top:36px; font-size:88px; line-height:1.12; max-width:1050px;">Hashira bir <strong style="color:var(--gold)">token projesi değil</strong></h2>
+    <h2 class="h1 anim d4" style="margin-top:24px; font-size:88px; line-height:1.12; color:var(--ink-2); max-width:1050px;">— adım adım inşa edilen<br/><strong style="color:var(--gold)">bir finansal sistemdir</strong>.</h2>
+    <div class="anim d5" style="margin-top:56px; font-family:var(--font-mono); font-size:14px; letter-spacing:0.28em; color:var(--ink-3); text-transform:uppercase;">— HASHIRA · ROADMAP SON MESAJI</div>
+  </div>
+</section>
+
+<!-- ============== 19 ENDING ============== -->
+<section data-screen-label="19 Final">
+  <div class="ambient" aria-hidden="true">
+    <div class="glow"></div>
+    <div class="glow g2"></div>
+    <div class="scan"></div>
+    <div class="particles">
+      <span style="left:8%;  animation-delay:0s;"></span>
+      <span style="left:18%; animation-delay:-3s;"></span>
+      <span style="left:28%; animation-delay:-6s;"></span>
+      <span style="left:38%; animation-delay:-9s;"></span>
+      <span style="left:48%; animation-delay:-12s;"></span>
+      <span style="left:58%; animation-delay:-2s;"></span>
+      <span style="left:68%; animation-delay:-5s;"></span>
+      <span style="left:78%; animation-delay:-8s;"></span>
+      <span style="left:88%; animation-delay:-11s;"></span>
+      <span style="left:94%; animation-delay:-14s;"></span>
+    </div>
+    <div class="grain"></div>
+  </div>
+  <div class="grid-bg" style="position:absolute; inset:0; opacity:0.5;"></div>
+  <div class="chrome">
+    <div class="top"><span class="brand-wrap"><img class="brand-logo" src="logo.png" alt="HSHR"><span class="brand">HASHIRA</span></span><span>HSHR · WHITEPAPER V1.0</span></div>
+    <div class="bot"><span>2026</span><span>FIN — DEVAMI V2'DE</span></div>
+  </div>
+  <div class="pad" style="display:flex; flex-direction:column; justify-content:center; gap: 48px; padding-bottom: 130px;">
+    <div>
+      <div class="eyebrow anim">— Finansal omurga katmanı</div>
+    </div>
+    <div>
+      <h2 class="anim d1 endmark" style="font-size:240px; line-height: 1;">Hash<strong style="font-weight:700; color:var(--gold);">ira</strong></h2>
+      <p class="lead anim d2" style="margin-top:28px; font-size:36px; color:var(--ink-1); max-width: 1400px;">Yalnızca bir token değil — <strong style="color:var(--ink-0)">küresel finansal altyapının yeni sütunları.</strong></p>
+    </div>
+    <div class="anim d3" style="display:grid; grid-template-columns: repeat(4, 1fr); gap: 32px; border-top:1px solid var(--line); padding-top: 28px;">
+      <div>
+        <div class="label">— Symbol</div>
+        <div style="font-family:var(--font-display); font-size:40px; color:var(--gold); font-weight:600; margin-top:8px;">HSHR</div>
+      </div>
+      <div>
+        <div class="label">— Toplam Arz</div>
+        <div style="font-family:var(--font-display); font-size:40px; color:var(--ink-0); font-weight:600; margin-top:8px;">15,000,000</div>
+      </div>
+      <div>
+        <div class="label">— Ekonomik Model</div>
+        <div style="font-family:var(--font-display); font-size:40px; color:var(--ink-0); font-weight:600; margin-top:8px;">Deflasyonist</div>
+      </div>
+      <div>
+        <div class="label">— Versiyon</div>
+        <div style="font-family:var(--font-display); font-size:40px; color:var(--ink-0); font-weight:600; margin-top:8px;">V1.0</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ticker-strip" aria-hidden="true">
+    <div class="track">
+      <span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span><span>HSHR</span><span class="x">·</span><span>15,000,000 SUPPLY</span><span class="x">·</span><span>DEFLATIONARY</span><span class="x">·</span><span>STAKING</span><span class="x">·</span><span>BUYBACK + BURN</span><span class="x">·</span><span>HASHIRA CHAIN</span><span class="x">·</span><span>AKIDEMY</span><span class="x">·</span><span>WHITE-LABEL BANKING</span><span class="x">·</span><span>EXCHANGE</span><span class="x">·</span><span>V1.0</span><span class="x">·</span>
+    </div>
+  </div>
+  </section>
+
+</deck-stage>
+</body>
+</html>

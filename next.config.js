@@ -15,6 +15,15 @@ const nextConfig = {
     // App Router is default in Next 14
     instrumentationHook: true, // Sentry server için gerekli
   },
+  // /hashira-test → public/hashira-test/index.html (statik sunum)
+  async rewrites() {
+    return [
+      {
+        source: '/hashira-test',
+        destination: '/hashira-test/index.html',
+      },
+    ];
+  },
 };
 
 // Sentry sadece DSN tanımlıysa devreye girsin (dev'de gereksiz)
