@@ -151,24 +151,31 @@ export function WaiterBoard({ businessId }: Props) {
     let canceled = false;
     let lastIds = new Set<string>();
     const fetchCalls = async () => {
-      const r = await getActiveWaiterCalls();
-      if (canceled) return;
-      if (r.success) {
-        const newCalls = r.calls || [];
-        const fresh = newCalls.filter((c) => !lastIds.has(c.id));
-        if (fresh.length > 0 && lastIds.size > 0) {
-          playCallSound();
-          fresh.forEach((c) => {
-            const tableLabel = c.table_name?.toUpperCase() || 'BİLİNMEYEN';
-            toast.info(
-              `🔔 ${tableLabel} · ${c.button_name_snapshot || 'Çağrı'}`,
-              6000
-            );
-          });
-          setCallsBump((n) => n + 1);
+      try {
+        const r = await getActiveWaiterCalls();
+        if (canceled) return;
+        if (r.success) {
+          const newCalls = r.calls || [];
+          const fresh = newCalls.filter((c) => !lastIds.has(c.id));
+          if (fresh.length > 0 && lastIds.size > 0) {
+            playCallSound();
+            fresh.forEach((c) => {
+              const tableLabel = c.table_name?.toUpperCase() || 'BİLİNMEYEN';
+              toast.info(
+                `🔔 ${tableLabel} · ${c.button_name_snapshot || 'Çağrı'}`,
+                6000
+              );
+            });
+            setCallsBump((n) => n + 1);
+          }
+          setActiveCalls(newCalls);
+          lastIds = new Set(newCalls.map((c) => c.id));
         }
-        setActiveCalls(newCalls);
-        lastIds = new Set(newCalls.map((c) => c.id));
+      } catch (err) {
+        if (process.env.NODE_ENV === 'development') {
+          // eslint-disable-next-line no-console
+          console.warn('[waiter-board] fetchCalls network error', err);
+        }
       }
     };
     fetchCalls();
@@ -189,32 +196,39 @@ export function WaiterBoard({ businessId }: Props) {
     let lastReadyIds = new Set<string>();
     let firstFetch = true;
     const fetchOrders = async () => {
-      const r = await getAllActiveOrders();
-      if (canceled) return;
-      if (r.success) {
-        const newOrders = r.orders || [];
-        const newReadyIds = new Set(
-          newOrders.filter((o) => o.status === 'ready').map((o) => o.id)
-        );
-        // Yeni ready'ye geçen siparişler
-        const freshlyReady = newOrders.filter(
-          (o) => o.status === 'ready' && !lastReadyIds.has(o.id)
-        );
-        if (!firstFetch && freshlyReady.length > 0) {
-          playOrderSound();
-          freshlyReady.forEach((o) => {
-            const tableLabel = getOrderDestination(o);
-            const itemCount = o.items.reduce((sum, it) => sum + it.quantity, 0);
-            toast.info(
-              `🍽 ${tableLabel} · Sipariş hazır · ${itemCount} ürün`,
-              6000
-            );
-          });
-          setOrdersBump((n) => n + 1);
+      try {
+        const r = await getAllActiveOrders();
+        if (canceled) return;
+        if (r.success) {
+          const newOrders = r.orders || [];
+          const newReadyIds = new Set(
+            newOrders.filter((o) => o.status === 'ready').map((o) => o.id)
+          );
+          // Yeni ready'ye geçen siparişler
+          const freshlyReady = newOrders.filter(
+            (o) => o.status === 'ready' && !lastReadyIds.has(o.id)
+          );
+          if (!firstFetch && freshlyReady.length > 0) {
+            playOrderSound();
+            freshlyReady.forEach((o) => {
+              const tableLabel = getOrderDestination(o);
+              const itemCount = o.items.reduce((sum, it) => sum + it.quantity, 0);
+              toast.info(
+                `🍽 ${tableLabel} · Sipariş hazır · ${itemCount} ürün`,
+                6000
+              );
+            });
+            setOrdersBump((n) => n + 1);
+          }
+          setActiveOrders(newOrders);
+          lastReadyIds = newReadyIds;
+          firstFetch = false;
         }
-        setActiveOrders(newOrders);
-        lastReadyIds = newReadyIds;
-        firstFetch = false;
+      } catch (err) {
+        if (process.env.NODE_ENV === 'development') {
+          // eslint-disable-next-line no-console
+          console.warn('[waiter-board] fetchOrders network error', err);
+        }
       }
     };
     fetchOrders();
@@ -231,9 +245,19 @@ export function WaiterBoard({ businessId }: Props) {
   useEffect(() => {
     let canceled = false;
     const fetchTables = async () => {
-      const r = await getTablesWithStatus();
-      if (!canceled && r.success) {
-        setZones(r.zones || []);
+      try {
+        const r = await getTablesWithStatus();
+        if (!canceled && r.success) {
+          setZones(r.zones || []);
+        }
+      } catch (err) {
+        // iOS Safari + PWA'da network başarısız olunca fetch reject atar.
+        // Sessizce yutalım; bir sonraki polling iterasyonunda tekrar dener.
+        // Eski zones state'i korunur (kullanıcı boş ekran görmez).
+        if (process.env.NODE_ENV === 'development') {
+          // eslint-disable-next-line no-console
+          console.warn('[waiter-board] fetchTables network error', err);
+        }
       }
     };
     fetchTables();
