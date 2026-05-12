@@ -80,13 +80,12 @@ export async function getTablesWithZones(): Promise<{
       return { success: false, error: zonesError.message };
     }
 
-    // Masalar
+    // Masalar - DB'den geliş sırası önemli değil, aşağıda doğal sort yapacağız
     const { data: tablesRaw, error: tablesError } = await admin
       .from('tables')
       .select('id, name, capacity, zone_id, status, table_zones(name, color)')
       .eq('business_id', businessId)
-      .neq('status', 'inactive')
-      .order('name', { ascending: true });
+      .neq('status', 'inactive');
 
     if (tablesError) {
       return { success: false, error: tablesError.message };
@@ -138,6 +137,11 @@ export async function getTablesWithZones(): Promise<{
         active_orders_count: activeCounts.get(t.id) || 0,
       };
     });
+
+    // Doğal sıralama: "MASA 1, 2, 10" - string sort değil
+    tables.sort((a, b) =>
+      a.name.localeCompare(b.name, 'tr', { numeric: true, sensitivity: 'base' })
+    );
 
     return { success: true, tables, zones };
   } catch (err) {

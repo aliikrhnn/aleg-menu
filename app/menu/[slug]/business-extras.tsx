@@ -18,9 +18,11 @@ type Props = {
     qrDataUrl: string;
     icon: string;
   }>;
+  /** "SADECE MENÜ" banner aktif mi? Aktifse WiFi pillini aşağı kaydırır. */
+  hasMenuOnlyBanner?: boolean;
 };
 
-export function BusinessExtras({ wifi, socialLinks }: Props) {
+export function BusinessExtras({ wifi, socialLinks, hasMenuOnlyBanner }: Props) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -89,9 +91,9 @@ export function BusinessExtras({ wifi, socialLinks }: Props) {
         aria-label="Hızlı bağlantılar"
         style={{
           position: 'fixed',
-          top: 12,
+          top: hasMenuOnlyBanner ? 52 : 12,  // banner ~38px + 14px gap
           right: 12,
-          zIndex: 25,
+          zIndex: 45,  // banner (z-40) üzerinde dur, böylece kart açılıp kapanırken üstüne biner
           display: 'flex',
           gap: 6,
           flexWrap: 'wrap',

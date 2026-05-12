@@ -108,13 +108,12 @@ export async function getTablesWithStatus(): Promise<{
       .eq('business_id', businessId)
       .order('sort_order', { ascending: true });
 
-    // 2) Tüm masalar
+    // 2) Tüm masalar - DB'den geliş sırası önemli değil, aşağıda doğal sort yapacağız
     const { data: tables } = await admin
       .from('tables')
       .select('id, name, capacity, zone_id, shape, status')
       .eq('business_id', businessId)
-      .neq('status', 'inactive')
-      .order('name', { ascending: true });
+      .neq('status', 'inactive');
 
     if (!tables) return { success: true, zones: [] };
 
@@ -233,10 +232,16 @@ export async function getTablesWithStatus(): Promise<{
     });
 
     // 7) Bölgelere göre grupla
+    // Her bölge içinde "doğal" sıra: "MASA 1, 2, 10" - string sort değil
+    const naturalCompare = (a: string, b: string) =>
+      a.localeCompare(b, 'tr', { numeric: true, sensitivity: 'base' });
+
     const grouped: TableZoneWithTables[] = [];
 
     (zones || []).forEach((z) => {
-      const zoneTables = tablesWithStatus.filter((t) => t.zone_id === z.id);
+      const zoneTables = tablesWithStatus
+        .filter((t) => t.zone_id === z.id)
+        .sort((a, b) => naturalCompare(a.name, b.name));
       if (zoneTables.length > 0) {
         grouped.push({
           zone: z,
@@ -246,7 +251,9 @@ export async function getTablesWithStatus(): Promise<{
     });
 
     // Bölgesiz masalar
-    const orphanTables = tablesWithStatus.filter((t) => !t.zone_id);
+    const orphanTables = tablesWithStatus
+      .filter((t) => !t.zone_id)
+      .sort((a, b) => naturalCompare(a.name, b.name));
     if (orphanTables.length > 0) {
       grouped.push({ zone: null, tables: orphanTables });
     }

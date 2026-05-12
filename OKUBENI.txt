@@ -1,73 +1,88 @@
 ═══════════════════════════════════════════════════════════════
-  HASHIRA SUNUM - GEÇİCİ
-  alegstudio.com/hashira-test
+  2 BUG FIX
+  1) Masa sıralaması doğal (MASA 1, 2, 10 vs MASA 1, 10, 2)
+  2) WiFi pill "SADECE MENÜ" banner'ın altında durur
 ═══════════════════════════════════════════════════════════════
 
-✱ NE YAPILDI
+✱ BUG 1: MASA SIRASIZ
+──────────────────────
 
-Hashira sunum dosyaları (index.html, styles.css, deck-stage.js, 
-logo.png) public/hashira-test/ altına yerleştirildi.
+SORUN:
+Garson ekranı + Panel masalar sayfası: masalar
+"MASA 1, MASA 10, MASA 11, MASA 2, MASA 20..." şeklinde
+ALFABETİK string sort kullanıyor.
 
-URL: https://alegstudio.com/hashira-test
+SEBEP:
+.order('name', { ascending: true }) → veritabanı text sort
+"10" string olarak "2"den önce gelir.
 
-✱ NASIL ÇALIŞIR
+ÇÖZÜM:
+DB sıralaması kaldırıldı, JavaScript tarafında
+localeCompare(numeric:true) uygulandı.
 
-1) next.config.js'e rewrite eklendi:
-   /hashira-test → /hashira-test/index.html
+Doğru sıra: MASA 1, MASA 2, MASA 3 ... MASA 10, MASA 11...
+Türkçe karakterler de doğru sıralanır (Ç, Ş, vs).
 
-2) middleware.ts: /hashira-test bypass edildi
-   (subdomain rewrite mantığına girmesin)
+DOSYALAR:
+  lib/actions/tables-status.ts   (garson ekranı)
+  lib/actions/tables.ts          (panel/masalar sayfası)
 
-3) HTML'in <head>'ine <base href="/hashira-test/" /> eklendi
-   Göreceli linkler (styles.css, deck-stage.js, logo.png) 
-   doğru çözülsün diye.
+✱ BUG 2: WIFI PILL BANNER İLE ÇAKIŞIYOR
+─────────────────────────────────────────
 
-✱ DOSYALAR
+SORUN:
+"SADECE MENÜ — Sipariş için lütfen garsona haber verin"
+banner'ı sticky top-0 (yukarıya yapışık).
+WiFi pill position: fixed, top: 12 → banner'ın
+arkasında kalıyor, yarısı görünmüyor.
 
-YENİ:
-  public/hashira-test/index.html
-  public/hashira-test/styles.css
-  public/hashira-test/deck-stage.js
-  public/hashira-test/logo.png
+SEBEP:
+- Banner: sticky top:0 z-40
+- WiFi pill: fixed top:12 z-25
+Banner'ın z-index'i daha yüksek + WiFi'nin top'u yetersiz.
 
-DEĞİŞEN:
-  next.config.js                  rewrite eklendi
-  middleware.ts                   /hashira-test bypass
+ÇÖZÜM:
+BusinessExtras'a hasMenuOnlyBanner prop'u eklendi.
+- Banner varsa: WiFi top:52 (banner ~38px + 14px gap)
+- Banner yoksa: WiFi top:12 (eski yer)
+- WiFi z-index: 45 (banner z-40 üstünde)
 
-✱ NPM/MIGRATION
-NPM:        Yok
-MIGRATION:  Yok
+DOSYALAR:
+  app/menu/[slug]/business-extras.tsx  (Props + top hesabı)
+  app/menu/[slug]/page.tsx             (prop geçirme)
 
 ✱ PUSH
 
-  git add public/hashira-test/
-  git add next.config.js middleware.ts
-  git commit -m "feat: hashira sunum statik geçici"
+  git add lib/actions/tables-status.ts lib/actions/tables.ts
+  git add 'app/menu/[slug]/business-extras.tsx'
+  git add 'app/menu/[slug]/page.tsx'
+  git commit -m "fix: masa dogal sira + wifi banner cakisma"
+  git push
+
+VEYA tek seferde:
+  git add .
+  git commit -m "fix: masa dogal sira + wifi banner cakisma"
   git push
 
 ✱ TEST
 
-Deploy bittikten sonra:
-  https://alegstudio.com/hashira-test
-  
-  Sunum açılmalı, animasyonlar çalışmalı.
+1) Garson ekranı:
+   panel.alegstudio.com → Garson olarak gir
+   ✓ Masalar: MASA 1, MASA 2, MASA 3 ... sıralı
 
-✱ KALDIRMAK İSTERSEN (proje bitince)
+2) Panel masalar:
+   panel.alegstudio.com/masalar
+   ✓ Aynı doğal sıra
 
-  git rm -r public/hashira-test
-  
-  Ve next.config.js'ten rewrites kısmını kaldır:
-  async rewrites() { return [...]; }
-  
-  Ve middleware.ts'ten /hashira-test bypass satırını kaldır.
-  
-  git commit -m "chore: hashira-test kaldırıldı"
-  git push
+3) Müşteri menü (banner yok):
+   baq.alegstudio.com (online sipariş açık)
+   ✓ WiFi pill sağ üstte, top: 12px
+   ✓ Açılan kart düzgün
+
+4) Müşteri menü (banner var):
+   Bir kafede online sipariş kapatılırsa
+   ✓ "SADECE MENÜ" banner üstte
+   ✓ WiFi pill banner'ın hemen altında, top: 52px
+   ✓ WiFi açılan kart banner ile çakışmıyor
 
 ═══════════════════════════════════════════════════════════════
-
-✱ NOT
-─────────
-Bu sunum **public** — herkes URL'i bilirse erişebilir.
-E�er gizli tutmak istersen URL'i daha tahmin edilemez yap, ör:
-  /hashira-presentation-x7k2m/

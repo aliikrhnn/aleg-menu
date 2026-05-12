@@ -394,7 +394,11 @@ export default async function CustomerMenuPage({ params, searchParams }: Props) 
           isPreview={!!previewPreset}
         >
           {/* Wifi + Sosyal medya QR — sticky topbar (en üstte) */}
-          <BusinessExtras wifi={wifi} socialLinks={socialLinks} />
+          <BusinessExtras
+            wifi={wifi}
+            socialLinks={socialLinks}
+            hasMenuOnlyBanner={business.order_config?.online_enabled === false}
+          />
 
           <MenuView
             business={{
