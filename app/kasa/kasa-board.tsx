@@ -152,9 +152,16 @@ export function KasaBoard({ initialOrders, businessId }: Props) {
     let canceled = false;
 
     const fetchSettings = async () => {
-      const r = await getKasaSoundSettings(businessId);
-      if (!canceled && r.success && r.settings) {
-        soundSettingsRef.current = r.settings;
+      try {
+        const r = await getKasaSoundSettings(businessId);
+        if (!canceled && r.success && r.settings) {
+          soundSettingsRef.current = r.settings;
+        }
+      } catch (err) {
+        if (process.env.NODE_ENV === 'development') {
+          // eslint-disable-next-line no-console
+          console.warn('[kasa-board] fetchSettings network error', err);
+        }
       }
     };
 
@@ -209,62 +216,71 @@ export function KasaBoard({ initialOrders, businessId }: Props) {
     let initialized = false;
 
     const fetchOrders = async () => {
-      const result = await getRecentNewOrders(30);
-      if (canceled) return;
-      if (!result.success || !result.orders) return;
+      try {
+        const result = await getRecentNewOrders(30);
+        if (canceled) return;
+        if (!result.success || !result.orders) return;
 
-      const orders = result.orders;
+        const orders = result.orders;
 
-      if (!initialized) {
-        // İlk çağrıda mevcut olanları "görüldü" işaretle (ses çalma)
-        seenOrderIdsRef.current = new Set(orders.map((o) => o.id));
-        initialized = true;
-        return;
-      }
-
-      // Yeni gelenleri bul
-      const seen = seenOrderIdsRef.current;
-      const fresh = orders.filter((o) => !seen.has(o.id));
-      if (fresh.length > 0) {
-        playOrderSound();
-        // 5 dakika boyunca kırmızı flash başlat
-        setOrderFlashUntil(Date.now() + 5 * 60 * 1000);
-        fresh.forEach((o) => {
-          const tableLabel = o.table_name
-            ? o.table_name.toUpperCase()
-            : 'AL-GÖTÜR';
-          const totalLabel = `₺${Math.round(o.total)}`;
-          toast.info(`🍽 ${tableLabel} · Yeni sipariş · ${totalLabel}`, 6000);
-        });
-        // Browser notification (sayfa arka planda ise)
-        if (
-          typeof Notification !== 'undefined' &&
-          Notification.permission === 'granted' &&
-          document.visibilityState === 'hidden'
-        ) {
-          try {
-            const n = new Notification('Yeni sipariş', {
-              body: `${fresh.length} yeni sipariş geldi`,
-              icon: '/icon-192.png',
-              tag: 'aleg-new-order',
-            });
-            setTimeout(() => n.close(), 4500);
-          } catch {
-            // yoksay
-          }
+        if (!initialized) {
+          // İlk çağrıda mevcut olanları "görüldü" işaretle (ses çalma)
+          seenOrderIdsRef.current = new Set(orders.map((o) => o.id));
+          initialized = true;
+          return;
         }
-        // Refresh tetikle - masa/sipariş listesi güncellensin
-        setRefreshKey((k) => k + 1);
-      }
-      // Set'i güncelle — yeni gelenleri ekle
-      const next = new Set(seen);
-      orders.forEach((o) => next.add(o.id));
-      // 100'den fazla birikmesin (eski olanları temizle)
-      if (next.size > 100) {
-        const arr = Array.from(next);
-        seenOrderIdsRef.current = new Set(arr.slice(-50));
-      } else {
-        seenOrderIdsRef.current = next;
+
+        // Yeni gelenleri bul
+        const seen = seenOrderIdsRef.current;
+        const fresh = orders.filter((o) => !seen.has(o.id));
+        if (fresh.length > 0) {
+          playOrderSound();
+          // 5 dakika boyunca kırmızı flash başlat
+          setOrderFlashUntil(Date.now() + 5 * 60 * 1000);
+          fresh.forEach((o) => {
+            const tableLabel = o.table_name
+              ? o.table_name.toUpperCase()
+              : 'AL-GÖTÜR';
+            const totalLabel = `₺${Math.round(o.total)}`;
+            toast.info(`🍽 ${tableLabel} · Yeni sipariş · ${totalLabel}`, 6000);
+          });
+          // Browser notification (sayfa arka planda ise)
+          if (
+            typeof Notification !== 'undefined' &&
+            Notification.permission === 'granted' &&
+            document.visibilityState === 'hidden'
+          ) {
+            try {
+              const n = new Notification('Yeni sipariş', {
+                body: `${fresh.length} yeni sipariş geldi`,
+                icon: '/icon-192.png',
+                tag: 'aleg-new-order',
+              });
+              setTimeout(() => n.close(), 4500);
+            } catch {
+              // yoksay
+            }
+          }
+          // Refresh tetikle - masa/sipariş listesi güncellensin
+          setRefreshKey((k) => k + 1);
+        }
+        // Set'i güncelle — yeni gelenleri ekle
+        const next = new Set(seen);
+        orders.forEach((o) => next.add(o.id));
+        // 100'den fazla birikmesin (eski olanları temizle)
+        if (next.size > 100) {
+          const arr = Array.from(next);
+          seenOrderIdsRef.current = new Set(arr.slice(-50));
+        } else {
+          seenOrderIdsRef.current = next;
+        }
+      } catch (err) {
+        // Network/fetch hatasında sessizce yutalım; eski state korunur.
+        // Bir sonraki polling iterasyonunda tekrar dener.
+        if (process.env.NODE_ENV === 'development') {
+          // eslint-disable-next-line no-console
+          console.warn('[kasa-board] fetchOrders network error', err);
+        }
       }
     };
 
@@ -360,29 +376,36 @@ export function KasaBoard({ initialOrders, businessId }: Props) {
     let lastIds = new Set<string>();
 
     const fetchCalls = async () => {
-      const result = await getActiveWaiterCalls();
-      if (canceled) return;
-      if (result.success) {
-        const newCalls = result.calls || [];
-        const newIds = new Set(newCalls.map((c) => c.id));
-        // Yeni gelen çağrıları bul
-        const fresh = newCalls.filter((c) => !lastIds.has(c.id));
-        if (fresh.length > 0 && lastIds.size > 0) {
-          // İlk fetch DEĞİL, gerçekten yeni çağrı geldi
-          playCallSound();
-          fresh.forEach((c) => {
-            const tableLabel = c.table_name
-              ? c.table_name.toUpperCase()
-              : 'BİLİNMEYEN MASA';
-            toast.info(
-              `🔔 ${tableLabel} · ${c.button_name_snapshot || 'Çağrı'}`,
-              6000
-            );
-          });
-          setCallsBump((n) => n + 1);
+      try {
+        const result = await getActiveWaiterCalls();
+        if (canceled) return;
+        if (result.success) {
+          const newCalls = result.calls || [];
+          const newIds = new Set(newCalls.map((c) => c.id));
+          // Yeni gelen çağrıları bul
+          const fresh = newCalls.filter((c) => !lastIds.has(c.id));
+          if (fresh.length > 0 && lastIds.size > 0) {
+            // İlk fetch DEĞİL, gerçekten yeni çağrı geldi
+            playCallSound();
+            fresh.forEach((c) => {
+              const tableLabel = c.table_name
+                ? c.table_name.toUpperCase()
+                : 'BİLİNMEYEN MASA';
+              toast.info(
+                `🔔 ${tableLabel} · ${c.button_name_snapshot || 'Çağrı'}`,
+                6000
+              );
+            });
+            setCallsBump((n) => n + 1);
+          }
+          setActiveCalls(newCalls);
+          lastIds = newIds;
         }
-        setActiveCalls(newCalls);
-        lastIds = newIds;
+      } catch (err) {
+        if (process.env.NODE_ENV === 'development') {
+          // eslint-disable-next-line no-console
+          console.warn('[kasa-board] fetchCalls network error', err);
+        }
       }
     };
 

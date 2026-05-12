@@ -24,15 +24,26 @@ export function TablesGrid({ onTableClick, callsByTable }: Props) {
   const [filter, setFilter] = useState<ZoneFilterId>('all');
 
   const load = useCallback(async () => {
-    const r = await getTablesWithStatus();
-    if (!r.success) {
-      setError(r.error || 'Masalar alınamadı');
-      setZones([]);
-    } else {
-      setZones(r.zones || []);
-      setError(null);
+    try {
+      const r = await getTablesWithStatus();
+      if (!r.success) {
+        // Server hatası: error göster ama mevcut masaları SİLME
+        // (network kopuşunda boş ekran daha kötü; eski masalar dursun)
+        setError(r.error || 'Masalar alınamadı');
+      } else {
+        setZones(r.zones || []);
+        setError(null);
+      }
+    } catch (err) {
+      // Network/fetch hatası: sessizce yutalım, eski state korunur.
+      // Sonraki polling iterasyonunda tekrar denenecek.
+      if (process.env.NODE_ENV === 'development') {
+        // eslint-disable-next-line no-console
+        console.warn('[tables-grid] load network error', err);
+      }
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   useEffect(() => {
