@@ -1,120 +1,82 @@
-# Aleg Süper Admin Paneli — Paket 4
+# Aleg — Restaurant Platform
 
-Destek talepleri, duyurular, admin ekibi yönetimi, audit log, sistem durumu, platform ayarları + ⌘K komut menüsü.
+A multi-tenant QR ordering and restaurant management platform, built on Next.js and
+Supabase. Guests order from a QR menu, waitstaff and the kitchen work the queue, the till
+closes the day, and a super-admin console runs the platform across all tenants.
 
-## ✓ Zaten yapılan (Supabase MCP üzerinden)
+This is the production implementation. `aleg-menu-io` is the later monorepo restructuring
+of the same product.
 
-- Migration `0034_paket4_support_notifications_settings` Supabase'e **uygulandı**
-- 4 yeni tablo: `support_tickets`, `support_ticket_messages`, `platform_announcements`, `platform_settings`
-- 6 yeni view: `v_admin_support_tickets_list`, `v_admin_support_metrics`, `v_admin_announcements_list`, `v_admin_audit_logs_full`, `v_admin_super_admins_list`, `v_admin_system_health`
-- 5 örnek support ticket + 3 örnek duyuru seed olarak yüklendi
-- 10 default platform setting yüklendi
-- Tüm tablolarda RLS açık, sadece `super_admins` erişebiliyor
+## Features
 
-## 📂 Dosya yapısı
+**Guest** — QR menu per table, cart and ordering, order status, reviews
+
+**Restaurant** — order queue, waiter and kitchen manifests, cashier flow with an
+end-of-day close, menu and category management, QR code generation and export (PDF via
+`jsPDF`, batched as a ZIP), push notifications
+
+**Super admin** — support ticket system with threaded replies, platform announcements,
+admin team management, audit log timeline, system health, platform settings, and a ⌘K
+command menu
+
+**AI-assisted content** — description and slogan generation, menu item variations and
+monogram generation, backed by the Anthropic API
+
+## Architecture
 
 ```
-app/(admin)/
-├── destek/
-│   ├── page.tsx                # Ticket listesi + metrikler
-│   └── [id]/page.tsx           # Ticket detay + mesajlaşma
-├── bildirimler/page.tsx        # Duyurular CRUD
-├── kullanicilar/page.tsx       # Süper admin ekibi
-├── audit/page.tsx              # Audit log timeline
-├── sistem/page.tsx             # Sistem health
-└── ayarlar/page.tsx            # Platform settings
-
-lib/actions/
-├── admin-support.ts            # listSupportTickets, replySupportTicket, ...
-├── admin-notifications.ts      # listAnnouncements, createAnnouncement, ...
-├── admin-users.ts              # listAdminTeam, inviteSuperAdmin, removeSuperAdmin
-├── admin-audit.ts              # listAuditLogs, listAuditActionTypes
-├── admin-system.ts             # getSystemHealth, getRecentSystemActivity
-└── admin-settings.ts           # listPlatformSettings, updatePlatformSetting
-
-components/admin/
-├── support-list-client.tsx
-├── support-detail-client.tsx
-├── notifications-client.tsx
-├── admin-users-client.tsx
-├── audit-client.tsx
-├── system-client.tsx
-├── settings-client.tsx
-├── command-palette.tsx         # ⌘K menü
-└── command-palette-mount.tsx   # Layout için server component
-
-migrations/
-└── 0034_paket4_support_notifications_settings.sql  # Saklı kopya
+app/
+├── (guest)/          QR menu and ordering
+├── (panel)/          Restaurant operations
+├── (admin)/          Platform super-admin
+└── api/              Route handlers — AI, cashier, manifests, status
+lib/
+├── actions/          Server actions, grouped by domain
+├── printer/          ESC/POS builders shared with the on-prem agent
+└── supabase/         Server and browser clients
+supabase/migrations/  37 tracked migrations
 ```
 
-## 🔌 Sidebar entegrasyonu
+**Multi-tenancy is enforced in the database, not the application.** Every tenant-scoped
+table has row-level security; the super-admin tables are readable only by members of
+`super_admins`. An application bug cannot leak one restaurant's orders to another,
+because the query never returns them in the first place.
 
-`app/(admin)/layout.tsx` veya sidebar componentine yeni linkler ekle:
+**Migrations are disciplined.** 37 sequential migrations, with the rules for writing them
+recorded in `MIGRATION-DISIPLINI.md` and backup and restore documented in
+`BACKUP-RESTORE-REHBERI.md`. Read models are exposed as SQL views rather than assembled
+in application code.
 
-```tsx
-const NAV = [
-  // ... mevcut linkler
-  { href: '/destek', label: 'Destek' },
-  { href: '/bildirimler', label: 'Duyurular' },
-  { href: '/kullanicilar', label: 'Ekip' },
-  { href: '/audit', label: 'Hareket kaydı' },
-  { href: '/sistem', label: 'Sistem' },
-  { href: '/ayarlar', label: 'Ayarlar' },
-]
+**Offline resilience.** `dexie` keeps an IndexedDB cache so the panel survives a dropped
+connection mid-service.
+
+**Printing is out of process.** A browser cannot open a TCP socket to a thermal printer,
+so print jobs are queued in the database and collected by
+[aleg-agent](https://github.com/aliikrhnn/aleg-agent) running on the café's own PC.
+
+## Stack
+
+Next.js (App Router) · TypeScript · Supabase (Postgres, Auth, Realtime, RLS) · Tailwind
+CSS · Anthropic SDK · Sentry · Dexie · jsPDF · web-push
+
+## Running it
+
+```bash
+npm install
+cp .env.example .env.local     # then fill it in
+npm run dev                    # http://localhost:3000
 ```
 
-## 🎹 ⌘K Command Palette mount
-
-Admin layout'unun sonuna ekle (genelde `</body>` öncesi):
-
-```tsx
-import { CommandPaletteMount } from '@/components/admin/command-palette-mount'
-
-export default async function AdminLayout({ children }) {
-  return (
-    <html>
-      <body>
-        {/* mevcut içerik */}
-        {children}
-        <CommandPaletteMount />
-      </body>
-    </html>
-  )
-}
+```bash
+npm run build
+npm run type-check
+npm run lint
 ```
 
-## ⚠️ Bağımlılıklar
+Setup, migration and backup procedures are documented in `KURULUM.md`,
+`MIGRATION-DISIPLINI.md` and `BACKUP-RESTORE-REHBERI.md`. A Turkish version of this
+README is in `README.tr.md`.
 
-Bu paket aşağıdaki Paket 1 bileşenlerini kullanır — varlıklarını doğrula:
+## Licence
 
-- `@/lib/supabase/server` → `createClient()` (Supabase server client)
-- `@/lib/auth/super-admin` → `getSuperAdminUser(): Promise<{ user_id, email, full_name } | null>`
-- `@/lib/admin/audit` → `logAdminAction({ action, target_type?, target_id?, target_label?, tone?, meta? })`
-- `@/components/admin/primitives` → `Eyebrow, SerifTitle, SerifNum, Pill, StatusDot, FilterChip, SearchInput, Money`
-
-`inviteSuperAdmin` ayrıca `lookup_user_by_email` adlı RPC fonksiyonuna ihtiyaç duyuyor. Eğer yoksa, şu SQL ile ekleyebilirsin:
-
-```sql
-CREATE OR REPLACE FUNCTION public.lookup_user_by_email(p_email text)
-RETURNS uuid LANGUAGE sql SECURITY DEFINER SET search_path = public, auth AS $$
-  SELECT id FROM auth.users WHERE lower(email) = lower(p_email) LIMIT 1;
-$$;
-GRANT EXECUTE ON FUNCTION public.lookup_user_by_email(text) TO authenticated;
-```
-
-## 🧪 Test
-
-Supabase'e seed verisiyle aşağıdaki örnekleri kontrol edebilirsin:
-- `/destek` → 5 ticket, 1'i acil/açık (Karaköy yazıcı sorunu)
-- `/bildirimler` → 2 yayında, 1 taslak duyuru
-- `/audit` → Paket 1-3'te yapılan kayıtların timeline'ı
-- `/sistem` → Karaköy'deki 82 sipariş, 96 print job vb. yansır
-- `/ayarlar` → 10 platform ayarı (4 kategoride)
-
-## ✅ Lint/build durumu
-
-- `any` kullanımı: yok
-- Kullanılmayan import: yok
-- TypeScript strict: temiz (lib/actions ve components izole olarak çalıştırıldı)
-- `console.log`: yok
-- `'use client'` direktifleri: tüm hook kullanan dosyalarda mevcut
+Not open source. Published for review; all rights reserved.
